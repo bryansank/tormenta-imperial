@@ -23,8 +23,13 @@ var _campaign_line: Label
 var _gate_line: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
+## Capitulos (feat/ritmo-colono): "Capitulo II · La cuenta" y sus metas con ✓.
+var _chapter_head: Label
+var _chapter_goals: Label
 
 const Objectives := preload("res://scripts/services/Objectives.gd")
+const Chapters := preload("res://scripts/services/Chapters.gd")
+const ChapterScreenScript := preload("res://scripts/ui/ChapterScreen.gd")
 ## Cifras vivas en el porque ({HQ2_COST}, {HQ3_COST}: el coste real del Cuartel
 ## General, leido de GameConfig; feat/topes-mejoras-ayuda).
 const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
@@ -46,6 +51,9 @@ func _ready() -> void:
 	set_process(false)
 	if UITheme.is_cartoon():
 		_setup_line()
+	# La tarjeta de cierre de capitulo (feat/ritmo-colono): vive aqui, en las dos
+	# escenas, y no como un nodo mas de Main.tscn / Main2D.tscn.
+	add_child(ChapterScreenScript.new())
 
 # ══════════════════════════════════════════════════════════════════════
 # LA LINEA DEL SIGUIENTE PASO (rediseno 2026-10, docs/28 §12)
@@ -285,6 +293,15 @@ func _setup_ui() -> void:
 	content.add_theme_constant_override("separation", 8 if tight else 20)
 	scroll.add_child(content)
 
+	# ── EL CAPITULO (feat/ritmo-colono): los tres actos del lore ──
+	_chapter_head = UITheme.section_header("")
+	_chapter_head.name = "ChapterHead"
+	_chapter_head.mouse_filter = Control.MOUSE_FILTER_PASS
+	content.add_child(_chapter_head)
+	_chapter_goals = UITheme.make_label("", "body", UITheme.TEXT)
+	_chapter_goals.name = "ChapterGoals"
+	_chapter_goals.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_chapter_goals)
 	# ── AHORA: el siguiente paso, calculado desde la partida (Objectives) ──
 	# Antes esto eran cinco pasos fijos, y tres eran falsos: construir un Nucleo
 	# (ya lo tienes y no se construye), "conectar" con almacenes (no se conecta
@@ -358,6 +375,25 @@ func _setup_ui() -> void:
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)
 
+## El capitulo en curso arriba del panel, con sus metas (✓ hecho, · por hacer).
+## Oculto en los modos sin capitulos y con la partida ganada.
+func _paint_chapter() -> void:
+	if _chapter_head == null:
+		return
+	var n: int = Chapters.current()
+	var on: bool = Chapters.enabled() and n <= Chapters.COUNT
+	_chapter_head.visible = on
+	_chapter_goals.visible = on
+	if not on:
+		return
+	_chapter_head.text = Chapters.heading(n).to_upper()
+	_chapter_head.tooltip_text = Chapters.goal_text(n)
+	_chapter_goals.text = "%s: %s\n%s" % [Tr.t("CHAPTER_OBJ"), Chapters.goal_text(n), "\n".join(Chapters.goal_lines(n))]
+
+## Lo que dice el capitulo en el panel (pruebas).
+func chapter_text() -> String:
+	return "%s\n%s" % [_chapter_head.text, _chapter_goals.text] if _chapter_head != null and _chapter_head.visible else ""
+
 func toggle() -> void:
 	_is_open = not _is_open
 	if _is_open:
@@ -384,6 +420,7 @@ func _process(delta: float) -> void:
 ## Vuelve a preguntar el paso y repinta. Publico para los tests.
 func refresh() -> void:
 	_refresh_left = REFRESH_EVERY
+	_paint_chapter()
 	var p: Dictionary = Objectives.plan()
 	var step: Dictionary = p["action"]
 	var text: Dictionary = Objectives.describe(p["goal"])

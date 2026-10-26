@@ -308,6 +308,22 @@ signal defense_auto_resolved(victory: bool, rounds: int, summary: Dictionary)
 ## tienen que reaccionar a un ensayo. Lo pinta WarReportScreen.
 @warning_ignore("unused_signal")
 signal trial_tithe_resolved(repelled: bool, taken: Dictionary)
+## La Visita (feat/ritmo-colono): un Impuesto que se resuelve con parte
+## automatico ofrece ¡PELEAR! unos segundos (`open` = true) y la oferta se cierra
+## (false) al pulsarlo, al resolverse sola o al cargar. Solo StormManager; el
+## boton vive en StormHUD.
+@warning_ignore("unused_signal")
+signal tithe_choice_changed(open: bool)
+## Una sola llave (feat/ritmo-colono): el jefe de la campana `domain` entrego su
+## pieza del Cuartel General nivel 3. Solo CombatManager, justo despues de
+## `campaign_completed`.
+@warning_ignore("unused_signal")
+signal campaign_piece_won(domain: String)
+## Capitulos de Colono (feat/ritmo-colono): el capitulo `chapter` (1-3) se acaba
+## de cerrar. Solo ProgressionManager, una vez por capitulo y partida (nunca al
+## cargar). La pantalla corta de cierre la pinta ChapterScreen.
+@warning_ignore("unused_signal")
+signal chapter_completed(chapter: int)
 
 # ── The Final Audit ──
 ## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana

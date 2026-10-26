@@ -181,6 +181,11 @@ static func upgrade_block_lines(data: BuildingData, node: Node) -> Array:
 	if ProductionManager.is_constructing(node):
 		out.append(Tr.t("TOPE_UPGRADING"))
 		return out
+	# Una sola llave (feat/ritmo-colono): el CG nivel 3 pide las piezas de los
+	# jefes de campana. "Para el CG 3 te faltan: pieza de Mar, pieza de Aire".
+	if data.id == "headquarters" and not CombatManager.hq_missing_pieces(level + 1).is_empty():
+		out.append(CombatManager.hq_pieces_text())
+		out.append(Tr.t("HQ3_PIECES_HOW"))
 	var cost := GameConfig.get_upgrade_cost(data, level + 1)
 	# Cabe en el almacen? Lo que cuenta es la bolsa compartida (los materiales y
 	# los repuestos van aparte). El nivel 3 del Cuartel General pide la bolsa entera.

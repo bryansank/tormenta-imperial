@@ -26,7 +26,11 @@ extends Node
 ##
 ## Hermana de tools/storm_probe.gd y tools/battle_probe.gd.
 ##
-## AVISO sobre el modelo: `Encounter`, `CombatRules` y `CombatAI` no tiran dados.
+## Azar del dano (feat/ritmo-colono): `-- --spread=F` pisa combat_damage_spread
+## (0 = sin dados, como antes). Cada combate de campana siembra su Encounter con
+## la semilla de su oferta: la misma corrida da la misma tabla.
+##
+## AVISO (de antes del azar, 2026-10-25): `Encounter`, `CombatRules` y `CombatAI` no tiraban dados.
 ## Con la misma plantilla y el mismo roster, el encuentro sale identico siempre.
 ## La unica variedad de un barrido de encuentros viene de lo que sortea
 ## `ExpeditionGenerator` (composicion del roster) y de la plantilla que elige la
@@ -137,6 +141,10 @@ func _run() -> void:
 			_set_by_domain(GameConfig.campaign_boss_heavies, a.trim_prefix("--boss-heavies="), true)
 		elif a == "--camp-calib=1":
 			_camp_calib = true
+		elif a.begins_with("--retry-sim="):
+			_retry_sim = maxi(1, int(a.trim_prefix("--retry-sim=")))
+		elif a == "--ease=0":
+			_retry_ease = false
 		elif a.begins_with("--calib="):
 			var r: PackedStringArray = a.trim_prefix("--calib=").split(",")
 			_calib_mults = []
@@ -146,6 +154,9 @@ func _run() -> void:
 				m += float(r[2])
 		elif a.begins_with("--camp-mult="):
 			_set_by_domain(GameConfig.campaign_enemy_mult, a.trim_prefix("--camp-mult="), false)
+		elif a.begins_with("--spread="):
+			# Azar del dano (feat/ritmo-colono): 0 = el combate sin dados de antes.
+			GameConfig.combat_damage_spread = float(a.trim_prefix("--spread="))
 		elif a == "--adv=off":
 			GameConfig.combat_type_advantage["beats"] = {}
 		elif a.begins_with("--adv="):
@@ -162,8 +173,8 @@ func _run() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN, tier)
 	print("")
 	print("==============================================================")
-	print(" SONDA DE BALANCE DE COMBATE — %d semillas/celda — nivel %s (enemigos x%.2f)" % [
-		SEEDS, GameMode.tier_key_of(GameMode.tier), GameMode.expedition_enemy_mult()])
+	print(" SONDA DE BALANCE DE COMBATE — %d semillas/celda — nivel %s (enemigos x%.2f) — azar del dano ±%.0f %%" % [
+		SEEDS, GameMode.tier_key_of(GameMode.tier), GameMode.expedition_enemy_mult(), 100.0 * GameConfig.combat_damage_spread])
 	print("==============================================================")
 	_print_config()
 	if only_coast:
@@ -172,6 +183,10 @@ func _run() -> void:
 		return
 	if only_campaigns and _camp_calib:
 		_calibrate_campaigns()
+		print("")
+		return
+	if only_campaigns and _retry_sim > 0:
+		_simulate_retries()
 		print("")
 		return
 	if only_campaigns:
@@ -707,6 +722,9 @@ func _measure_coast(offers: Array, counts: Dictionary) -> Dictionary:
 			var node: Dictionary = run.current_node_data()
 			var encounter: Encounter = Encounter.create(units, run.current_node, bool(node.get("is_boss", false)),
 				false, [], true, run.current_terrain(GameConfig.combat_board_size))
+			# Azar del dano (feat/ritmo-colono): una semilla por oferta y combate (y
+			# por intento, en la simulacion de reintentos).
+			encounter.seed_rng(hash([int(offer.get("seed", 0)), run.current_node, fights, encounter.board_seed(), _try_salt]))
 			var result: Dictionary = AutoResolver.resolve(encounter)
 			var r: int = int(result["rounds"])
 			fights += 1
@@ -789,6 +807,14 @@ const CAMPAIGN_PARTIES := {
 }
 const CAMP_SEEDS := 150
 var _camp_seeds: int = CAMP_SEEDS
+## Reintentos (feat/ritmo-colono): `-- --retry-sim=N` juega cada mision (la misma
+## oferta, el mismo mapa) hasta N veces con la columna bien formada, como un
+## jugador que la repite tras perder; `--ease=0` sin la rebaja del 5 % por derrota
+## (campaign_retry_ease). Da la victoria al 1.er intento, en <=2, <=3, <=N y las
+## que nunca caen. Con dano fijo, un mapa perdido se pierde siempre salvo la rebaja.
+var _retry_sim: int = 0
+var _retry_ease := true
+var _try_salt: int = 0
 ## `-- --camp-only=land:5,sea:4` (medio:mision desde 0, o solo el medio) limita
 ## el barrido; `--camp-step=N`, `--boss-extra=F`, `--boss-heavies=N` pisan los
 ## campaign_* correspondientes.
@@ -817,7 +843,7 @@ func _sweep_campaigns() -> void:
 	print("-- LAS TRES CAMPANAS (cada mision entera, curacion entre combates, jugador 'jugado') --")
 	print("medio mision        era comb  plantilla                        n    gana   bajas  rondas  min")
 	for domain in GameConfig.CAMPAIGN_DOMAINS:
-		var count: int = GameConfig.campaign_mission_count(domain)
+		var count: int = GameConfig.campaign_base_count(domain)
 		for mission in range(count):
 			if not _camp_selected(domain, mission):
 				continue
@@ -833,11 +859,50 @@ func _sweep_campaigns() -> void:
 					domain, name, era, Generator.campaign_mission_fights(domain, mission), party["label"], row["n"],
 					"%.0f%%" % (100.0 * row["win_rate"]), row["casualties_mean"], row["rounds_mean"], row["minutes_mean"]])
 
+## Reintentos de la misma mision (ver _retry_sim). Solo la columna "bien".
+func _simulate_retries() -> void:
+	print("")
+	print("-- REINTENTOS (misma oferta hasta %d veces, rebaja por derrota %s, azar ±%.0f %%) --" % [
+		_retry_sim, "SI" if _retry_ease else "NO", 100.0 * GameConfig.combat_damage_spread])
+	print("medio mision   plantilla                        n    1.er   <=2    <=3    <=%d   nunca" % _retry_sim)
+	for domain in GameConfig.CAMPAIGN_DOMAINS:
+		for mission in range(GameConfig.campaign_base_count(domain)):
+			if not _camp_selected(domain, mission):
+				continue
+			var era: int = Generator.campaign_mission_era(domain, mission)
+			for party in CAMPAIGN_PARTIES[domain].get(era, []):
+				if not String(party["label"]).contains("(bien)"):
+					continue
+				var by_try: Array = []
+				for t in range(_retry_sim + 1):
+					by_try.append(0)
+				for s in range(_camp_seeds):
+					var won_at := -1
+					for t in range(_retry_sim):
+						var offer: Dictionary = Generator.campaign_offer(domain, mission, SEED_BASE + 7919 * s, era)
+						offer["retries"] = t if _retry_ease else 0
+						_try_salt = t
+						if float(_measure_coast([offer], party["counts"])["win_rate"]) > 0.5:
+							won_at = t
+							break
+					_try_salt = 0
+					by_try[won_at + 1 if won_at >= 0 else 0] += 1
+				var n: float = float(maxi(1, _camp_seeds))
+				var cum := 0.0
+				var cells: Array = []
+				for t in range(1, _retry_sim + 1):
+					cum += float(by_try[t])
+					if t <= 3 or t == _retry_sim:
+						cells.append("%5.0f%%" % (100.0 * cum / n))
+				var name: String = ("JEFE m%d" % (mission + 1)) if Generator.campaign_is_boss_mission(domain, mission) else ("m%d" % (mission + 1))
+				print("%-5s %-8s %-32s %-4d %s  %5.0f%%" % [domain, name, party["label"], _camp_seeds,
+					" ".join(cells), 100.0 * float(by_try[0]) / n])
+
 func _calibrate_campaigns() -> void:
 	print("")
 	print("-- CALIBRACION DE CAMPANAS (victoria por plantilla; mult = escala de mision y de jefe) --")
 	for domain in GameConfig.CAMPAIGN_DOMAINS:
-		var count: int = GameConfig.campaign_mission_count(domain)
+		var count: int = GameConfig.campaign_base_count(domain)
 		var saved_mult = GameConfig.campaign_enemy_mult[domain]
 		var saved_boss = GameConfig.campaign_boss_extra_scale[domain]
 		for mission in range(count):

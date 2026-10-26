@@ -57,6 +57,16 @@ var _trial_tithe_pending: bool = false
 var _trial_tithe_defending: bool = false
 ## Igual que _resume_when_running, para el Impuesto de juguete. Transitorio.
 var _trial_tithe_resume: bool = false
+## La Visita (feat/ritmo-colono, decision de Bryan 2026-10-25): solo uno de cada
+## `storm_tithe_board_every` Impuestos se pelea en el tablero; los demas los
+## resuelve la guarnicion sola con el parte automatico (AutoResolver, las mismas
+## reglas). Antes de resolverlo se ofrece ¡PELEAR! durante
+## `storm_tithe_choice_seconds`: estos segundos que quedan (> 0 = abierta), la
+## severidad y la escolta. Transitorio: un guardado en medio vuelve a pedir el
+## Impuesto al cargar (_tithe_to_resume) y la oferta se abre otra vez.
+var _tithe_choice_left: float = 0.0
+var _tithe_choice_severity: int = 0
+var _tithe_choice_roster: Dictionary = {}
 
 func _ready() -> void:
 	_cycle = StormCycleScript.create()
@@ -82,6 +92,7 @@ func _process(delta: float) -> void:
 	if _trial_tithe_resume:
 		_trial_tithe_resume = false
 		_resume_trial_tithe()
+	_tick_tithe_choice(delta)
 	_tick_trial(delta)
 	if _halted or _cycle == null or not is_armed():
 		return
@@ -182,6 +193,7 @@ func _on_halted_forever() -> void:
 	_trial_tithe_pending = false
 	_trial_tithe_defending = false
 	_trial_tithe_resume = false
+	_close_tithe_choice()
 	GameConfig.event_production_multiplier = 1.0
 	_cycle = StormCycleScript.create()
 	EventBus.storm_phase_changed.emit(StormCycle.Phase.CALM, 0.0)
@@ -617,17 +629,99 @@ func _begin_tithe(severity: int) -> void:
 	if CombatManager.is_board_open():
 		_auto_resolve_tithe(roster, severity)
 		return
+	# La Visita: este Impuesto no toca tablero. La guarnicion lo resuelve sola
+	# (parte automatico), salvo que el jugador pulse ¡PELEAR! mientras se ofrece.
+	if not is_visit_due():
+		_open_tithe_choice(severity, roster)
+		return
+	_defend_on_board(roster, severity)
+
+## El Impuesto en el tablero: la guarnicion de casa contra la escolta, o el cobro
+## directo si no hay nadie.
+func _defend_on_board(roster: Dictionary, severity: int) -> void:
 	if CombatManager.start_defense(roster):
 		return
 	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
 	_pay_tithe(severity)
 
+# ── La Visita: uno de cada tres Impuestos en el tablero ──────────────
+
+## ¿Este Impuesto (el que esta cobrando ahora, o el proximo) es la Visita? El
+## primero de verdad siempre (ensena), luego uno de cada `storm_tithe_board_every`.
+## Cuenta los Impuestos ya saldados (StormCycle.storms_survived), asi que es puro
+## y vale igual despues de cargar. La prueba de la era 1 no cuenta (no salda).
+func is_visit_due() -> bool:
+	var every: int = maxi(1, GameConfig.storm_tithe_board_every)
+	return storms_survived() % every == 0
+
+## Cuantos Impuestos con parte automatico quedan antes de la proxima Visita,
+## contando desde el siguiente (0 = el siguiente es la Visita).
+func tithes_before_visit() -> int:
+	var every: int = maxi(1, GameConfig.storm_tithe_board_every)
+	return posmod(every - posmod(storms_survived(), every), every)
+
+## Se esta ofreciendo ¡PELEAR! en un Impuesto con parte automatico.
+func is_tithe_choice_open() -> bool:
+	return _tithe_choice_left > 0.0
+
+func tithe_choice_seconds_left() -> float:
+	return maxf(0.0, _tithe_choice_left)
+
+func _open_tithe_choice(severity: int, roster: Dictionary) -> void:
+	_tithe_choice_severity = severity
+	_tithe_choice_roster = roster.duplicate()
+	_tithe_choice_left = maxf(0.01, GameConfig.storm_tithe_choice_seconds)
+	EventBus.notification_posted.emit(Tr.t("STORM_TITHE_AUTO_OFFER"), "warning", UITheme.WARNING)
+	EventBus.tithe_choice_changed.emit(true)
+
+func _close_tithe_choice() -> void:
+	var was_open: bool = _tithe_choice_left > 0.0 or not _tithe_choice_roster.is_empty()
+	_tithe_choice_left = 0.0
+	_tithe_choice_roster = {}
+	if was_open:
+		EventBus.tithe_choice_changed.emit(false)
+
+func _tick_tithe_choice(delta: float) -> void:
+	if _tithe_choice_left <= 0.0:
+		return
+	_tithe_choice_left -= delta
+	if _tithe_choice_left > 0.0:
+		return
+	resolve_tithe_auto()
+
+## El jugador deja que su guarnicion se encargue ya (o se acabo el tiempo).
+func resolve_tithe_auto() -> bool:
+	if _tithe_choice_roster.is_empty():
+		return false
+	var roster: Dictionary = _tithe_choice_roster.duplicate()
+	var severity: int = _tithe_choice_severity
+	_close_tithe_choice()
+	if _cycle == null or not _cycle.is_collecting() or _halted:
+		return false
+	_auto_resolve_tithe(roster, severity, true)
+	return true
+
+## ¡PELEAR!: este Impuesto, que iba con parte automatico, se pelea en el tablero.
+## false si no hay oferta abierta o si el tablero esta ocupado.
+func fight_this_tithe() -> bool:
+	if not is_tithe_choice_open() or CombatManager.is_board_open():
+		return false
+	var roster: Dictionary = _tithe_choice_roster.duplicate()
+	var severity: int = _tithe_choice_severity
+	_close_tithe_choice()
+	if _cycle == null or not _cycle.is_collecting() or _halted:
+		return false
+	_defend_on_board(roster, severity)
+	return true
+
 ## El Diezmo cae con el jugador de expedicion. La defensa se resuelve al
 ## instante y el Diezmo con ella: aqui no se espera `encounter_ended`, porque esa
 ## senal es del tablero abierto, no de esta pelea. El parte llega por
 ## `defense_auto_resolved` y por un aviso con bajas y rondas.
-func _auto_resolve_tithe(roster: Dictionary, severity: int) -> void:
-	var outcome: Dictionary = CombatManager.auto_resolve_defense(roster)
+## `routine` (la Visita): no es que el ejercito este fuera, es uno de los
+## Impuestos que se resuelven solos. El parte lo dice ("Parte automatico").
+func _auto_resolve_tithe(roster: Dictionary, severity: int, routine: bool = false) -> void:
+	var outcome: Dictionary = CombatManager.auto_resolve_defense(roster, -1.0, "auto_tithe" if routine else "")
 	if not bool(outcome.get("fought", false)):
 		EventBus.notification_posted.emit(Tr.t("STORM_TITHE_UNDEFENDED"), "danger", UITheme.DANGER)
 		_pay_tithe(severity)
@@ -639,11 +733,11 @@ func _auto_resolve_tithe(roster: Dictionary, severity: int) -> void:
 	var rounds: int = int(outcome.get("rounds", 0))
 	if bool(outcome.get("victory", false)):
 		EventBus.notification_posted.emit(
-			Tr.t("MSG_DEFENSE_AUTO_WON") % [dead, rounds], "success", UITheme.POSITIVE)
+			Tr.t("MSG_TITHE_AUTO_WON" if routine else "MSG_DEFENSE_AUTO_WON") % [dead, rounds], "success", UITheme.POSITIVE)
 		repel_tithe()
 	else:
 		EventBus.notification_posted.emit(
-			Tr.t("MSG_DEFENSE_AUTO_LOST") % [dead, rounds], "danger", UITheme.DANGER)
+			Tr.t("MSG_TITHE_AUTO_LOST" if routine else "MSG_DEFENSE_AUTO_LOST") % [dead, rounds], "danger", UITheme.DANGER)
 		_pay_tithe(severity)
 
 ## The force that comes to collect. A line of Assessors with guns behind it,
@@ -881,6 +975,8 @@ func load_save_data(data: Dictionary) -> void:
 		else:
 			_on_trial_phase(_trial.phase)
 	_tithe_to_resume = not _halted and _cycle.is_collecting()
+	_tithe_choice_left = 0.0
+	_tithe_choice_roster = {}
 	# Un guardado de antes de la Orden llega sin encargo: se sortea uno sin abrir
 	# la tarjeta (no es una calma nueva, es la de siempre que ahora se ve).
 	_ensure_order(false)
@@ -929,6 +1025,9 @@ func reset() -> void:
 	_armed = false
 	_halted = false
 	_tithe_to_resume = false
+	_tithe_choice_left = 0.0
+	_tithe_choice_roster = {}
+	_tithe_choice_severity = 0
 	_morale_debt = 0.0
 	_on_demand = false
 	_resume_when_running = false

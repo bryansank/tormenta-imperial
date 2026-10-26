@@ -287,6 +287,11 @@ static func tithe_force_mult() -> float:
 static func audit_enemy_mult() -> float:
 	return _tier_num("audit_enemy_mult") if combat_hard() else 1.0
 
+## Los materiales del taller que piden los niveles 2 y 3 del Cuartel General,
+## por esto (feat/ritmo-colono: Colono 0,5, Gobernador 1).
+static func hq_material_mult() -> float:
+	return maxf(0.0, _tier_num("hq_material_mult"))
+
 # ── Textos ───────────────────────────────────────────────────────────
 
 static func name_key(mode: int = -1) -> String:

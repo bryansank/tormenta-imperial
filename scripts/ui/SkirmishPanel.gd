@@ -1070,11 +1070,12 @@ func current_tab() -> String:
 	current_campaign()
 	return _tab
 
-## Lo que falta para el Ataque Final, como lista de comprobacion: CG nivel 3 y
-## cada campana, con ✓ lo hecho y candado lo que falta. Solo mientras falte
+## Lo que falta para el Ataque Final, como lista de comprobacion: las tres piezas
+## del CG nivel 3 (una por jefe de campana) y el propio CG nivel 3, con ✓ lo hecho
+## y candado lo que falta (una sola llave, feat/ritmo-colono). Solo mientras falte
 ## algo (y el modo tenga asedio). La frase entera, al mantener pulsado.
 func _add_gate_line() -> void:
-	var text: String = ProgressionManager.final_audit_gate_text()
+	var text: String = Objectives.final_gate_text()
 	if text == "":
 		return
 	var gate := HFlowContainer.new()
@@ -1088,15 +1089,16 @@ func _add_gate_line() -> void:
 	lead.add_child(CT.make_glyph("storm", 22))
 	lead.add_child(CT.label(Tr.t("ARMY2_GATE") + ":", "small", CT.text("window")))
 	gate.add_child(lead)
-	gate.add_child(_gate_item(ProgressionManager.milestones_completed.has("hq_max"), Tr.t("ARMY2_GATE_HQ")))
+	var hq_done: bool = ProgressionManager.milestones_completed.has("hq_max")
 	if GameMode.audit_needs_campaigns():
 		for domain in GameConfig.CAMPAIGN_DOMAINS:
 			var d := String(domain)
-			var done: bool = CombatManager.is_campaign_complete(d)
-			var word := Tr.t(String(DOMAIN_TAB_KEY.get(d, "ARMY2_TAB_LAND")))
-			if not done:
-				word += " %d/%d" % [CombatManager.campaign_won(d), CombatManager.campaign_total(d)]
-			gate.add_child(_gate_item(done, word))
+			var done: bool = hq_done or CombatManager.has_campaign_piece(d)
+			var item := _gate_item(done, CombatManager.piece_name(d))
+			item.name = "GatePiece_" + d
+			item.tooltip_text = Tr.t("PIECE_FROM_BOSS") % [CombatManager.piece_name(d), Tr.t("CAMP_NAME_" + d.to_upper())]
+			gate.add_child(item)
+	gate.add_child(_gate_item(hq_done, Tr.t("ARMY2_GATE_HQ")))
 	_head_box.add_child(gate)
 
 func _gate_item(done: bool, text: String) -> HBoxContainer:
@@ -1179,6 +1181,20 @@ func _add_campaign_header(domain: String) -> void:
 	var track := CT.campaign_track(won, total, ph, boss_tip)
 	track.tooltip_text = Tr.t("CAMP_BLURB_" + domain.to_upper())
 	_mission_box.add_child(track)
+	# Una sola llave (feat/ritmo-colono): lo que entrega su jefe.
+	if GameConfig.hq_needs_pieces(GameConfig.max_building_level):
+		var has: bool = CombatManager.has_campaign_piece(domain)
+		var piece_line := CT.icon_line("check" if has else "star",
+			Tr.t("CAMP_PIECE_GOT" if has else "CAMP_PIECE_BOSS") % CombatManager.piece_name(domain),
+			"positive" if has else "")
+		piece_line.name = "CampaignPiece"
+		_mission_box.add_child(piece_line)
+	# La rebaja por derrota, a la vista (feat/ritmo-colono): antes era invisible.
+	var eased: int = CombatManager.campaign_retry_ease_pct(domain)
+	if eased > 0:
+		var ease_line := CT.icon_line("minus", Tr.t("CAMP_RETRY_EASED") % eased, "")
+		ease_line.name = "CampaignRetryEase"
+		_mission_box.add_child(ease_line)
 	# El Leviatan pide acorazados: se dice antes de llegar a el (docs/15 §13).
 	var need: String = Objectives.campaign_boss_need_text(domain)
 	if need != "":

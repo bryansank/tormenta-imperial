@@ -769,6 +769,10 @@ func start_upgrade(node: Node, data: BuildingData, new_level: int) -> void:
 		return
 	if new_level <= int(node.get_meta("level", 1)) or new_level > GameConfig.max_building_level:
 		return
+	# Una sola llave (feat/ritmo-colono): el Cuartel General nivel 3 pide las tres
+	# piezas que entregan los jefes de campana, ademas de su coste.
+	if data.id == "headquarters" and not CombatManager.hq_missing_pieces(new_level).is_empty():
+		return
 	var cost := GameConfig.get_upgrade_cost(data, new_level)
 	if not ResourceManager.can_afford(cost):
 		return

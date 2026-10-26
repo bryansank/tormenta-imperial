@@ -8,6 +8,12 @@ extends CanvasLayer
 ##     con su sello — COBRADO o REPELIDO. Lee el diccionario `taken` tal cual:
 ##     recursos por nombre, `buildings` embargados, `workers` reclutados.
 ##
+##   * **Parte automatico** (la Visita, feat/ritmo-colono): dos de cada tres
+##     Impuestos los resuelven las tropas de casa solas (`defense_auto_resolved`
+##     con summary["reason"] = "auto_tithe"). Una sola tarjeta: la pelea, lo que
+##     se llevaron (el Impuesto que llega detras se pega a ella) y cuando toca la
+##     proxima Visita en el tablero.
+##
 ##   * **Parte del Impuesto de prueba** (`trial_tithe_resolved`, 2026-10-17): la
 ##     tormenta de prueba de la era 1 trae unos Cobradores de juguete. Echados, o
 ##     lo poco que se llevaron, y por que: sin soldados en casa no hay quien pelee.
@@ -207,10 +213,27 @@ func _on_trial_tithe_resolved(repelled: bool, taken: Dictionary) -> void:
 ## Diferido: `final_audit_lost` puede llegar despues del Diezmo en la misma
 ## cadena. Si llego en este frame, el Diezmo es el del asedio y lo cuenta el
 ## parte de derrota.
+## El Impuesto de un parte automatico (la Visita) no saca otra tarjeta: se pega a
+## la de su pelea, este en la cola o ya en pantalla.
 func _enqueue_tithe(repelled: bool, taken: Dictionary, frame: int) -> void:
 	if _audit_lost_frame == frame:
 		return
+	var tithe := {"repelled": repelled, "taken": taken}
+	if _is_open_auto(_current):
+		_current["tithe"] = tithe
+		_paint_defense(_current)
+		_queue_relayout()
+		return
+	for i in range(_queue.size() - 1, -1, -1):
+		if _is_open_auto(_queue[i]):
+			_queue[i]["tithe"] = tithe
+			return
 	_queue.append({"kind": Kind.TITHE, "repelled": repelled, "taken": taken})
+
+## Un parte automatico que aun espera su Impuesto.
+static func _is_open_auto(report: Dictionary) -> bool:
+	return int(report.get("kind", -1)) == Kind.DEFENSE and not report.has("tithe") \
+		and String((report.get("summary", {}) as Dictionary).get("reason", "")) == "auto_tithe"
 
 # ── Cola ─────────────────────────────────────────────────────────────
 
@@ -318,16 +341,36 @@ func _set_stamp(text: String, color: Color) -> void:
 
 func _paint_defense(report: Dictionary) -> void:
 	var victory: bool = bool(report.get("victory", false))
-	_kicker.text = Tr.t("LBL_REPORT_DEFENSE_KICKER")
+	var summary: Dictionary = report.get("summary", {})
+	var auto: bool = String(summary.get("reason", "")) == "auto_tithe"
+	_kicker.text = Tr.t("LBL_REPORT_AUTO_KICKER") if auto else Tr.t("LBL_REPORT_DEFENSE_KICKER")
 	_title.text = Tr.t("LBL_REPORT_DEFENSE_WON") if victory else Tr.t("LBL_REPORT_DEFENSE_LOST")
 	_tone(victory, "danger")
 	_set_stamp("", Color.WHITE)
 	# Bajas en discos: las nuestras en verde, las suyas en rojo.
-	var summary: Dictionary = report.get("summary", {})
-	_set_icons([CT.roster_discs(summary.get("casualties", {}), CT.sem("POSITIVE"), 40),
-		CT.roster_discs(summary.get("enemy_casualties", {}), CT.sem("DANGER"), 40)])
-	_body.text = "\n".join(defense_lines(victory, int(report.get("rounds", 0)), report.get("summary", {})))
+	var icons: Array = [CT.roster_discs(summary.get("casualties", {}), CT.sem("POSITIVE"), 40),
+		CT.roster_discs(summary.get("enemy_casualties", {}), CT.sem("DANGER"), 40)]
+	var lines: Array = defense_lines(victory, int(report.get("rounds", 0)), summary)
+	# El Impuesto que vino detras (parte automatico): su sello y lo que se llevaron.
+	var tithe: Dictionary = report.get("tithe", {})
+	if not tithe.is_empty():
+		var repelled: bool = bool(tithe.get("repelled", false))
+		_set_stamp(Tr.t("LBL_STAMP_REPELLED") if repelled else Tr.t("LBL_STAMP_COLLECTED"),
+			CT.sem("POSITIVE") if repelled else CT.sem("DANGER"))
+		icons.append(_taken_chips(tithe.get("taken", {})))
+		lines.append_array(tithe_lines(repelled, tithe.get("taken", {})))
+	if auto:
+		lines.append(next_visit_line())
+	_set_icons(icons)
+	_body.text = "\n".join(lines)
 	_say(Kind.DEFENSE, victory)
+
+## "La proxima Visita, en el tablero: dentro de 2 Impuestos." (StormManager).
+static func next_visit_line() -> String:
+	var left: int = StormManager.tithes_before_visit()
+	if left <= 0:
+		return Tr.t("LBL_REPORT_NEXT_VISIT_1")
+	return Tr.t("LBL_REPORT_NEXT_VISIT") % (left + 1)
 
 func _paint_tithe(report: Dictionary) -> void:
 	var repelled: bool = bool(report.get("repelled", false))

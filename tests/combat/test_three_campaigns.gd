@@ -36,11 +36,66 @@ func _offer(domain: String, mission: int, era: int = 3) -> Dictionary:
 
 func test_each_campaign_has_its_missions_and_a_boss_at_the_end() -> void:
 	for domain in DOMAINS:
-		var total: int = BookScript.total(domain)
+		var total: int = BookScript.base_total(domain)
 		assert_int(total).override_failure_message("%s sin misiones" % domain).is_greater_equal(4)
 		assert_bool(Generator.campaign_is_boss_mission(domain, total - 1)).is_true()
 		assert_bool(Generator.campaign_is_boss_mission(domain, 0)).is_false()
 		assert_int((GameConfig.campaign_defs[domain]["fights"] as Array).size()).is_equal(total)
+
+## feat/ritmo-colono: Colono juega Tierra 4, Mar 3 y Aire 3 (el jefe siempre);
+## Gobernador, la tabla entera.
+func test_colonist_plays_fewer_missions_and_always_the_boss() -> void:
+	var saved_tier: int = GameMode.tier
+	GameMode.tier = GameMode.Tier.COLONIST
+	assert_array(GameConfig.campaign_mission_list("land")).is_equal([0, 2, 4, 5])
+	assert_array(GameConfig.campaign_mission_list("sea")).is_equal([0, 2, 4])
+	assert_array(GameConfig.campaign_mission_list("air")).is_equal([0, 2, 4])
+	assert_int(BookScript.total("land")).is_equal(4)
+	assert_int(BookScript.number_of("land", 4)).is_equal(3)
+	assert_int(BookScript.number_of("land", 1)).is_equal(-1)
+	GameMode.tier = GameMode.Tier.GOVERNOR
+	for domain in DOMAINS:
+		assert_int(BookScript.total(domain)).is_equal(BookScript.base_total(domain))
+	GameMode.tier = saved_tier
+
+func test_colonist_skips_the_missions_it_does_not_play() -> void:
+	var saved_tier: int = GameMode.tier
+	GameMode.tier = GameMode.Tier.COLONIST
+	var book := _book()
+	book.finish("land", 0, true, 0.0, 0.0)
+	assert_int(book.next_mission("land")).is_equal(2)
+	assert_int(book.won("land")).is_equal(1)
+	# La 1 de la tabla no cuenta en Colono: no es la que toca.
+	book.finish("land", 1, true, 0.0, 0.0)
+	assert_int(book.won("land")).is_equal(1)
+	GameMode.tier = saved_tier
+
+## Una sola llave: la pieza del CG nivel 3 es haber ganado al jefe.
+func test_the_boss_hands_over_the_piece() -> void:
+	var book := _book()
+	assert_array(book.missing_pieces()).is_equal(["land", "sea", "air"])
+	var seen: Array = []
+	for m in GameConfig.campaign_mission_list("sea"):
+		for e in book.finish("sea", int(m), true, 0.0, 0.0):
+			seen.append(String(e["e"]))
+	assert_bool(book.has_piece("sea")).is_true()
+	assert_int(seen.count("campaign_piece_won")).is_equal(1)
+	assert_array(book.missing_pieces()).is_equal(["land", "air"])
+	assert_int(book.pieces_count()).is_equal(1)
+
+## Un guardado de antes de los niveles (progreso contado en la tabla entera): la
+## pieza sale de si gano al jefe; sin el jefe, la campana sigue en Colono por la
+## siguiente mision que juega.
+func test_an_old_save_derives_its_pieces_from_the_bosses_it_beat() -> void:
+	var saved_tier: int = GameMode.tier
+	GameMode.tier = GameMode.Tier.COLONIST
+	var book: CampaignBook = BookScript.from_dict({"seed": 9, "progress": {"land": 6, "sea": 4, "air": 1}})
+	assert_bool(book.has_piece("land")).is_true()
+	assert_bool(book.has_piece("sea")).is_false()
+	assert_int(book.next_mission("sea")).is_equal(4)
+	assert_int(book.won("sea")).is_equal(2)
+	assert_int(book.next_mission("air")).is_equal(2)
+	GameMode.tier = saved_tier
 
 func test_a_new_book_has_nothing_won() -> void:
 	var book := _book()
@@ -71,8 +126,8 @@ func test_beating_the_three_bosses_completes_everything() -> void:
 	var book := _book()
 	var seen: Array = []
 	for domain in DOMAINS:
-		for m in range(BookScript.total(domain)):
-			for e in book.finish(domain, m, true, 0.0, 0.0):
+		for m in GameConfig.campaign_mission_list(domain):
+			for e in book.finish(domain, int(m), true, 0.0, 0.0):
 				seen.append(String(e["e"]))
 		assert_bool(book.is_complete(domain)).is_true()
 		assert_int(book.next_mission(domain)).is_equal(-1)
@@ -82,8 +137,9 @@ func test_beating_the_three_bosses_completes_everything() -> void:
 
 func test_the_book_round_trips_and_loading_twice_does_not_add() -> void:
 	var book := _book()
-	book.finish("land", 0, true, 5.0, 30.0)
-	book.finish("land", 1, true, 6.0, 30.0)
+	var played: Array = GameConfig.campaign_mission_list("land")
+	book.finish("land", int(played[0]), true, 5.0, 30.0)
+	book.finish("land", int(played[1]), true, 6.0, 30.0)
 	var data: Dictionary = JSON.parse_string(JSON.stringify(book.to_dict()))
 	var once: CampaignBook = BookScript.from_dict(data)
 	var twice: CampaignBook = BookScript.from_dict(data)
@@ -108,7 +164,7 @@ func test_the_seed_is_set_once_and_never_moves() -> void:
 
 func test_every_mission_only_fields_enemies_of_its_own_domain() -> void:
 	for domain in DOMAINS:
-		for m in range(BookScript.total(domain)):
+		for m in range(BookScript.base_total(domain)):
 			for era in [Generator.campaign_mission_era(domain, m), 3]:
 				var map: Array = Generator.campaign_mission_map(_offer(domain, m, era))
 				assert_array(map).is_not_empty()
@@ -128,7 +184,7 @@ func test_the_same_offer_is_the_same_mission() -> void:
 
 func test_the_number_of_fights_follows_the_config() -> void:
 	for domain in DOMAINS:
-		for m in range(BookScript.total(domain)):
+		for m in range(BookScript.base_total(domain)):
 			var map: Array = Generator.campaign_mission_map(_offer(domain, m))
 			assert_int(Generator.fights_on_path(map)).is_equal(Generator.campaign_mission_fights(domain, m))
 			if map.size() > 1:
@@ -147,7 +203,7 @@ func test_only_the_last_fight_pays() -> void:
 
 func test_the_campaign_boss_is_stronger_than_the_mission_before() -> void:
 	for domain in DOMAINS:
-		var total: int = BookScript.total(domain)
+		var total: int = BookScript.base_total(domain)
 		var boss_map: Array = Generator.campaign_mission_map(_offer(domain, total - 1))
 		var prev_map: Array = Generator.campaign_mission_map(_offer(domain, total - 2))
 		var boss_node: Dictionary = boss_map[boss_map.size() - 1]
@@ -249,19 +305,28 @@ func test_a_campaign_without_its_building_is_locked() -> void:
 		assert_str(CombatManager.campaign_lock_reason("sea")).is_equal("CAMP_LOCK_BUILDING")
 
 func test_reset_starts_with_no_campaign_and_a_seed() -> void:
-	CombatManager.load_campaigns_save_data({"progress": {"land": 2}})
-	assert_int(CombatManager.campaign_won("land")).is_equal(2)
+	# El progreso del guardado cuenta misiones de la tabla: 3 son las 0, 1 y 2,
+	# de las que este nivel juega las que diga su lista.
+	CombatManager.load_campaigns_save_data({"progress": {"land": 3}})
+	var played := 0
+	for m in GameConfig.campaign_mission_list("land"):
+		if int(m) < 3:
+			played += 1
+	assert_int(CombatManager.campaign_won("land")).is_equal(played)
 	CombatManager.load_campaigns_save_data({})
 	assert_int(CombatManager.campaign_won("land")).is_equal(0)
 	assert_int(CombatManager.get_campaign_book().seed_value).is_not_equal(0)
 
 func test_the_save_keeps_the_campaigns() -> void:
 	CombatManager.load_campaigns_save_data({"seed": 55, "progress": {"land": 3, "sea": 1}})
+	var land_won: int = CombatManager.campaign_won("land")
+	var sea_won: int = CombatManager.campaign_won("sea")
 	var data: Dictionary = CombatManager.get_campaigns_save_data()
 	CombatManager.load_campaigns_save_data({})
 	CombatManager.load_campaigns_save_data(data)
-	assert_int(CombatManager.campaign_won("land")).is_equal(3)
-	assert_int(CombatManager.campaign_won("sea")).is_equal(1)
+	assert_int(CombatManager.campaign_won("land")).is_equal(land_won)
+	assert_int(CombatManager.campaign_won("sea")).is_equal(sea_won)
+	assert_int(int(data["progress"]["land"])).is_equal(3)
 	assert_int(CombatManager.get_campaign_book().seed_value).is_equal(55)
 
 func test_the_campaign_key_is_written_and_read_by_the_game_manager() -> void:
@@ -274,8 +339,10 @@ func test_the_texts_exist_in_both_languages() -> void:
 		"AUDIT_NEEDS_HQ3", "HELP_T_CAMPAIGNS", "HELP_B_CAMPAIGNS", "HELP_T_FINAL_GATE", "HELP_B_FINAL_GATE",
 		"OBJ_DO_CAMPAIGN", "OBJ_ROUTE_CAMPAIGNS", "CAMP_LOCK_BUILDING", "CAMP_LOCK_REST", "CAMP_LOCK_ERA"]
 	for domain in DOMAINS:
-		for m in range(BookScript.total(domain)):
+		for m in range(BookScript.base_total(domain)):
 			keys.append(Generator.campaign_mission_name_key(domain, m))
+		keys.append("PIECE_" + domain.to_upper())
+		keys.append("PIECE_SHORT_" + domain.to_upper())
 		keys.append("CAMP_BLURB_" + domain.to_upper())
 		keys.append("CAMP_WHERE_" + domain.to_upper())
 		keys.append("CAMP_NO_UNITS_" + domain.to_upper())
@@ -291,7 +358,7 @@ func test_the_texts_exist_in_both_languages() -> void:
 func test_each_mission_has_its_calibrated_scale() -> void:
 	for domain in GameConfig.CAMPAIGN_DOMAINS:
 		var row: Array = GameConfig.campaign_enemy_mult[domain]
-		assert_int(row.size()).is_equal(GameConfig.campaign_mission_count(domain))
+		assert_int(row.size()).is_equal(GameConfig.campaign_base_count(domain))
 		for m in range(row.size()):
 			assert_float(ExpeditionGenerator.campaign_mission_mult(domain, m)).is_equal(float(row[m]))
 		assert_int(int(GameConfig.campaign_boss_heavies[domain])).is_equal(1)
@@ -323,6 +390,6 @@ func test_each_failure_eases_the_same_mission() -> void:
 	# Ganarla pone el contador a cero; se guarda y se carga.
 	book.finish("air", 0, true, 0.0, 0.0)
 	assert_int(int(book.fails["air"])).is_equal(0)
-	book.finish("air", 1, false, 0.0, 0.0)
+	book.finish("air", book.next_mission("air"), false, 0.0, 0.0)
 	var loaded = BookScript.from_dict(book.to_dict())
 	assert_int(int(loaded.fails["air"])).is_equal(1)

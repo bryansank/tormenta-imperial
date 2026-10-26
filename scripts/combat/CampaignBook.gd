@@ -12,6 +12,18 @@ class_name CampaignBook
 ## jefe de campana en la ultima). Perder o abandonar no avanza nada: la misma
 ## mision espera, con el mismo mapa (la semilla no cambia: la Regencia sigue en
 ## su sitio).
+##
+## Niveles (feat/ritmo-colono): Colono juega menos misiones que Gobernador
+## (GameConfig.campaign_mission_list). Las misiones se nombran SIEMPRE por su
+## indice en la tabla (campaign_defs): `progress` es el indice de la tabla de la
+## siguiente mision por jugar (la tabla entera = campana completa). Asi un
+## guardado de antes, que contaba misiones de la tabla, carga tal cual; y lo que
+## se ensena ("3 de 4") cuenta solo las misiones del nivel (won / total).
+##
+## La pieza (una sola llave, feat/ritmo-colono): el jefe de cada campana entrega
+## una pieza del Cuartel General nivel 3. Tenerla es haber ganado al jefe, o sea
+## la campana completa: has_piece() == is_complete(). Un guardado viejo con el
+## jefe ganado ya la tiene; sin el jefe, no.
 
 const Generator := preload("res://scripts/combat/ExpeditionGenerator.gd")
 
@@ -19,7 +31,8 @@ const DOMAINS := ["land", "sea", "air"]
 
 ## Semilla de la partida: cada mision la mezcla con su medio y su numero.
 var seed_value: int = 0
-## Misiones ganadas por campana (0 .. total). Igual al total = campana completa.
+## La siguiente mision por jugar de cada campana, como indice de la tabla
+## (0 .. campaign_base_count). Igual al total de la tabla = campana completa.
 var progress: Dictionary = {"land": 0, "sea": 0, "air": 0}
 ## Segundos jugados a partir de los cuales se puede lanzar la siguiente mision.
 var next_at: Dictionary = {"land": 0.0, "sea": 0.0, "air": 0.0}
@@ -35,14 +48,53 @@ var fails: Dictionary = {"land": 0, "sea": 0, "air": 0}
 
 # ── Consultas ────────────────────────────────────────────────────────
 
+## Misiones de la campana en este nivel (jefe incluido).
 static func total(domain: String) -> int:
 	return GameConfig.campaign_mission_count(domain)
 
+## Misiones de la tabla (las de Gobernador).
+static func base_total(domain: String) -> int:
+	return GameConfig.campaign_base_count(domain)
+
+## El numero que se ensena de una mision de la tabla en este nivel (1..total):
+## en Colono la mision 3 de la tabla puede ser la "2 de 4". -1 si este nivel no
+## la juega.
+static func number_of(domain: String, mission: int) -> int:
+	var i: int = GameConfig.campaign_mission_list(domain).find(mission)
+	return i + 1 if i >= 0 else -1
+
+## El indice de la tabla de la siguiente mision por jugar.
+func base_progress(domain: String) -> int:
+	return clampi(int(progress.get(domain, 0)), 0, base_total(domain))
+
+## Misiones de este nivel ya ganadas (lo que se ensena: "2 de 4").
 func won(domain: String) -> int:
-	return clampi(int(progress.get(domain, 0)), 0, total(domain))
+	if is_complete(domain):
+		return total(domain)
+	var at: int = base_progress(domain)
+	var n := 0
+	for m in GameConfig.campaign_mission_list(domain):
+		if int(m) < at:
+			n += 1
+	return mini(n, maxi(0, total(domain) - 1))
 
 func is_complete(domain: String) -> bool:
-	return total(domain) > 0 and won(domain) >= total(domain)
+	return base_total(domain) > 0 and base_progress(domain) >= base_total(domain)
+
+## La pieza del Cuartel General de esta campana: la entrega su jefe.
+func has_piece(domain: String) -> bool:
+	return is_complete(domain)
+
+## Las campanas cuya pieza falta, en el orden de las pestanas.
+func missing_pieces() -> Array:
+	var out: Array = []
+	for domain in DOMAINS:
+		if not has_piece(domain):
+			out.append(domain)
+	return out
+
+func pieces_count() -> int:
+	return DOMAINS.size() - missing_pieces().size()
 
 func all_complete() -> bool:
 	for domain in DOMAINS:
@@ -57,12 +109,19 @@ func completed_count() -> int:
 			n += 1
 	return n
 
-## La mision que toca (indice desde 0), o -1 si la campana esta completa.
+## La mision que toca, como indice de la tabla, o -1 si la campana esta
+## completa: la primera de este nivel que no se ha jugado.
 func next_mission(domain: String) -> int:
-	return -1 if is_complete(domain) else won(domain)
+	if is_complete(domain):
+		return -1
+	var at: int = base_progress(domain)
+	for m in GameConfig.campaign_mission_list(domain):
+		if int(m) >= at:
+			return int(m)
+	return base_total(domain) - 1
 
 func is_started(domain: String) -> bool:
-	return won(domain) > 0
+	return base_progress(domain) > 0
 
 ## Segundos que faltan para poder lanzar la siguiente (0 = ya).
 func cooldown_left(domain: String, now: float) -> float:
@@ -104,13 +163,14 @@ func finish(domain: String, mission: int, won_it: bool, now: float, cooldown: fl
 		return [{"e": "campaign_changed"}]
 	if mission != next_mission(domain):
 		return [{"e": "campaign_changed"}]
-	progress[domain] = won(domain) + 1
+	progress[domain] = mission + 1
 	fails[domain] = 0
 	next_at[domain] = now + maxf(0.0, cooldown)
 	var boss: bool = Generator.campaign_is_boss_mission(domain, mission)
 	var events: Array = [{"e": "campaign_mission_won", "domain": domain, "mission": mission, "boss": boss}]
 	if is_complete(domain):
 		events.append({"e": "campaign_completed", "domain": domain})
+		events.append({"e": "campaign_piece_won", "domain": domain})
 		if all_complete():
 			events.append({"e": "campaigns_all_completed"})
 	events.append({"e": "campaign_changed"})
@@ -140,7 +200,9 @@ func to_dict() -> Dictionary:
 
 ## Idempotente: lo cargado sustituye a todo, nunca se suma. Sin datos (guardado
 ## anterior a las campanas) = ninguna empezada. Un numero fuera de rango se
-## recorta al total de su campana.
+## recorta al total de la tabla. `progress` siempre fue (y sigue siendo) un indice
+## de la tabla: un guardado de antes de los niveles carga igual, y su pieza sale
+## de si gano al jefe.
 static func from_dict(data: Dictionary) -> CampaignBook:
 	var book := CampaignBook.new()
 	if data.is_empty():
@@ -151,7 +213,7 @@ static func from_dict(data: Dictionary) -> CampaignBook:
 		var n: Dictionary = data.get("next_at", {}) if data.get("next_at", {}) is Dictionary else {}
 		var s: Dictionary = data.get("seen", {}) if data.get("seen", {}) is Dictionary else {}
 		var b: Dictionary = data.get("setbacks", {}) if data.get("setbacks", {}) is Dictionary else {}
-		book.progress[domain] = clampi(int(p.get(domain, 0)), 0, total(domain))
+		book.progress[domain] = clampi(int(p.get(domain, 0)), 0, base_total(domain))
 		book.next_at[domain] = maxf(0.0, float(n.get(domain, 0.0)))
 		book.seen[domain] = int(s.get(domain, -1))
 		book.setbacks[domain] = maxi(0, int(b.get(domain, 0)))

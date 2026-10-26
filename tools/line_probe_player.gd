@@ -86,6 +86,10 @@ func run() -> void:
 			var prop: String = String(key).substr(4)
 			GameConfig.set(prop, str_to_var(String(options[key])))
 			print("override %s = %s" % [prop, str(GameConfig.get(prop))])
+	# El nivel de la Campana (feat/ritmo-colono): Colono (por defecto) o
+	# Gobernador. GameManager._new_game() lo conserva (begin_run con el de ahora).
+	GameMode.begin_run(GameMode.Mode.CAMPAIGN, GameMode.tier_from_key(String(options.get("tier", "colonist"))))
+	print("nivel: %s" % GameMode.tier_key_of(GameMode.tier))
 	_clock_probe = load("res://tools/balance_probe.gd").new()
 	_connect_probes()
 	_connect_extra_probes()
@@ -175,6 +179,9 @@ func _play_seed(map_seed: int) -> Dictionary:
 		# Tres campanas: minuto de cada mision ganada por medio, intentos fallidos.
 		"campaign_won": {"land": [], "sea": [], "air": []}, "campaign_setbacks": 0,
 		"campaign_done": {}, "camp_losses": {},
+		# feat/ritmo-colono: cierre de cada capitulo, tableros abiertos y como se
+		# resolvio cada Impuesto (la Visita en el tablero, el resto automatico).
+		"chapters": {}, "boards": 0, "tithe_board": 0, "tithe_auto": 0,
 	}
 	_extras_accum = 0.0
 	_last_coast = -INF
@@ -415,8 +422,12 @@ func _decide() -> void:
 		"make":
 			_try_make(step)
 		"campaign":
-			# Tres campanas: la linea la pide (CG nv3 hecho y faltan campanas).
-			_launch_campaign(String(step["id"]), true)
+			# Las piezas del CG (feat/ritmo-colono): la linea las pide. Como
+			# cualquier salida, en calma y lejos del Aviso: la columna fuera no
+			# defiende el Impuesto (sin esto la tropa salia en plena Tormenta y
+			# se pagaba un Impuesto tras otro).
+			if _campaign_window_open():
+				_launch_campaign(String(step["id"]), true)
 		"sortie":
 			# La primera escaramuza: la columna que propone el panel. El tablero
 			# lo juega el bucle de arriba como cualquier otro.
@@ -489,12 +500,19 @@ func _campaign_mission() -> bool:
 	# El Leviatan sin acorazados devuelve un paso de entrenar, no la mision.
 	if camp.is_empty() or String(camp.get("kind", "")) != "campaign":
 		return false
+	if not _campaign_window_open():
+		return false
+	return _launch_campaign(String(camp["id"]), false)
+
+## En calma y a mas de 5 min del Aviso: lo que espera un jugador razonable para
+## sacar una columna (fuera, no defiende el Impuesto).
+func _campaign_window_open() -> bool:
 	if StormManager.get_phase() != StormCycle.Phase.CALM:
 		return false
 	var cycle: StormCycle = StormManager.get_cycle()
 	if StormManager.is_armed() and cycle != null and float(cycle.seconds_left) < 300.0:
 		return false
-	return _launch_campaign(String(camp["id"]), false)
+	return true
 
 ## Lanza la mision que toca de `domain` con lo mas fuerte de su medio que haya en
 ## casa (hasta el tope del tablero). En tierra deja en casa la mitad de la
@@ -590,7 +608,17 @@ func _train_for_campaign(domain: String) -> bool:
 	if best == "":
 		return false
 	if String(ArmyManager.can_train(best).get("reason", "")) == "LBL_ARMY_AT_CAP":
-		return false
+		# Ejercito al tope: otro Cuartel (lo que pide ¿QUE HACER?,
+		# Objectives.army_room_step). Si no se puede, se sale con lo que hay.
+		var room: Dictionary = Objectives.army_room_step({"kind": "train", "id": best})
+		if room.is_empty():
+			return false
+		_try_build("barracks", room)
+		return true
+	# Los materiales que pida (las vigas del tanque, el combustible del caza) se
+	# fabrican antes en su taller: el Mercado no los vende.
+	if _make_missing_materials(ArmyManager._convert_cost(GameConfig.get_unit_def(best).get("cost", {}))):
+		return true
 	_try_train(best)
 	return true
 
@@ -1634,6 +1662,16 @@ func _connect_probes() -> void:
 		(_r["camp_losses"] as Dictionary)[domain] = 0)
 	EventBus.campaign_completed.connect(func(domain: String) -> void:
 		_r["campaign_done"][domain] = _clock)
+	EventBus.chapter_completed.connect(func(n: int) -> void:
+		_r["chapters"][n] = _clock)
+	EventBus.encounter_started.connect(func(_i: int, _b: bool) -> void:
+		_r["boards"] = int(_r["boards"]) + 1
+		if CombatManager.is_defending() and not ProgressionManager.is_final_audit_active() \
+				and not StormManager.is_trial_tithe_pending():
+			_r["tithe_board"] = int(_r["tithe_board"]) + 1)
+	EventBus.defense_auto_resolved.connect(func(_v: bool, _rounds: int, summary: Dictionary) -> void:
+		if String(summary.get("reason", "")) == "auto_tithe":
+			_r["tithe_auto"] = int(_r["tithe_auto"]) + 1)
 	EventBus.expedition_ended.connect(func(result: int, _rw: Dictionary, _c: Dictionary) -> void:
 		var lost_domain: String = String(CombatManager.get_last_result().get("campaign_domain", ""))
 		if result != Expedition.RESULT_WON and not lost_domain.is_empty():
@@ -1802,6 +1840,9 @@ func _print_run(r: Dictionary) -> void:
 		camps += "%s %d/%d [%s] completa %s | " % [domain, wins.size(), GameConfig.campaign_mission_count(domain),
 			",".join(times), _mins(r["campaign_done"].get(domain, -1.0))]
 	print("  campanas: %sfallidas %d" % [camps, int(r["campaign_setbacks"])])
+	print("  capitulos: I %s | II %s | III %s | tableros %d | impuestos en el tablero %d, automaticos %d" % [
+		_mins(r["chapters"].get(1, -1.0)), _mins(r["chapters"].get(2, -1.0)), _mins(r["chapters"].get(3, -1.0)),
+		int(r["boards"]), int(r["tithe_board"]), int(r["tithe_auto"])])
 	print("  CG nv2 en el minuto %s | CG nv3 (convocatoria) en el %s | casas %d | granjas %d | gente %d | comida %.0f/min" % [
 		_mins(r.get("hq2_at", -1.0)), _mins(r.get("hq3_at", -1.0)), int(r.get("houses", 0)), int(r.get("farms", 0)),
 		int(r["end"]["pop"]), float(r.get("food_per_min", 0.0))])
@@ -1828,8 +1869,8 @@ func _print_run(r: Dictionary) -> void:
 
 func _print_table(results: Array) -> void:
 	print("")
-	print("| semilla | era 2 | era 3 | CG | CG nv3 | tierra | mar | aire | asedio | victoria | era 1 | era 2 dura | era 3 dura | tormentas | diezmos repelidos | asedios | esperas>2min | hueco max | huecos>3min sin decidir | mayor sin decidir | bolsa llena | desbordado |")
-	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+	print("| semilla | era 2 | era 3 | CG | CG nv3 | tierra | mar | aire | asedio | victoria | cap I | cap II | tableros | impuestos tablero/auto | era 1 | era 2 dura | era 3 dura | tormentas | diezmos repelidos | asedios | esperas>2min | hueco max | huecos>3min sin decidir | mayor sin decidir | bolsa llena | desbordado |")
+	print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for r in results:
 		var m: Dictionary = r["milestones"]
 		var repelled := 0
@@ -1838,12 +1879,15 @@ func _print_table(results: Array) -> void:
 				repelled += 1
 		var g: Dictionary = _gaps(r)
 		var siege_t: float = float(r["sieges"][0]["t"]) if not r["sieges"].is_empty() else -1.0
-		print("| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %.1f | %.0f | %.0f | %d | %d/%d | %d | %d (%.0f min) | %.1f min | %d | %.1f min | %.0f min | %d |" % [
+		print("| %d | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %d | %d/%d | %.1f | %.0f | %.0f | %d | %d/%d | %d | %d (%.0f min) | %.1f min | %d | %.1f min | %.0f min | %d |" % [
 			r["seed"], _mins(m.get("era_2", -1.0)), _mins(m.get("era_3", -1.0)),
 			_mins(m.get("hq_built", -1.0)), _mins(m.get("hq_max", -1.0)),
 			_mins(r["campaign_done"].get("land", -1.0)), _mins(r["campaign_done"].get("sea", -1.0)),
 			_mins(r["campaign_done"].get("air", -1.0)),
-			_mins(siege_t), _mins(r["victory_at"]), _era_len(r, 1), _era_len(r, 2), _era_len(r, 3),
+			_mins(siege_t), _mins(r["victory_at"]),
+			_mins(r["chapters"].get(1, -1.0)), _mins(r["chapters"].get(2, -1.0)),
+			int(r["boards"]), int(r["tithe_board"]), int(r["tithe_auto"]),
+			_era_len(r, 1), _era_len(r, 2), _era_len(r, 3),
 			r["storms"].size(), repelled, r["tithes"].size(), r["sieges"].size(),
 			g["count"], g["dead"] / 60.0, g["longest"] / 60.0, int(g["idle_count"]), float(g["idle_longest"]) / 60.0,
 			r["full_time"] / 60.0, r["overflow"]])

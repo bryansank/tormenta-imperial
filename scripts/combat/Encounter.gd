@@ -51,6 +51,14 @@ var terrain: Dictionary = {}
 ## en un tablero sin agua). No pelean, no mueren, no cuentan: se quedan "en el
 ## puerto". Normalmente vacio: quien compone los bandos ya evita mandarlas.
 var reserve: Array = []
+## El azar del dano (feat/ritmo-colono, docs/15 §3 "El dano y su azar"): un
+## generador PROPIO, sembrado. create() lo siembra con una semilla sacada del
+## tablero tal como empieza (bandos, vida, casillas), asi que el mismo tablero da
+## el mismo combate; quien quiera otra noche (un reintento, otro Impuesto) llama
+## seed_rng() con su semilla antes de start(). Misma semilla y mismas jugadas =
+## mismo combate. Nunca randf() global.
+var rng := RandomNumberGenerator.new()
+var rng_seed: int = 0
 
 # ── Construction ─────────────────────────────────────────────────────
 
@@ -78,7 +86,22 @@ static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: 
 	# Despues de desplegar: lo que se quedo en reserva no cuenta para la retirada.
 	for unit in Rules.living_units(e.units, ENEMY):
 		e.enemy_start_hp += unit.hp
+	e.seed_rng(e.board_seed())
 	return e
+
+## La semilla que sale del tablero tal como empieza: indice, jefe, defensa y cada
+## unidad (tipo, bando, vida, escala y casilla). Pura: el mismo tablero, la misma.
+func board_seed() -> int:
+	var parts: Array = [index, is_boss, is_defense]
+	for unit in units:
+		parts.append([unit.unit_id, unit.side, unit.hp, snappedf(unit.scale, 0.001), unit.position])
+	var value: int = hash(parts)
+	return value if value != 0 else 1
+
+## Siembra el azar del dano. Llamar antes de start() (o de AutoResolver.resolve).
+func seed_rng(value: int) -> void:
+	rng_seed = value if value != 0 else 1
+	rng.seed = rng_seed
 
 ## ¿Hay agua en este tablero?
 func has_water() -> bool:
@@ -383,7 +406,10 @@ func attack(uid: int, target_uid: int) -> Array:
 		return []
 	var attacker := get_unit(uid)
 	var target := get_unit(target_uid)
-	var dealt: int = Rules.damage(attacker, target)
+	# El golpe sale del rango con la tirada de este tablero (rng sembrado). Con
+	# combat_damage_spread = 0 el rango es un solo numero y no se tira nada.
+	var span: Vector2i = Rules.damage_range(attacker, target)
+	var dealt: int = span.x if span.x == span.y else Rules.rolled_damage(attacker, target, rng.randf())
 	target.take_damage(dealt)
 	attacker.has_acted = true
 	var events: Array = [{"e": "unit_attacked", "attacker": uid, "target": target_uid, "damage": dealt}]
