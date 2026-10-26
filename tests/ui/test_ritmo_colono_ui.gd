@@ -52,6 +52,19 @@ func test_the_last_chapter_is_closed_by_the_victory_screen() -> void:
 	assert_int(screen.pending_count()).is_equal(0)
 	assert_bool(screen.try_show_next()).is_false()
 
+## Integracion v1.3: la victoria (y su EL LIBRO) no deja una tarjeta de
+## capitulo pendiente ni a la vista detras.
+func test_the_victory_clears_a_pending_or_shown_chapter_card() -> void:
+	var screen: CanvasLayer = auto_free(ChapterScreenScript.new())
+	add_child(screen)
+	await await_idle_frame()
+	EventBus.chapter_completed.emit(1)
+	EventBus.chapter_completed.emit(2)
+	assert_bool(screen.try_show_next()).is_true()
+	screen._on_victory({})
+	assert_bool(screen.is_showing()).is_false()
+	assert_int(screen.pending_count()).is_equal(0)
+
 func test_the_chapter_card_waits_for_an_open_board() -> void:
 	ArmyManager.load_save_data({"units": {"infantry": 2}, "training": [], "upkeep_accum": 0.0})
 	var screen: CanvasLayer = auto_free(ChapterScreenScript.new())

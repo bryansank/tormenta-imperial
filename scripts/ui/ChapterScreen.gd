@@ -38,6 +38,9 @@ func _ready() -> void:
 	EventBus.chapter_completed.connect(_on_chapter_completed)
 	EventBus.game_new_started.connect(_clear)
 	EventBus.game_load_completed.connect(_clear)
+	# La victoria cierra el capitulo III y abre su pantalla (EL LIBRO): una tarjeta
+	# de capitulo que quedara pendiente o a la vista no se queda detras.
+	EventBus.victory_achieved.connect(_on_victory)
 	get_viewport().size_changed.connect(_relayout)
 
 func _setup_ui() -> void:
@@ -83,6 +86,9 @@ func _on_chapter_completed(chapter: int) -> void:
 		return
 	_queue.append(chapter)
 	set_process(true)
+
+func _on_victory(_stats: Dictionary = {}) -> void:
+	_clear()
 
 func _clear() -> void:
 	_queue.clear()
