@@ -412,8 +412,9 @@ static func style_label(l: Label, level: String, color: Color, outline: bool = f
 		l.add_theme_color_override("font_outline_color", INK)
 	else:
 		l.add_theme_constant_override("outline_size", 0)
-	# Rotulos Art Deco: titulares y botones en mayusculas (no cambia `text`).
-	l.uppercase = caps_titles() and level in ["display", "title", "button"]
+	# Rotulos Art Deco: placas de titulo y botones en mayusculas (no cambia
+	# `text`). El nivel "title" no: a veces lleva una frase entera (tutorial).
+	l.uppercase = caps_titles() and level in ["display", "button"]
 	l.add_theme_constant_override("line_spacing", -2 if level in ["display", "title", "button", "number"] else 0)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 

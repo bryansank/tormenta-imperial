@@ -1240,7 +1240,7 @@ cambió de código para la piel: `pill_button`, `window`, `card_style`,
 
 | Uso | Fuente | Fichero |
 |---|---|---|
-| Titulares, placas de ventana, botones (`display`, `title`, `button`) | **Big Shoulders Display** 800, en mayúsculas (`Label.uppercase`, no cambia `text`) y con 1 px entre letras | `assets/fonts/big_shoulders_display/BigShouldersDisplay-Variable.ttf` (un variable, eje `wght` a 800) |
+| Titulares, placas de ventana, botones (`display`, `title`, `button`) | **Big Shoulders Display** 800 con 1 px entre letras; placas y botones (`display`, `button`) en mayúsculas (`Label.uppercase`, no cambia `text`; `title` no, porque a veces es una frase entera) | `assets/fonts/big_shoulders_display/BigShouldersDisplay-Variable.ttf` (un variable, eje `wght` a 800) |
 | Texto (`body`) | **IBM Plex Sans Condensed** Medium | `assets/fonts/ibm_plex_sans_condensed/IBMPlexSansCondensed-Medium.ttf` |
 | Cifras y rótulos pequeños (`number`, `small`) | **IBM Plex Sans Condensed** Bold | `.../IBMPlexSansCondensed-Bold.ttf` |
 

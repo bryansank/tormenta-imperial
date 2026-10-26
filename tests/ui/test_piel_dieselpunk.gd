@@ -82,7 +82,7 @@ func test_the_fonts_carry_spanish_letters() -> void:
 				.override_failure_message("%s sin '%s'" % [f, ch]).is_true()
 
 func test_titles_are_art_deco_and_figures_condensed() -> void:
-	var title := CartoonTheme.label("Construir", "title", Color.WHITE)
+	var title := CartoonTheme.label("Construir", "display", Color.WHITE)
 	var number := CartoonTheme.label("1.240", "number", Color.WHITE)
 	var body := CartoonTheme.label("Texto", "body", Color.WHITE)
 	auto_free(title)
