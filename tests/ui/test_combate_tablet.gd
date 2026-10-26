@@ -65,6 +65,9 @@ func test_combat_buttons_are_48_px_with_a_finger() -> void:
 func test_low_canvas_is_only_short_and_wide() -> void:
 	assert_bool(BS.is_low_canvas(Vector2(640, 360))).is_true()
 	assert_bool(BS.is_low_canvas(Vector2(800, 360))).is_true()
+	# El lienzo de un telefono de 640x360 dp con el perfil telefono.
+	assert_bool(BS.is_low_canvas(Vector2(853, 480))).is_true()
+	assert_bool(BS.is_low_canvas(Vector2(1280, 720))).is_false()
 	assert_bool(BS.is_low_canvas(Vector2(1113, 696))).is_false()
 	assert_bool(BS.is_low_canvas(Vector2(400, 720))).is_false()
 

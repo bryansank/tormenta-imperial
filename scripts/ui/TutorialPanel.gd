@@ -1290,8 +1290,8 @@ func _combat_spot(vp: Vector2, lay: Dictionary, focus: Rect2, avoid: Array, text
 	var board: Rect2 = lay.get("board", Rect2())
 	if board.size.x <= 1.0 or board.size.y <= 1.0:
 		return {}
-	var top: float = maxf(EDGE, float(lay.get("top", 0.0)) + 4.0)
-	var bottom: float = minf(vp.y - EDGE, float(lay.get("bottom", vp.y)) - 4.0)
+	var top: float = maxf(EDGE, float(lay.get("top", 0.0)) + AVOID_GAP + 1.0)
+	var bottom: float = minf(vp.y - EDGE, float(lay.get("bottom", vp.y)) - AVOID_GAP - 1.0)
 	var skey := "%s|%s|%s|%s|%d|%d|%s" % [text_key, str(vp.round()), str(board.position.round()), str(board.size.round()),
 		int(top), int(bottom), str(focus.get_center().round())]
 	for r in avoid:

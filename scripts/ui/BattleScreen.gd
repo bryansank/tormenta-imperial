@@ -417,16 +417,20 @@ func _build_board_view() -> void:
 
 # ── Lienzo bajo (telefono apaisado) ──────────────────────────────────
 
-## Telefono apaisado (QA de telefono, 2026-10-26): a 640x360 la cabecera (~150),
+## Telefono apaisado (QA de telefono, 2026-10-26): a 640x360 dp la cabecera (~150),
 ## la franja de turnos, el tablero (8 casillas de al menos 34) y los botones no
 ## cabian uno encima de otro y los botones quedaban fuera (y=470 de 360). Con
 ## menos de LOW_CANVAS_H de alto y mas ancho que alto, tres columnas: a la
 ## izquierda, arriba, la cabecera y la franja de turnos; en medio el tablero (la
 ## casilla sale del alto entero); a la derecha, abajo (lejos del ☰), los botones.
-## Los mismos nodos: se mueven de la columna a la fila y de vuelta.
-const LOW_CANVAS_H := 450.0
-## Ancho minimo de cada columna lateral: dos botones de icono de 48 y su hueco.
-const LOW_SIDE_W := 2 * TOUCH_BTN_H + 16
+## Los mismos nodos: se mueven de la columna a la fila y de vuelta. Ojo: el
+## lienzo no es la ventana; un telefono de 640x360 dp con el perfil telefono da
+## un lienzo de 853x480 (y ahi tampoco cabia: ~510 de alto en columna).
+const LOW_CANVAS_H := 560.0
+## La columna de la derecha: los botones, solo icono, uno debajo de otro (hasta
+## seis de 48 caben en 360). La de la izquierda, la cabecera, se lleva el resto.
+const LOW_RIGHT_W := TOUCH_BTN_H + 8
+const LOW_LEFT_MIN_W := 160
 var _low_row: HBoxContainer
 var _low_left: VBoxContainer
 var _low_center: VBoxContainer
@@ -457,7 +461,7 @@ func _build_low_row() -> void:
 	_low_left.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_low_left.add_theme_constant_override("separation", 6)
 	_low_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_low_left.custom_minimum_size.x = LOW_SIDE_W
+	_low_left.custom_minimum_size.x = LOW_LEFT_MIN_W
 	_low_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_low_center = VBoxContainer.new()
 	_low_center.name = "LowCenter"
@@ -467,11 +471,35 @@ func _build_low_row() -> void:
 	_low_right = VBoxContainer.new()
 	_low_right.name = "LowRight"
 	_low_right.alignment = BoxContainer.ALIGNMENT_END
-	_low_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_low_right.custom_minimum_size.x = LOW_SIDE_W
+	_low_right.custom_minimum_size.x = LOW_RIGHT_W
 	_low_right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for c in [_low_left, _low_center, _low_right]:
 		_low_row.add_child(c)
+
+## En la columna de la izquierda los rotulos de la cabecera se recortan (con
+## "…") al ancho que queda: el nombre del pais en mayusculas ensanchaba la
+## columna y sacaba los botones por la derecha. `width` <= 0 los deja como eran.
+func _fit_low_header(width: float) -> void:
+	if _header_margin == null:
+		return
+	var inner := width - 28.0
+	for n in _header_margin.find_children("*", "Label", true, false):
+		var l := n as Label
+		if not l.has_meta("low_natural"):
+			l.set_meta("low_natural", l.custom_minimum_size.x)
+		if width <= 0.0:
+			l.clip_text = false
+			l.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+			l.custom_minimum_size.x = float(l.get_meta("low_natural"))
+			continue
+		l.clip_text = false
+		l.custom_minimum_size.x = float(l.get_meta("low_natural"))
+		var natural := l.get_minimum_size().x
+		var room := inner - (44.0 if l.name == "BylineName" else 0.0)
+		if natural > room:
+			l.clip_text = true
+			l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			l.custom_minimum_size.x = maxf(24.0, room)
 
 ## Pone la columna o las tres columnas segun el lienzo. Devuelve si cambio.
 func _apply_low_layout() -> bool:
@@ -494,6 +522,7 @@ func _apply_low_layout() -> bool:
 	else:
 		for n in order:
 			_board_column.add_child(n)
+		_fit_low_header(0.0)
 	# La ficha de la cabecera usa todo el ancho de su columna (asi parte en
 	# menos filas); en la columna de siempre, centrada y a su medida.
 	var card := _header_margin.get_child(0) as Control
@@ -502,6 +531,7 @@ func _apply_low_layout() -> bool:
 	_board_column.visible = not low
 	_low_row.visible = low
 	_fit_header()
+	_skin_actions()
 	return true
 
 ## Un boton de la barra de acciones. Su piel la pone _skin_action (texto o solo
@@ -520,6 +550,8 @@ func _make_action(text: String, callback: Callable, glyph: String = "", kind: St
 ## [icono] Palabra. Lo que diga el boton, siempre tambien en su tooltip.
 func _skin_action(btn: Button, kind_override: String = "") -> void:
 	var phone := CT.is_phone() if is_inside_tree() else CT.phone
+	# En el lienzo bajo los botones van en una columna estrecha: solo icono.
+	phone = phone or _low
 	var label := String(btn.get_meta("label", btn.text))
 	var glyph := String(btn.get_meta("glyph", ""))
 	btn.text = "" if (phone and glyph != "") else label
@@ -848,9 +880,10 @@ func _recalculate_cell_size() -> void:
 		# encima o debajo) y del ancho que dejan las dos columnas laterales. Lo
 		# mas cerca de 48 que quepa: a 360 de alto, ~41.
 		var lgaps := 2.0 * float(_board.x - 1) + 12.0
-		var lw: float = (vp.x - 2.0 * float(LOW_SIDE_W) - 16.0 - 2.0 * UITheme.MARGIN - lgaps) / float(_board.x)
+		var lw: float = (vp.x - float(LOW_LEFT_MIN_W + LOW_RIGHT_W) - 16.0 - 2.0 * UITheme.MARGIN - lgaps) / float(_board.x)
 		var lh: float = (vp.y - 2.0 * UITheme.MARGIN - 2.0 * float(_board.y - 1) - 8.0) / float(_board.y)
 		_cell_size = int(clampf(minf(lw, lh), 28.0, 62.0))
+		_fit_low_header(vp.x - float(LOW_RIGHT_W) - 16.0 - 2.0 * UITheme.MARGIN - (float(_cell_size) * float(_board.x) + lgaps))
 		return
 	# Se descuentan los huecos entre casillas (2 px) y el borde del marco: con
 	# 400 px la ultima columna se salia un pixel (402 de 401).
@@ -2240,6 +2273,9 @@ func _ensure_board3d() -> void:
 func _open_board_3d(index: int) -> void:
 	_ensure_board3d()
 	_apply_low_layout()
+	if _low:
+		var vp3 := get_viewport().get_visible_rect().size
+		_fit_low_header(maxf(float(LOW_LEFT_MIN_W), vp3.x * 0.28))
 	_board3d.visible = true
 	_grid_center.visible = false
 	_board_spacer.visible = true
@@ -2298,8 +2334,7 @@ func _update_board3d_margins() -> void:
 	var top_y: float = _order_box.get_global_rect().end.y - _board3d.global_position.y + 6.0
 	var bottom_y: float = _board3d.size.y - (_actions_row.global_position.y - _board3d.global_position.y) + 6.0
 	if _low:
-		# Cabecera y botones van a los lados: la maqueta tiene el alto entero.
-		top_y = 40.0
+		# Los botones van a la derecha: la maqueta baja hasta abajo.
 		bottom_y = 40.0
 	_board3d.board.set_safe_margins(maxf(top_y, 40.0), maxf(bottom_y, 40.0))
 
@@ -2644,11 +2679,16 @@ func coach_layout() -> Dictionary:
 		return {}
 	var vp := get_viewport().get_visible_rect().size
 	var top := 0.0
-	if _order_box != null and _order_box.is_visible_in_tree():
-		top = _order_box.get_global_rect().end.y
 	var bottom := vp.y
-	if _actions_row != null and _actions_row.is_visible_in_tree():
-		bottom = _actions_row.get_global_rect().position.y
+	# En el lienzo bajo la cabecera y los botones van a los lados: no son ni
+	# techo ni suelo (los aparta "keep").
+	if not _low:
+		var ob := _content_rect(_order_box)
+		if ob.size != Vector2.ZERO:
+			top = ob.end.y
+		var ab := _content_rect(_actions_row)
+		if ab.size != Vector2.ZERO:
+			bottom = ab.position.y
 	var board := Rect2()
 	var units: Array = []
 	if _uses_3d():
@@ -2678,10 +2718,28 @@ func coach_layout() -> Dictionary:
 					units.append(cell.get_global_rect())
 	# Lo que tampoco se tapa: la cabecera, la franja de turnos y los botones.
 	var keep: Array = []
-	for c in [_header_margin.get_child(0) if _header_margin != null else null, _order_box, _actions_row]:
-		if c != null and (c as Control).is_visible_in_tree():
-			keep.append((c as Control).get_global_rect())
+	if _header_margin != null and _header_margin.get_child(0).is_visible_in_tree():
+		keep.append((_header_margin.get_child(0) as Control).get_global_rect())
+	# La franja y la fila de botones parten en filas y ocupan todo el ancho de su
+	# columna: cuenta lo que tienen dentro, no el contenedor.
+	for box in [_order_box, _actions_row]:
+		var r := _content_rect(box)
+		if r.size != Vector2.ZERO:
+			keep.append(r)
 	return {"board": board, "top": top, "bottom": bottom, "units": units, "keep": keep}
+
+## Lo que ocupan de verdad los hijos visibles de `box` (coordenadas globales).
+static func _content_rect(box: Control) -> Rect2:
+	if box == null or not box.is_visible_in_tree():
+		return Rect2()
+	var out := Rect2()
+	var first := true
+	for c in box.get_children():
+		if c is Control and (c as Control).visible:
+			var r := (c as Control).get_global_rect()
+			out = r if first else out.merge(r)
+			first = false
+	return out
 
 ## Hasta donde pueden bajar los avisos con el tablero abierto (NotificationPanel):
 ## por encima de la fila de botones; en el lienzo bajo, los botones van a la
