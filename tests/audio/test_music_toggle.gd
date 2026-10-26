@@ -37,7 +37,7 @@ func _restore_settings_file() -> void:
 		DirAccess.remove_absolute(GameConfig.USER_SETTINGS_PATH)
 
 func _has_track(key: String) -> bool:
-	return AudioManager._streams.has(key)
+	return AudioManager.has_stream(key)
 
 func test_the_switch_persists_in_settings() -> void:
 	AudioManager.set_music_enabled(false)

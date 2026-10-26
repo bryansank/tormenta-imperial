@@ -973,3 +973,86 @@ El "antes" ya era mayor que lo medido el 2026-09-27 (119,7 MB y 38,9 MB) porque 
 juego ha crecido: combate 3D, ambientes, modelos horneados, decoraciones. Para llegar
 al presupuesto falta la plantilla a medida (§13.4); el resto de palancas (audio
 recodificado, §13.3) suman 2 MB como mucho.
+
+## 14. Arranque y pantalla de carga
+
+El dueño veía el juego "pegado" al abrir: el logo del motor durante unos 15 s y luego,
+de golpe, el menú principal. Desde 2026-10-26 la escena principal es
+`scenes/main/Boot.tscn` (un solo nodo, `scripts/boot/Boot.gd`), que pone la pantalla de
+carga (`scripts/boot/LoadingScreen.gd`, CanvasLayer 90, piel D) en la raíz y carga la
+escena de la vista elegida por hilos. Abrir `Main.tscn` o `Main2D.tscn` a mano (F6,
+tests, sondas `-s`) se la salta; ViewRouter y `--no-title` siguen igual.
+
+### 14.1 Qué enseña
+
+Ilustración del menú, una tarjeta con "Cargando: <etapa>", la barra con su porcentaje,
+un consejo al azar (`LOAD_TIP_1..16`) y la versión (`application/config/version`) en
+la esquina de arriba a la derecha. Etapas, en orden, con su peso (ms medidos en el
+.exe):
+
+| Etapa | Qué es | Cómo se mide | Peso |
+|---|---|---|---|
+| Preparando la isla (n/N) | dependencias de la escena que no son paneles (scripts del mundo) | `load_threaded_request` una a una | 1250 |
+| Preparando los paneles (n/N) | los `scenes/ui/*.tscn` y la escena misma | igual | 6300 |
+| Cargando edificios (n/N) | `data/buildings/*.tres` con sus GLB | en paralelo, otro hilo | 150 |
+| Cargando sonidos (n/N) | los clips de AudioManager | en paralelo, otro hilo | 50 |
+| Montando la colonia (n/N) | instanciar y el `_ready` de cada hijo | señal `ready` de cada hijo | 900 |
+| Colocando edificios (n/N) / Preparando una isla nueva | `GameManager._begin` | `EventBus.game_load_progress` | 300 + 1,2 por edificio |
+| Preparando los gráficos | primer fotograma con el 3D | 2 fotogramas tras encender el 3D | 700 |
+
+Montar y colocar son llamadas largas del hilo principal: entre hijo e hijo (y entre
+edificio y edificio) se fuerza una pintada (`RenderingServer.force_draw`, como mucho
+cada 100 ms) con el 3D del viewport apagado, así la barra se mueve sin pintar el mundo
+a medias. El 3D se enciende al terminar la partida, con la pantalla aún puesta: el
+primer fotograma compila los shaders del mapa debajo de ella. La barra no retrocede.
+
+Fallos: un recurso que no carga, o la partida que no arranca en 30 s, dejan la
+pantalla con "Falló en: <etapa>", el archivo, la ruta del registro y Reintentar
+(reinicia el proceso) / Salir. Una pieza de más de 45 s lo dice y sigue esperando. El
+diálogo de "ya hay otra copia abierta" (capa 100) sale por encima.
+
+Coste: seis controles y, por fotograma, mirar el estado de tres cargas como mucho.
+
+### 14.2 Medir
+
+`-- --boot-trace` (también en el .exe) o `dev_mode` escriben el desglose al log y a
+`user://boot_trace.txt` (`scripts/boot/BootTrace.gd`: autoloads y paneles por
+`SceneTree.node_added`, etapas, y los 90 fotogramas tras el menú). Capturas:
+`tools/loading_probe.gd` (necesita `override.cfg` propio). Mide siempre con un
+`override.cfg` al lado del .exe (claves `config/use_custom_user_dir.template` y
+`config/custom_user_dir_name.template`) y cierra el juego con normalidad: matándolo no
+guarda la caché de pipelines y el primer fotograma sale el doble de caro.
+
+### 14.3 Dónde se va el tiempo (2026-10-26)
+
+.exe release, Windows 11, i5-10500H + RTX 3060, cachés calientes, partida nueva
+(con el guardado de 312 edificios de la línea, entre paréntesis):
+
+| Tramo | Antes | Después |
+|---|---|---|
+| Motor hasta el primer script (ventana, Vulkan, PCK) | 2,5-4,3 s | igual |
+| Compilar los scripts de los autoloads (GameConfig arrastra 11 scripts, 10k líneas) | 2,9 s | igual |
+| Primera imagen propia | **con el menú, a los ~15 s** | **la pantalla de carga, a los 5,6-7,1 s** |
+| Cargar la escena (compilar los scripts de los paneles) | 6,5-7,6 s | igual, ya con barra |
+| `GameManager._ready` (tasklist de "una sola copia") | 0,21-0,36 s | 0,2 ms (en un hilo) |
+| `AudioManager._ready` (55 clips) | 0,12-0,13 s | 9 ms (los carga la pantalla, en paralelo) |
+| `_ready` de CONSTRUIR (los .tres y sus GLB) | 0,31-0,72 s | 0,11-0,21 s (precargados en paralelo) |
+| Colocar el guardado de 312 edificios | 0,41-0,44 s | 0,29-0,31 s |
+| Primer fotograma (shaders) | 0,6 s; **8,7 s la primera vez** en el equipo | igual, pero bajo "Preparando los gráficos" |
+| Menú principal listo | 15,2-17,5 s | 15,4-19,1 s (ruido: otros Godot en la máquina) |
+
+Perfil teléfono: lo mismo (pantalla a los ~7 s, menú a los 15-17 s).
+
+El tiempo total no baja de forma medible (lo ahorrado, ~0,7 s, cae dentro del ruido de
+la máquina): lo que cambia es que se ve qué pasa desde el segundo 6 en vez del 15.
+
+**Lo que de verdad cuesta es compilar GDScript** (~10 s de 15 en el .exe, ~25 s en el
+editor). Medido con un script sintético de 1000 líneas: cada referencia a un autoload o
+a un `class_name` (`Tr.t()`, `GameConfig.x`, `UITheme.X`, `EventBus.s`) cuesta ~1,1 ms
+al compilar; la misma con un alias `const X := preload(...)` cuesta 0,06 ms, y una
+llamada a una función del motor 0,03 ms. El proyecto tiene ~7200 de esas referencias
+(Tr 1450, GameConfig 1170, EventBus 900, UITheme 650; Objectives.gd 465, BattleScreen
+290). No se ha tocado aquí: cambiar los nombres en 186 scripts choca con todas las
+ramas abiertas. Si se hace, en una rama propia y empezando por los paneles más caros
+(BattleScreen, Objectives, SettingsPanel, SkirmishPanel), o cargando los paneles que no
+se ven al arrancar (combate, tecnología) la primera vez que se abren.

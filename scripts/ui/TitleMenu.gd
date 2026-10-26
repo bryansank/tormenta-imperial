@@ -255,6 +255,7 @@ static func title_card_lift(vp_h: float, card_h: float) -> float:
 # ── Abrir / cerrar ───────────────────────────────────────────────────
 
 func open_menu() -> void:
+	BootTrace.mark("menu principal abierto")
 	_refresh_buttons()
 	_relayout()
 	_root.visible = true

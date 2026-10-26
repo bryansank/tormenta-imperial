@@ -19,6 +19,7 @@ const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
 func _enter_tree() -> void:
 	if get_tree().current_scene != self:
 		return
+	BootTrace.mark("escena principal entra (%s)" % view_mode)
 	var wanted := ViewMode.requested()
 	if wanted != view_mode and ResourceLoader.exists(ViewMode.scene_for(wanted)):
 		GameManager.hold_start()

@@ -69,6 +69,10 @@ func _ready() -> void:
 		elif a.begins_with("--quality="):
 			GameConfig.ui_graphics_quality = a.substr(10)
 			EventBus.graphics_quality_changed.emit(GameConfig.ui_graphics_quality)
+	# Desde Boot.tscn la escena llega cargada por hilos, despues de este _ready:
+	# se espera a que la partida arranque antes de contar SETTLE.
+	while not GameManager.is_started():
+		await get_tree().process_frame
 	await get_tree().create_timer(SETTLE).timeout
 	_quiet_onboarding()
 	await get_tree().create_timer(0.3).timeout

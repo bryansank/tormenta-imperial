@@ -375,6 +375,7 @@ listeners are what is left of the old sidebar layout.
 |--------|--------|------------|-------------|
 | `game_new_started` | — | GameManager | TutorialManager, HelperPanel, AudioManager, StormSky, NotificationPanel, SandboxPanel, TitleMenu |
 | `game_load_completed` | — | GameManager | ArmyManager, ProcessManager, StormManager, ArmyPanel, SkirmishPanel, BattleScreen, HelperPanel, AudioManager, TutorialManager, StormSky, AuditDefeatScreen, NotificationPanel, SandboxPanel, TitleMenu |
+| `game_load_progress` | `done: int, total: int` | GameManager (per building of the save while loading; 0/2..2/2 for a new game) | LoadingScreen |
 
 ## Tutorial
 
