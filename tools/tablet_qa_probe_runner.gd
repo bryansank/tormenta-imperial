@@ -138,9 +138,12 @@ func _test_tap_reliability() -> void:
 		bb = bar
 	(bb as BaseButton).pressed.connect(func(): _press_count += 1)
 	print("TQA: boton probado=", bb.get_path(), " action_mode=", (bb as BaseButton).action_mode)
-	for mode in ["limpio", "tras_globo", "toque_1f", "toque_8f"]:
+	for mode in ["limpio", "tras_globo", "toque_1f", "toque_8f", "toque_130ms"]:
 		var ok := 0
 		var fails: Array = []
+		var held_ms: Array = []
+		var unfocused := 0
+		var bubbles := 0
 		for i in 20:
 			if mode == "tras_globo" and chip != null:
 				var cp := _win(chip.get_global_rect().get_center())
@@ -149,10 +152,23 @@ func _test_tap_reliability() -> void:
 				await _touch_up(0, cp)
 				await _frames(int(i % 5) * 3)
 			var p := _win(bb.get_global_rect().get_center())
+			var focused_before := DisplayServer.window_is_focused()
+			var t0 := Time.get_ticks_msec()
 			await _touch_down(0, p)
-			var hold := 1 if mode == "toque_1f" else (8 if mode == "toque_8f" else 3)
-			await _frames(hold)
+			if mode == "toque_130ms":
+				await _seconds(0.13)
+			else:
+				var hold := 1 if mode == "toque_1f" else (8 if mode == "toque_8f" else 3)
+				await _frames(hold)
+			# Diagnostico (2026-10-26): ¿el dedo estuvo mas de touch_tooltip_hold_sec
+			# en tiempo real? Entonces TouchTooltip lo lee como "mantener" y cancela.
+			var bubble := bool(InputService.touch_tooltip().is_shown())
+			var dt := Time.get_ticks_msec() - t0
 			await _touch_up(0, p)
+			if not (focused_before and DisplayServer.window_is_focused()):
+				unfocused += 1
+			if bubble:
+				bubbles += 1
 			var ever_open := false
 			for f in 12:
 				ever_open = ever_open or bool(cm.get("_is_open"))
@@ -161,14 +177,19 @@ func _test_tap_reliability() -> void:
 			if i < 3:
 				print("TQA: diag %s #%d pulsado=%d abierto_en_algun_momento=%s abierto=%s bajo_dedo=%s" % [mode, i, _press_count, ever_open, opened,
 					str(TouchTooltip_control_at(p))])
+			held_ms.append(dt)
 			if opened:
 				ok += 1
 				cm.call("_close")
 			else:
 				fails.append(i)
+				print("TQA: fallo %s #%d dedo=%d ms fps=%d foco=%s globo=%s" % [mode, i, dt, Engine.get_frames_per_second(),
+					DisplayServer.window_is_focused(), bubble])
 			await _frames(12)
 			# La ficha de recursos se plega si quedo abierta (por la prueba del globo).
-		_check("toques a CONSTRUIR (%s) %d/20" % [mode, ok], ok == 20, "fallaron %s" % str(fails))
+		held_ms.sort()
+		_check("toques a CONSTRUIR (%s) %d/20" % [mode, ok], ok == 20, "fallaron %s; dedo %s-%s ms; sin foco %d; globo %d" % [
+			str(fails), str(held_ms[0]), str(held_ms[-1]), unfocused, bubbles])
 	await _shot("taps_fin")
 
 func _test_hold_to_read() -> void:

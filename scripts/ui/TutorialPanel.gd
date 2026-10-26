@@ -1267,16 +1267,32 @@ func _layout_combat(delta: float) -> void:
 
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
 	var key := "%s|%s|%d|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _circle.visible]
-	_fit_card(w, key)
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
 	elif has_point:
 		focus = Rect2(Vector2(anchor["point"]) - Vector2(40, 40), Vector2(80, 80))
 	var avoid := _combat_avoid_rects(bs)
-	_card.position = clear_of(combat_card_position(vp, Vector2(w, _card_h), focus),
-		Vector2(w, _card_h), avoid, vp, focus)
+	var lay: Dictionary = bs.coach_layout() if bs != null and bs.has_method("coach_layout") else {}
+	# La cabecera, la franja de turnos y los botones tampoco se tapan.
+	avoid.append_array(lay.get("keep", []))
+	# Fuera del tablero si hay sitio (a un lado, encima o debajo, mas estrecha
+	# si hace falta); si no, junto a lo senalado sin tapar las piezas.
+	var spot := _combat_spot(vp, lay, focus, avoid, key)
+	if not spot.is_empty():
+		w = float(spot["w"])
+		_fit_card(w, key + "|%d" % int(w))
+		_card.position = spot["pos"]
+	else:
+		_fit_card(w, key)
+		var keep_clear: Array = avoid.duplicate()
+		keep_clear.append_array(lay.get("units", []))
+		_card.position = clear_of(combat_card_position(vp, Vector2(w, _card_h), focus),
+			Vector2(w, _card_h), keep_clear, vp, focus)
 	avoid.append(focus)
+	if lay.has("board") and (lay["board"] as Rect2).size.x > 1.0 and not spot.is_empty():
+		# El busto tampoco se pone encima del tablero (si no cabe, no sale).
+		avoid.append(lay["board"])
 	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, _card_h)), avoid)
 	CT.place_tail(_tail, Rect2(_card.position, Vector2(w, _card_h)), _bust)
 
@@ -1302,6 +1318,88 @@ func _layout_combat(delta: float) -> void:
 		_ring.position = pt - _ring.size * 0.5
 		_arrow.visible = true
 		_arrow.point_at(pt - Vector2(0, 44), Vector2.DOWN)
+
+## La tarjeta del combate guiado no tapa el tablero (QA de tablet, 2026-10-26:
+## a 1280x800 el Sargento cubria las filas 2-5, enemigos incluidos). Busca, en
+## este orden, un sitio fuera de `lay["board"]` y entre la fila de turnos y los
+## botones: a un lado (el del foco primero, con el ancho que quepa y no menos
+## de COMBAT_SIDE_MIN_W), encima o debajo del tablero (a lo ancho). Ninguno de
+## `avoid` (avisos, ficha de la unidad). {"pos", "w"}, o {} si no hay sitio
+## (vista Frente, tablero a toda pantalla): entonces se coloca junto al foco.
+## Se recuerda mientras no cambie nada (medir la tarjeta a otro ancho la
+## reordena: no se hace cada fotograma).
+const COMBAT_SIDE_MIN_W := 200.0
+var _spot_key := ""
+var _spot: Dictionary = {}
+
+func _combat_spot(vp: Vector2, lay: Dictionary, focus: Rect2, avoid: Array, text_key: String) -> Dictionary:
+	var board: Rect2 = lay.get("board", Rect2())
+	if board.size.x <= 1.0 or board.size.y <= 1.0:
+		return {}
+	var top: float = maxf(EDGE, float(lay.get("top", 0.0)) + AVOID_GAP + 1.0)
+	var bottom: float = minf(vp.y - EDGE, float(lay.get("bottom", vp.y)) - AVOID_GAP - 1.0)
+	var skey := "%s|%s|%s|%s|%d|%d|%s" % [text_key, str(vp.round()), str(board.position.round()), str(board.size.round()),
+		int(top), int(bottom), str(focus.get_center().round())]
+	for r in avoid:
+		skey += str((r as Rect2).position.round())
+	if skey == _spot_key:
+		return _spot
+	_spot_key = skey
+	_spot = combat_spot_off_board(vp, board, top, bottom, focus, avoid,
+		func(width: float) -> float: return _fit_card(width, text_key + "|%d" % int(width)))
+	return _spot
+
+## Pura salvo por `height_for` (ancho -> alto de la tarjeta a ese ancho), para
+## las pruebas. Ver _combat_spot.
+static func combat_spot_off_board(vp: Vector2, board: Rect2, top: float, bottom: float, focus: Rect2,
+		avoid: Array, height_for: Callable) -> Dictionary:
+	var grown: Array = []
+	for r in avoid:
+		if (r as Rect2).size.x > 1.0 and (r as Rect2).size.y > 1.0:
+			grown.append((r as Rect2).grow(AVOID_GAP))
+	var clear := func(card: Rect2) -> bool:
+		if card.position.x < EDGE - 0.5 or card.end.x > vp.x - EDGE + 0.5:
+			return false
+		if card.position.y < top - 0.5 or card.end.y > bottom + 0.5:
+			return false
+		if card.intersects(board.grow(AVOID_GAP - 0.5)):
+			return false
+		for g in grown:
+			if card.intersects(g):
+				return false
+		return true
+	var fy: float = focus.get_center().y if focus.size != Vector2.ZERO else (top + bottom) * 0.5
+	var fx: float = focus.get_center().x if focus.size != Vector2.ZERO else vp.x * 0.5
+	# A un lado: primero el mas cercano al foco.
+	var left_room: float = board.position.x - AVOID_GAP - EDGE
+	var right_room: float = vp.x - EDGE - board.end.x - AVOID_GAP
+	var sides := [["left", left_room], ["right", right_room]]
+	if fx > board.get_center().x:
+		sides.reverse()
+	for s in sides:
+		var w: float = minf(CARD_WIDTH, float(s[1]))
+		if w < COMBAT_SIDE_MIN_W:
+			continue
+		var h: float = float(height_for.call(w))
+		var x: float = board.position.x - AVOID_GAP - w if s[0] == "left" else board.end.x + AVOID_GAP
+		var y: float = clampf(fy - h * 0.5, top, maxf(top, bottom - h))
+		var card := Rect2(x, y, w, h)
+		if clear.call(card):
+			return {"pos": card.position, "w": w}
+		# La ficha de la unidad (o un aviso) en ese lado: arriba o abajo del hueco.
+		for yy in [top, bottom - h]:
+			card.position.y = yy
+			if clear.call(card):
+				return {"pos": card.position, "w": w}
+	# Encima o debajo, a lo ancho (centrada sobre el foco).
+	var wide: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
+	var hw: float = float(height_for.call(wide))
+	var cx: float = clampf(fx - wide * 0.5, EDGE, maxf(EDGE, vp.x - wide - EDGE))
+	for y in [board.position.y - AVOID_GAP - hw, board.end.y + AVOID_GAP]:
+		var card := Rect2(cx, y, wide, hw)
+		if clear.call(card):
+			return {"pos": card.position, "w": wide}
+	return {}
 
 ## Lo que la tarjeta del combate guiado no debe tapar, a la izquierda del
 ## tablero: los avisos (NotificationPanel, capa 19 como esta) y la ficha de la

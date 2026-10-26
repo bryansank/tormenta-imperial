@@ -111,7 +111,7 @@ var _unit_card_uid := -1
 var _title_label: Label
 var _round_label: Label
 var _turn_label: Label
-var _order_box: HBoxContainer
+var _order_box: HFlowContainer
 var _defend_btn: Button
 var _wait_btn: Button
 var _end_btn: Button
@@ -171,6 +171,7 @@ var _map_progress: Label
 var _map_bonuses: Label
 var _map_scroll: ScrollContainer
 var _map_canvas: Control
+var _map_menu_gap: Control
 var _abandon_map_btn: Button
 var _map_buttons: Array = []        ## Button por nodo, alineado con el mapa
 var _node_positions: Array = []     ## Vector2, esquina superior izquierda
@@ -266,6 +267,7 @@ func _setup_ui() -> void:
 	_build_draft_panel()
 	_build_report_panel()
 	_build_confirm_dialog()
+	_fit_header()
 
 func _build_board_view() -> void:
 	_board_view = Control.new()
@@ -343,9 +345,13 @@ func _build_board_view() -> void:
 	HudRegistry.register("BattleScreen.turn", _turn_label)
 
 	# Franja de iniciativa: la ronda entera, en el orden en que va a pasar (FR-006).
-	_order_box = HBoxContainer.new()
-	_order_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_order_box.add_theme_constant_override("separation", 5)
+	# Parte en varias filas si no cabe (la columna lateral del lienzo bajo).
+	_order_box = HFlowContainer.new()
+	_order_box.name = "TurnOrder"
+	_order_box.alignment = FlowContainer.ALIGNMENT_CENTER
+	_order_box.add_theme_constant_override("h_separation", 5)
+	_order_box.add_theme_constant_override("v_separation", 5)
+	_order_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_order_box)
 
 	var grid_center := HBoxContainer.new()
@@ -410,6 +416,126 @@ func _build_board_view() -> void:
 	column.add_child(actions)
 	_actions_row = actions
 	_skin_actions()
+	_build_low_row()
+
+# ── Lienzo bajo (telefono apaisado) ──────────────────────────────────
+
+## Telefono apaisado (QA de telefono, 2026-10-26): a 640x360 dp la cabecera (~150),
+## la franja de turnos, el tablero (8 casillas de al menos 34) y los botones no
+## cabian uno encima de otro y los botones quedaban fuera (y=470 de 360). Con
+## menos de LOW_CANVAS_H de alto y mas ancho que alto, tres columnas: a la
+## izquierda, arriba, la cabecera y la franja de turnos; en medio el tablero (la
+## casilla sale del alto entero); a la derecha, abajo (lejos del ☰), los botones.
+## Los mismos nodos: se mueven de la columna a la fila y de vuelta. Ojo: el
+## lienzo no es la ventana; un telefono de 640x360 dp con el perfil telefono da
+## un lienzo de 853x480 (y ahi tampoco cabia: ~510 de alto en columna).
+const LOW_CANVAS_H := 560.0
+## La columna de la derecha: los botones, solo icono, uno debajo de otro (hasta
+## seis de 48 caben en 360). La de la izquierda, la cabecera, se lleva el resto.
+const LOW_RIGHT_W := TOUCH_BTN_H + 8
+const LOW_LEFT_MIN_W := 160
+var _low_row: HBoxContainer
+var _low_left: VBoxContainer
+var _low_center: VBoxContainer
+var _low_right: VBoxContainer
+var _low := false
+
+static func is_low_canvas(vp: Vector2) -> bool:
+	return vp.y < LOW_CANVAS_H and vp.x > vp.y * 1.2
+
+## Si el tablero esta repartido en tres columnas (pruebas).
+func is_low_layout() -> bool:
+	return _low
+
+func _build_low_row() -> void:
+	_low_row = HBoxContainer.new()
+	_low_row.name = "BoardLowRow"
+	_low_row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_low_row.offset_left = UITheme.MARGIN
+	_low_row.offset_top = UITheme.MARGIN
+	_low_row.offset_right = -UITheme.MARGIN
+	_low_row.offset_bottom = -UITheme.MARGIN
+	_low_row.add_theme_constant_override("separation", 8)
+	_low_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_low_row.visible = false
+	_board_view.add_child(_low_row)
+	_low_left = VBoxContainer.new()
+	_low_left.name = "LowLeft"
+	_low_left.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_low_left.add_theme_constant_override("separation", 6)
+	_low_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_low_left.custom_minimum_size.x = LOW_LEFT_MIN_W
+	_low_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_low_center = VBoxContainer.new()
+	_low_center.name = "LowCenter"
+	_low_center.alignment = BoxContainer.ALIGNMENT_CENTER
+	_low_center.add_theme_constant_override("separation", 4)
+	_low_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_low_right = VBoxContainer.new()
+	_low_right.name = "LowRight"
+	_low_right.alignment = BoxContainer.ALIGNMENT_END
+	_low_right.custom_minimum_size.x = LOW_RIGHT_W
+	_low_right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for c in [_low_left, _low_center, _low_right]:
+		_low_row.add_child(c)
+
+## En la columna de la izquierda los rotulos de la cabecera se recortan (con
+## "…") al ancho que queda: el nombre del pais en mayusculas ensanchaba la
+## columna y sacaba los botones por la derecha. `width` <= 0 los deja como eran.
+func _fit_low_header(width: float) -> void:
+	if _header_margin == null:
+		return
+	var inner := width - 28.0
+	for n in _header_margin.find_children("*", "Label", true, false):
+		var l := n as Label
+		if not l.has_meta("low_natural"):
+			l.set_meta("low_natural", l.custom_minimum_size.x)
+		if width <= 0.0:
+			l.clip_text = false
+			l.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+			l.custom_minimum_size.x = float(l.get_meta("low_natural"))
+			continue
+		l.clip_text = false
+		l.custom_minimum_size.x = float(l.get_meta("low_natural"))
+		var natural := l.get_minimum_size().x
+		var room := inner - (44.0 if l.name == "BylineName" else 0.0)
+		if natural > room:
+			l.clip_text = true
+			l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			l.custom_minimum_size.x = maxf(24.0, room)
+
+## Pone la columna o las tres columnas segun el lienzo. Devuelve si cambio.
+func _apply_low_layout() -> bool:
+	if _low_row == null or not is_inside_tree():
+		return false
+	var low := is_low_canvas(get_viewport().get_visible_rect().size)
+	if low == _low:
+		return false
+	_low = low
+	var order := [_header_margin, _order_box, _grid_center, _board_spacer, _actions_row]
+	for n in order:
+		n.get_parent().remove_child(n)
+	if low:
+		_low_left.add_child(_header_margin)
+		_low_left.add_child(_order_box)
+		_low_center.add_child(_grid_center)
+		_low_center.add_child(_board_spacer)
+		_low_right.add_child(_actions_row)
+		_low_center.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	else:
+		for n in order:
+			_board_column.add_child(n)
+		_fit_low_header(0.0)
+	# La ficha de la cabecera usa todo el ancho de su columna (asi parte en
+	# menos filas); en la columna de siempre, centrada y a su medida.
+	var card := _header_margin.get_child(0) as Control
+	if card != null:
+		card.size_flags_horizontal = Control.SIZE_FILL if low else Control.SIZE_SHRINK_CENTER
+	_board_column.visible = not low
+	_low_row.visible = low
+	_fit_header()
+	_skin_actions()
+	return true
 
 ## Un boton de la barra de acciones. Su piel la pone _skin_action (texto o solo
 ## icono segun la pantalla).
@@ -427,13 +553,22 @@ func _make_action(text: String, callback: Callable, glyph: String = "", kind: St
 ## [icono] Palabra. Lo que diga el boton, siempre tambien en su tooltip.
 func _skin_action(btn: Button, kind_override: String = "") -> void:
 	var phone := CT.is_phone() if is_inside_tree() else CT.phone
+	# En el lienzo bajo los botones van en una columna estrecha: solo icono.
+	phone = phone or _low
 	var label := String(btn.get_meta("label", btn.text))
 	var glyph := String(btn.get_meta("glyph", ""))
 	btn.text = "" if (phone and glyph != "") else label
 	var tip := String(btn.get_meta("tip", ""))
 	btn.tooltip_text = label if tip == "" else "%s\n%s" % [label, tip]
 	var kind := kind_override if kind_override != "" else String(btn.get_meta("kind", "secondary"))
-	CT.style_pill(btn, kind, 48 if phone else CT.BTN_SMALL, "hud", glyph)
+	CT.style_pill(btn, kind, action_height(phone), "hud", glyph)
+
+## Alto de los botones del combate: 48 px de lienzo con el dedo (telefono o
+## tablet, docs/28 §4.1; antes 44 en tablet, QA 2026-10-26) y CT.BTN_SMALL con
+## raton.
+const TOUCH_BTN_H := 48
+static func action_height(phone: bool) -> int:
+	return TOUCH_BTN_H if phone or UITheme.is_touch_ui() else CT.BTN_SMALL
 
 func _skin_actions() -> void:
 	for btn in [_advance_btn, _threat_btn, _defend_btn, _wait_btn, _end_btn, _abandon_board_btn, _auto_btn, _abandon_map_btn]:
@@ -514,6 +649,12 @@ func _build_map_view() -> void:
 	header.add_child(_map_title)
 	_map_progress = CT.label("", "number", CT.text("hud", true))
 	header.add_child(_map_progress)
+	# El hueco del boton ☰, que flota arriba a la derecha: "Nodos 2/5" quedaba
+	# debajo de el (QA de escritorio).
+	_map_menu_gap = Control.new()
+	_map_menu_gap.name = "MenuGap"
+	_map_menu_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header.add_child(_map_menu_gap)
 	header_col.add_child(header)
 
 	# Los bonos del draft van en la cabecera del mapa porque son la razon por la
@@ -533,10 +674,19 @@ func _build_map_view() -> void:
 	_map_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_child(_map_scroll)
 
+	# Centrado en el hueco (QA de escritorio, 2026-10-26: en las campanas de Mar
+	# y Aire, con dos o tres nodos, el lienzo pequeno se quedaba arriba a la
+	# izquierda, debajo de los avisos). Si el mapa no cabe, se desplaza igual.
+	var map_center := CenterContainer.new()
+	map_center.name = "MapCenter"
+	map_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	map_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_map_scroll.add_child(map_center)
 	_map_canvas = Control.new()
 	_map_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_map_canvas.draw.connect(_draw_map_links)
-	_map_scroll.add_child(_map_canvas)
+	map_center.add_child(_map_canvas)
 
 	var footer := HBoxContainer.new()
 	footer.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -727,6 +877,17 @@ func _build_grid() -> void:
 ## bajen de un tamano tocable (quickstart E9).
 func _recalculate_cell_size() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
+	_apply_low_layout()
+	if _low:
+		# Tres columnas: la casilla sale del alto entero (sin cabecera ni botones
+		# encima o debajo) y del ancho que dejan las dos columnas laterales. Lo
+		# mas cerca de 48 que quepa: a 360 de alto, ~41.
+		var lgaps := 2.0 * float(_board.x - 1) + 12.0
+		var lw: float = (vp.x - float(LOW_LEFT_MIN_W + LOW_RIGHT_W) - 16.0 - 2.0 * UITheme.MARGIN - lgaps) / float(_board.x)
+		var lh: float = (vp.y - 2.0 * UITheme.MARGIN - 2.0 * float(_board.y - 1) - 8.0) / float(_board.y)
+		_cell_size = int(clampf(minf(lw, lh), 28.0, 62.0))
+		_fit_low_header(vp.x - float(LOW_RIGHT_W) - 16.0 - 2.0 * UITheme.MARGIN - (float(_cell_size) * float(_board.x) + lgaps))
+		return
 	# Se descuentan los huecos entre casillas (2 px) y el borde del marco: con
 	# 400 px la ultima columna se salia un pixel (402 de 401).
 	var gaps := 2.0 * float(_board.x - 1) + 12.0
@@ -748,12 +909,21 @@ func _fit_header() -> void:
 	var narrow: bool = get_viewport().get_visible_rect().size.x < UILayoutConfig.NARROW_WIDTH
 	var btn_w: float = UITheme.MIN_BTN_H if narrow else PauseMenuScript.MENU_BTN_MIN_W
 	var reserve := int(btn_w + 2.0 * PauseMenuScript.MENU_BTN_MARGIN)
+	if _map_menu_gap != null:
+		_map_menu_gap.custom_minimum_size.x = float(reserve) - float(UITheme.MARGIN)
+	# En la columna de la izquierda (lienzo bajo) el ☰ queda lejos.
+	if _low:
+		reserve = 0
 	_header_margin.add_theme_constant_override("margin_left", reserve)
 	_header_margin.add_theme_constant_override("margin_right", reserve)
 
 func _on_viewport_resized() -> void:
+	var relaid := _apply_low_layout()
 	_fit_header()
 	_skin_actions()
+	if relaid and _view == View.BOARD and not _uses_3d():
+		_recalculate_cell_size()
+		_build_grid()
 	if _view == View.BOARD and _uses_3d():
 		_queue_margin_update()
 		_refresh()
@@ -2104,7 +2274,7 @@ func _refresh_view_button() -> void:
 	# El boton dice a donde lleva, no donde se esta.
 	var other := "OPT_COMBAT_VIEW_BOARD" if combat_view() == "front" else "OPT_COMBAT_VIEW_FRONT"
 	_view_btn.text = Tr.t(other)
-	CT.style_pill(_view_btn, "secondary", 44 if not CT.phone else 48, "hud", "", "small")
+	CT.style_pill(_view_btn, "secondary", action_height(CT.phone), "hud", "", "small")
 
 func view_button() -> Button:
 	return _view_btn
@@ -2143,6 +2313,10 @@ func _ensure_board3d() -> void:
 
 func _open_board_3d(index: int) -> void:
 	_ensure_board3d()
+	_apply_low_layout()
+	if _low:
+		var vp3 := get_viewport().get_visible_rect().size
+		_fit_low_header(maxf(float(LOW_LEFT_MIN_W), vp3.x * 0.28))
 	_board3d.visible = true
 	_grid_center.visible = false
 	_board_spacer.visible = true
@@ -2200,6 +2374,9 @@ func _update_board3d_margins() -> void:
 		return
 	var top_y: float = _order_box.get_global_rect().end.y - _board3d.global_position.y + 6.0
 	var bottom_y: float = _board3d.size.y - (_actions_row.global_position.y - _board3d.global_position.y) + 6.0
+	if _low:
+		# Los botones van a la derecha: la maqueta baja hasta abajo.
+		bottom_y = 40.0
 	_board3d.board.set_safe_margins(maxf(top_y, 40.0), maxf(bottom_y, 40.0))
 
 func _refresh_board3d() -> void:
@@ -2239,7 +2416,7 @@ func _refresh_speed_button() -> void:
 	var fast := GameConfig.game_speed > 1.0
 	_speed_btn.text = "x%d" % int(GameConfig.game_speed)
 	_speed_btn.tooltip_text = Tr.ti("LBL_GAME_SPEED_TIP")
-	CT.style_pill(_speed_btn, "accent" if fast else "secondary", 44 if not CT.phone else 48, "hud", "", "small")
+	CT.style_pill(_speed_btn, "accent" if fast else "secondary", action_height(CT.phone), "hud", "", "small")
 
 func speed_button() -> Button:
 	return _speed_btn
@@ -2545,6 +2722,88 @@ func coach_move_cell(active: CombatUnit) -> Vector2i:
 				best_d = d
 				best = cell
 	return best
+
+## Lo que la tarjeta del combate guiado no debe tapar (QA de tablet,
+## 2026-10-26: el Sargento cubria las filas 2-5 del tablero): el tablero en
+## pantalla ("board", coordenadas globales del lienzo; en 3D, la caja de sus
+## cuatro esquinas proyectadas), el hueco libre entre la fila de turnos y los
+## botones ("top", "bottom") y las piezas vivas ("units", un Rect2 cada una).
+## {} sin tablero abierto.
+func coach_layout() -> Dictionary:
+	if not _board_open or not visible:
+		return {}
+	var vp := get_viewport().get_visible_rect().size
+	var top := 0.0
+	var bottom := vp.y
+	# En el lienzo bajo la cabecera y los botones van a los lados: no son ni
+	# techo ni suelo (los aparta "keep").
+	if not _low:
+		var ob := _content_rect(_order_box)
+		if ob.size != Vector2.ZERO:
+			top = ob.end.y
+		var ab := _content_rect(_actions_row)
+		if ab.size != Vector2.ZERO:
+			bottom = ab.position.y
+	var board := Rect2()
+	var units: Array = []
+	if _uses_3d():
+		var b = _board3d.board
+		var corners := [Vector2i(0, 0), Vector2i(_board.x - 1, 0), Vector2i(0, _board.y - 1), Vector2i(_board.x - 1, _board.y - 1)]
+		var first: Vector2 = _board3d_to_canvas(b.cell_screen(corners[0]))
+		board = Rect2(first, Vector2.ZERO)
+		for c in corners:
+			board = board.expand(_board3d_to_canvas(b.cell_screen(c)))
+		# Media casilla de borde: las esquinas son centros de casilla.
+		var step: float = first.distance_to(_board3d_to_canvas(b.cell_screen(Vector2i(1, 0))))
+		board = board.grow(step * 0.5)
+		for u in CombatManager.get_units():
+			if not u.is_alive():
+				continue
+			var raw: Vector2 = b.unit_screen(u.uid)
+			if raw.x < 0.0:
+				continue
+			var p := _board3d_to_canvas(raw)
+			units.append(Rect2(p - Vector2(36, 52), Vector2(72, 88)))
+	elif _grid != null and _grid.is_visible_in_tree():
+		board = _grid.get_global_rect()
+		for u in CombatManager.get_units():
+			if u.is_alive():
+				var cell := board_cell(u.position)
+				if cell != null:
+					units.append(cell.get_global_rect())
+	# Lo que tampoco se tapa: la cabecera, la franja de turnos y los botones.
+	var keep: Array = []
+	if _header_margin != null and _header_margin.get_child(0).is_visible_in_tree():
+		keep.append((_header_margin.get_child(0) as Control).get_global_rect())
+	# La franja y la fila de botones parten en filas y ocupan todo el ancho de su
+	# columna: cuenta lo que tienen dentro, no el contenedor.
+	for box in [_order_box, _actions_row]:
+		var r := _content_rect(box)
+		if r.size != Vector2.ZERO:
+			keep.append(r)
+	return {"board": board, "top": top, "bottom": bottom, "units": units, "keep": keep}
+
+## Lo que ocupan de verdad los hijos visibles de `box` (coordenadas globales).
+static func _content_rect(box: Control) -> Rect2:
+	if box == null or not box.is_visible_in_tree():
+		return Rect2()
+	var out := Rect2()
+	var first := true
+	for c in box.get_children():
+		if c is Control and (c as Control).visible:
+			var r := (c as Control).get_global_rect()
+			out = r if first else out.merge(r)
+			first = false
+	return out
+
+## Hasta donde pueden bajar los avisos con el tablero abierto (NotificationPanel):
+## por encima de la fila de botones; en el lienzo bajo, los botones van a la
+## derecha y la esquina de abajo a la izquierda queda libre.
+func toast_floor() -> float:
+	var vp := get_viewport().get_visible_rect().size
+	if not visible or _low or _actions_row == null or not _actions_row.is_visible_in_tree():
+		return vp.y - 10.0
+	return _actions_row.get_global_rect().position.y - 8.0
 
 func _control_anchor(c: Control) -> Dictionary:
 	if c == null or not c.is_visible_in_tree():
