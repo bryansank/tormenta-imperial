@@ -37,8 +37,11 @@ const CT := preload("res://scripts/ui/CartoonTheme.gd")
 ## pagina lleva sello de tampon, PRO_<id>_STAMP. La "4" (2026-10-04) es la hoja
 ## final antes de jugar: que vamos a hacer (construir desde cero, economia,
 ## soldados, pelear contra el Imperio), sin instrucciones de botones.
+## Tutorial corto (decision de Bryan, 2026-10-24): el lore se queda en DOS folios
+## cortos (la Tormenta y quienes somos); "De que va" (AboutScreen) va delante. Los
+## folios 1 y 4 siguen en Tr por si vuelven.
 const VARIANTS := {
-	"full": ["1", "2", "3", "4"],
+	"full": ["2", "3"],
 	# Constructor: no hay Tormenta ni Diezmo que explicar. La portada y un cierre
 	# propio: el expediente esta "en tramite" y no se despacha ceniza.
 	"short": ["1", "B"],

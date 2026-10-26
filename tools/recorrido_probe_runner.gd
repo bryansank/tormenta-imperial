@@ -24,6 +24,9 @@ var _road_node: Node = null
 ## Ya se enseno el paso "consigue lo que falta" (una vez por recorrido).
 var _need_shown := false
 var _need_planks_shown := false
+## --pobre (2026-10-24): la bolsa a cero y nada de rellenar recursos ni gente: los
+## edificios del tutorial salen gratis, la Casa trae la gente y solo entrenar espera.
+var _poor := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -39,6 +42,7 @@ func _arg(key: String, fallback: String = "") -> String:
 
 func _run() -> void:
 	_args = OS.get_cmdline_user_args()
+	_poor = _arg("pobre") == "true"
 	var shot := _arg("shot-size")
 	if shot != "":
 		var wh := shot.split("x")
@@ -98,6 +102,14 @@ func _run() -> void:
 	# ── Prologo y guia rapida ──
 	var main := get_tree().current_scene
 	var tut: Node = main.get_node("TutorialPanel")
+	# "De que va" (tutorial corto, 2026-10-24): sale antes del lore.
+	var about: Node = tut.call("about")
+	await _frames(30)
+	print("recorrido_probe: de que va abierto=", about.call("is_open"))
+	if about.call("is_open"):
+		await _shot("de_que_va")
+		about.call("close")
+		await _frames(20)
 	var pro: Node = tut.call("prologue")
 	print("recorrido_probe: prologo abierto=", pro.call("is_open"))
 	if pro.call("is_open"):
@@ -132,6 +144,8 @@ func _run() -> void:
 		return
 
 	# ── Tutorial guiado, jugado ──
+	if _poor:
+		ResourceManager.set_amounts({"gold": 0, "wood": 0, "planks": 0})
 	await _play_guide(main)
 
 	# ── Leccion de reparar ──
@@ -479,9 +493,9 @@ func _play_guide(main: Node) -> void:
 			"", "done":
 				TutorialManager.finish_guide()
 				return
-			"goal", "core":
+			"goal", "core", "resources":
 				TutorialManager.confirm_step(step)
-			"wait_sawmill", "wait_barracks":
+			"wait_sawmill", "wait_barracks", "wait_gold_mine":
 				await _seconds(1.0)
 				_complete_all()
 			"collect":
@@ -490,11 +504,60 @@ func _play_guide(main: Node) -> void:
 				await _frames(20)
 				await _shot("tut_collect_lleno")
 				ProductionManager.collect(saw)
+			"collect_gold":
+				# Tutorial corto (2026-10-24): el oro de la Mina, como la madera.
+				var mine := _first("gold_mine")
+				ProductionManager._add_to_stock(mine, {"gold": 8})
+				await _frames(20)
+				await _shot("tut_collect_gold_lleno")
+				ProductionManager.collect(mine)
+			"wait_unit":
+				# El soldado se entrena (en dev, unos segundos).
+				await _seconds(2.0)
+			"battle":
+				var bar_btn := get_tree().get_first_node_in_group("hud_bar_missions") as Button
+				if bar_btn != null and not bar_btn.disabled:
+					bar_btn.pressed.emit()
+				else:
+					main.get_node("SkirmishPanel").call("open")
+				await _frames(20)
+			"battle_launch":
+				await _shot("tut_battle_launch_misiones")
+				var launch := get_tree().get_first_node_in_group("hud_mission_launch") as Button
+				if launch != null:
+					launch.pressed.emit()
+				await _seconds(2.0)
+				await _shot("tut_battle_tablero")
+				# Se juega sola (la IA en los dos bandos), como el Impuesto a ciegas.
+				var enc: Variant = CombatManager.get("_encounter")
+				if enc != null:
+					var outcome: Dictionary = load("res://scripts/combat/AutoResolver.gd").resolve(enc)
+					var events: Array = []
+					for event in outcome.get("events", []):
+						if String(event.get("e", "")) in ["unit_died", "enemy_routed", "encounter_ended"]:
+							events.append(event)
+					CombatManager.call("_emit_events", events)
+				await _seconds(2.0)
+				await _shot("tut_battle_parte")
+				var bs: Node = main.get_node_or_null("BattleScreen")
+				if bs != null and bs.has_method("_close_all"):
+					bs.call("_close_all")
+				if CombatManager.is_board_open():
+					CombatManager.end_encounter()
+				await _frames(30)
 			"rotate_now":
 				EventBus.building_rotate_requested.emit()
 				await _frames(15)
 				await _shot("tut_rotate_girado")
 			"train":
+				# El Cuartel ya esta: CONSTRUIR otra vez no lo vuelve a ofrecer
+				# elegido (queja de Bryan, 2026-10-24).
+				cm.call("_open")
+				await _frames(15)
+				await _shot("tut_train_construir_reabierto")
+				print("recorrido_probe: CONSTRUIR reabierto, elegido='", cm.call("selected_building_id"), "'")
+				cm.call("_close")
+				await _frames(5)
 				# Se entrena en el Cuartel: su ficha y ENTRENAR.
 				var bk := _first("barracks")
 				EventBus.building_clicked.emit(bk, _data_of(bk))
@@ -546,7 +609,19 @@ func _play_guide(main: Node) -> void:
 				# Una vez, sin oro ni madera ante la Mina: el paso "consigue lo que
 				# falta" (docs/23 §2.7) tiene que salir y volver solo al rellenar.
 				# Y el de los tablones del Cuartel (need_barracks): sin tablones.
-				if step == "open_barracks" and not _need_planks_shown:
+				if step == "need_train":
+					# Sin oro para el soldado: espera plegada, sin flecha (2026-10-24).
+					await _shot("tut_need_train_tarjeta")
+					await _seconds(9.0)
+					await _shot("tut_need_train_plegado")
+					# Lo que haria el jugador: juntar 40 de oro y 20 de madera.
+					ResourceManager.set_amounts({"gold": 40, "wood": 20})
+					await _seconds(1.5)
+					continue
+				if _poor and step.begins_with("need_"):
+					print("recorrido_probe: ESPERA INESPERADA en ", step, " libres=",
+						PopulationManager.get_free_workers(), " ", TutorialManager.step_hint(step))
+				if not _poor and step == "open_barracks" and not _need_planks_shown:
 					_need_planks_shown = true
 					ResourceManager.set_amounts({"planks": 0})
 					await _seconds(1.5)
@@ -555,7 +630,7 @@ func _play_guide(main: Node) -> void:
 					_top_up()
 					await _seconds(1.5)
 					continue
-				if step == "open_gold_mine" and not _need_shown:
+				if not _poor and step == "open_gold_mine" and not _need_shown:
 					_need_shown = true
 					ResourceManager.set_amounts({"gold": 0, "wood": 0, "food": 40})
 					await _seconds(1.5)
@@ -613,6 +688,8 @@ func _play_guide(main: Node) -> void:
 
 ## Recursos y obreros de sobra para que el tutorial no se pare por coste.
 func _top_up() -> void:
+	if _poor:
+		return
 	# Los tablones del Cuartel (cuartel temprano, 2026-10-17) tambien.
 	ResourceManager.set_amounts({"gold": 320, "wood": 220, "food": 40, "planks": 20})
 	if PopulationManager.get_free_workers() < 4:

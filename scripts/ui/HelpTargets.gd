@@ -69,6 +69,11 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			return _first_in_group(tree, "hud_info_move")
 		"info_train":
 			return _first_in_group(tree, "hud_train_button")
+		# La primera batalla del tutorial corto (2026-10-24).
+		"bar_missions":
+			return _first_in_group(tree, "hud_bar_missions")
+		"mission_launch":
+			return _first_in_group(tree, "hud_mission_launch")
 		"info_demolish":
 			return _first_in_group(tree, "hud_info_demolish")
 		"info_demolish_confirm":

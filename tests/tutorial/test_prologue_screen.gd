@@ -24,8 +24,9 @@ func test_it_opens_at_the_first_folio_on_top_of_everything() -> void:
 	var s := _screen()
 	assert_bool(s.is_open()).is_true()
 	assert_int(s.current_page()).is_equal(0)
-	# Cuatro folios: la firma, la Tormenta, quienes somos y la hoja final.
-	assert_int(s.page_count()).is_equal(4)
+	# Tutorial corto (2026-10-24): dos folios, la Tormenta y quienes somos ("De
+	# que va" va delante, en AboutScreen).
+	assert_int(s.page_count()).is_equal(2)
 	# Encima del menu de pausa y del principal (capa 30).
 	assert_int(s.layer).is_greater(30)
 
@@ -36,17 +37,15 @@ func test_back_is_disabled_on_the_first_folio_and_does_nothing() -> void:
 	assert_int(s.current_page()).is_equal(0)
 
 func test_next_twice_then_back_lands_on_folio_two() -> void:
-	# El caso de docs/07 bug 2 (Siguiente + Atras vuelve un folio), con los
-	# folios de ahora: Siguiente x2 + Atras -> folio 2 (indice 1).
+	# El caso de docs/07 bug 2 (Siguiente + Atras vuelve un folio), con los dos
+	# folios del lore corto (2026-10-24): Siguiente + Atras -> folio 1.
 	var s := _screen()
-	for i in 2:
-		# Con el texto ya escrito, Siguiente pasa folio (si no, lo completaria).
-		s.call("_finish_typing")
-		s.next_button().pressed.emit()
-	assert_int(s.current_page()).is_equal(2)
-	s.back_button().pressed.emit()
+	s.call("_finish_typing")
+	s.next_button().pressed.emit()
 	assert_int(s.current_page()).is_equal(1)
-	assert_bool(s.back_button().disabled).is_false()
+	s.back_button().pressed.emit()
+	assert_int(s.current_page()).is_equal(0)
+	assert_bool(s.back_button().disabled).is_true()
 
 ## Sin animacion (docs/28 §0.6): el folio sale entero y Siguiente pasa de
 ## folio al primer toque.
@@ -66,7 +65,7 @@ func test_next_on_the_last_folio_closes_it() -> void:
 
 func test_skip_closes_from_any_folio() -> void:
 	var s := _screen()
-	s.go_to_page(2)
+	s.go_to_page(1)
 	s.skip_button().pressed.emit()
 	assert_bool(s.is_open()).is_false()
 	assert_int(_closed).is_equal(1)
@@ -75,10 +74,11 @@ func test_a_left_swipe_turns_forward_and_a_right_swipe_goes_back() -> void:
 	var s := _screen()
 	assert_bool(s.handle_swipe(Vector2(-200, 10))).is_true()
 	assert_int(s.current_page()).is_equal(1)
-	assert_bool(s.handle_swipe(Vector2(-200, 0))).is_true()
-	assert_int(s.current_page()).is_equal(2)
-	assert_bool(s.handle_swipe(Vector2(220, -8))).is_true()
+	# Dos folios (lore corto, 2026-10-24): en el ultimo, deslizar no cierra.
+	s.handle_swipe(Vector2(-200, 0))
 	assert_int(s.current_page()).is_equal(1)
+	assert_bool(s.handle_swipe(Vector2(220, -8))).is_true()
+	assert_int(s.current_page()).is_equal(0)
 
 func test_a_short_or_vertical_drag_is_not_a_swipe() -> void:
 	var s := _screen()
@@ -153,7 +153,9 @@ func test_the_last_folio_before_playing_is_the_plan() -> void:
 	# ultima del prologo completo y su boton es Empezar.
 	var s := _screen()
 	s.go_to_page(s.page_count() - 1)
-	assert_str(s.title_text()).is_equal(Tr.t("PRO_4_TITLE"))
+	# Tutorial corto (2026-10-24): el lore acaba en "quienes somos", que ya dice
+	# el plan (construir, no pagar, ganarles).
+	assert_str(s.title_text()).is_equal(Tr.t("PRO_3_TITLE"))
 	assert_str(CartoonTheme.button_text(s.next_button())).contains(Tr.t("BTN_PROLOGUE_START"))
 	assert_bool(s.skip_button().visible).is_true()
 
@@ -203,9 +205,10 @@ func test_every_folio_of_every_variant_has_its_engraving() -> void:
 			assert_bool(Engraving.has_scene(String(id))).override_failure_message("folio %s sin lamina" % id).is_true()
 
 func test_the_engraving_follows_the_folio() -> void:
+	# Lore corto (2026-10-24): la Tormenta y quienes somos.
 	var s := _screen()
-	assert_str(String(s.art().get("folio"))).is_equal("1")
-	s.go_to_page(2)
+	assert_str(String(s.art().get("folio"))).is_equal("2")
+	s.go_to_page(1)
 	assert_str(String(s.art().get("folio"))).is_equal("3")
 	s.prev_page()
 	assert_str(String(s.art().get("folio"))).is_equal("2")

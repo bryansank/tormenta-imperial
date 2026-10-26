@@ -66,6 +66,19 @@ const ENTRIES := {
 		"title": "HELP_T_MOVE", "body": "HELP_B_MOVE", "target": ""},
 	"guide_demolish": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_DEMOLISH", "body": "HELP_B_DEMOLISH", "target": ""},
+	# Lo que salio del tutorial corto (2026-10-24): consejos que salen cuando hacen
+	# falta y quedan aqui desde el principio.
+	"house": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "TIP_HOUSE_T", "body": "TIP_HOUSE_B", "target": "workers"},
+	"food_low": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "TIP_FOOD_T", "body": "TIP_FOOD_B", "target": "resources"},
+	"placing": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "TIP_PLACING_T", "body": "TIP_PLACING_B", "target": ""},
+	"building_actions": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "TIP_BUILDING_T", "body": "TIP_BUILDING_B", "target": ""},
+	# Dejar de colocar (2026-10-24): Esc / clic derecho, o ✕ CANCELAR con el dedo.
+	"guide_cancel": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_CANCEL", "body": "HELP_B_CANCEL", "target": ""},
 	"guide_repair": {"kind": "guide", "cat": CAT_STORM, "basic": true,
 		"title": "HELP_T_REPAIR", "body": "HELP_B_REPAIR", "target": "", "needs": "storm_started"},
 	# ── Guia rapida (2026-09-28): los cuatro bloques de la pantalla del inicio ──

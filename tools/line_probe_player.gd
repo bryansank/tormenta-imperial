@@ -383,10 +383,11 @@ func _decide() -> void:
 	if _raid():
 		return
 	var step: Dictionary = Objectives.next_step()
-	# El tutorial guiado (2026-10-16) pide el Laboratorio justo despues del
-	# Almacen, antes de la Fundicion: el jugador que lo sigue lo levanta en la
-	# era 1. `--tutorial=0` juega sin el (solo la linea de ¿QUE HACER?).
-	if String(options.get("tutorial", "1")) != "0" and ProgressionManager.current_era == 1 \
+	# El tutorial guiado de 2026-10-16 pedia el Laboratorio justo despues del
+	# Almacen, antes de la Fundicion. El tutorial corto (2026-10-24) ya no lo
+	# pide: por defecto se juega solo la linea de ¿QUE HACER?; `--tutorial=1`
+	# repite la apertura vieja para comparar.
+	if String(options.get("tutorial", "0")) != "0" and ProgressionManager.current_era == 1 \
 			and String(step.get("kind", "")) == "build" and String(step.get("id", "")) == "foundry" \
 			and Rules.count_building("laboratory") == 0:
 		step = {"kind": "build", "id": "laboratory", "count": 1, "why": "OBJ_WHY_LABORATORY"}

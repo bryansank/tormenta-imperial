@@ -28,7 +28,12 @@ var morale_growth_threshold := 30
 var morale_danger_threshold := 20
 var morale_satisfied_recovery := 3
 var morale_unsatisfied_penalty := -8
-var population_start := 5
+## 10 colonos al empezar, y el Nucleo da sitio a 10 (data/buildings/nucleo.tres)
+## desde 2026-10-24 (antes 5 y 5). Queja de Bryan: "los trabajadores se agotan".
+## Con el tutorial corto (Aserradero 2 + Mina de oro 3 + Cuartel 1 = 6) caben
+## todos, mas 2 de minar a mano, sin construir ninguna Casa; y detras, la Granja
+## (2) que pide ¿QUE HACER?. tests/tutorial/test_guide_workers.gd lo comprueba.
+var population_start := 10
 var consumption_interval := 30.0
 var growth_interval := 20.0
 
@@ -2823,6 +2828,11 @@ var storm_trial_after_guide := 90.0
 ## detras del Cuartel temprano y a 120 oro + 80 madera tardaba (queja de Bryan,
 ## 2026-10-19). Las siguientes, al precio de la ficha. BuildingData.get_cost.
 var first_building_discount := {"gold_mine": 0.5}
+## Gratis en el tutorial (2026-10-24): mientras dura el tutorial guiado, el
+## primero de cada edificio que pide (y la carretera) no cuesta nada
+## (TutorialManager.is_free_build). Las pruebas de "consigue lo que falta" lo
+## apagan para ver la maquinaria con precios.
+var tutorial_free_builds := true
 var storm_trial_severity := 1
 ## Lo que deja producir durante su Ceniza y su Tormenta: bastante mas que una de
 ## verdad (0,5 y 0,15). Se nota, no hunde.

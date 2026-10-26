@@ -44,58 +44,45 @@ const Objectives := preload("res://scripts/services/Objectives.gd")
 ##     `needs` (opcional): la meta sin la que no se puede cumplir; si esa se pasa
 ##     de largo (imposible en esta isla), esta tambien.
 ##
-## Recoger lo producido y la Granja (rama feat/comida-granja-recoger, 2026-10-04)
-## van entre el aserradero y la casa: lo que hace un edificio se queda en el y la
-## gente come comida, y las dos cosas se ensenan en el orden en que pasan al
-## arrancar. La Granja no espera a su obra (se cultiva sola al terminar).
+## TUTORIAL CORTO (decision de Bryan, 2026-10-24, rama fix/tutorial-flujo): antes
+## de jugar, una pantalla "De que va" (AboutScreen) y un lore de dos folios; aqui,
+## SOLO lo que hace falta para la primera batalla: la tarjeta de los RECURSOS, el
+## ASERRADERO (colocar y recoger), la MINA DE ORO (colocar y recoger), el CUARTEL,
+## ENTRENAR el primer soldado y la PRIMERA BATALLA (con el combate guiado encima).
+## Casa, Granja, Mercado, Almacen, Laboratorio y girar/mover/derribar salieron del
+## tutorial: son consejos que salen cuando hacen falta (TIPS, uno a la vez) y
+## paginas de AYUDA; ¿QUE HACER? sigue la linea despues. Los edificios del
+## tutorial salen gratis (is_free_build) y hay gente para todos sin Casa (6 + 2
+## de minar a mano caben en los 10 del Nucleo: tests/tutorial/test_guide_workers.gd).
 ##
-## Tutorial claro (rama feat/tutorial-claro, 2026-10-16): delante, dos tarjetas
-## de LEER (la meta de la partida y el Nucleo), que se cumplen con su boton; y
-## detras de la casa, el resto de edificios del principio (Mina de oro, Mercado,
-## Almacen y Laboratorio), cada uno con una frase de para que sirve y sus cifras
-## (TutorialPanel las pinta con iconos, building_facts()). La carretera se
-## explica en la espera de la obra del aserradero, que es cuando se ve tenderse.
-## Y tres manejos (mismo dia): GIRAR al colocar la casa, MOVER la casa (gratis,
-## no pierde nada) y DERRIBAR un tramo de carretera puesto para eso (1 oro).
-##
-## Una meta "fact" puede tener sus propios pasos segun lo que hace el jugador:
-## `menu_step` con la lista de CONSTRUIR abierta, y `placing_step` mientras lleva
-## en la mano `placing` ("*": cualquier cosa). `building`: el edificio del que se
-## dicen el coste que falta y las cifras.
+## Una meta "fact" puede tener sus propios pasos segun lo que pasa:
+##   `menu_step` con la lista de CONSTRUIR abierta, y `placing_step` mientras lleva
+##   en la mano `placing` ("*": cualquier cosa); `building`: el edificio del que se
+##   dicen el coste que falta y las cifras.
+##   `unit`: se cumple pagando esa unidad; sin poder pagarla, need_<meta> (espera).
+##   `wait_fact` / `wait_step`: mientras ese hecho no se da, se espera en ese paso
+##   (el soldado aun entrenandose). `panel_fact` / `panel_step`: con esa ventana
+##   abierta, ese paso (MISIONES abierta: pulsa ¡A LA MISION!).
 ## El orden de esta lista es el orden del tutorial.
 const GUIDE_GOALS := [
-	{"goal": "goal", "kind": "fact", "fact": "goal_seen", "step": "goal"},
-	{"goal": "core", "kind": "fact", "fact": "core_seen", "step": "core"},
+	{"goal": "resources", "kind": "fact", "fact": "resources_seen", "step": "resources"},
 	{"goal": "sawmill", "kind": "build", "building": "sawmill",
 		"steps": {"open": "open_build", "pick": "pick_sawmill", "place": "place_sawmill", "wait": "wait_sawmill"}},
 	{"goal": "collect", "kind": "fact", "fact": "collected", "step": "collect", "needs": "sawmill"},
-	# Cuartel temprano (2026-10-17, feat/cuartel-temprano): "solo anadir el
-	# Cuartel", justo despues de la madera. Sus tablones salen del Aserradero (el
-	# paso need_barracks dice "toca tu Aserradero y pulsa Serrar tablones"); sin
+	{"goal": "gold_mine", "kind": "build", "building": "gold_mine",
+		"steps": {"open": "open_gold_mine", "pick": "pick_gold_mine", "place": "place_gold_mine", "wait": "wait_gold_mine"}},
+	{"goal": "collect_gold", "kind": "fact", "fact": "collected_gold", "step": "collect_gold", "needs": "gold_mine"},
+	# Sus tablones salen del Aserradero (gratis en el tutorial no hacen falta); sin
 	# Aserradero (bosque imposible) su requisito falla y se pasa de largo (prereq).
 	{"goal": "barracks", "kind": "build", "building": "barracks",
 		"steps": {"open": "open_barracks", "pick": "pick_barracks", "place": "place_barracks", "wait": "wait_barracks"}},
-	# Se entrena en el Cuartel (2026-10-19): tocarlo y pulsar ENTRENAR en su ficha.
-	{"goal": "train", "kind": "fact", "fact": "trained", "step": "train", "needs": "barracks"},
-	{"goal": "farm", "kind": "build", "building": "farm",
-		"steps": {"open": "open_farm", "pick": "pick_farm", "place": "place_farm"}},
-	{"goal": "rotate", "kind": "fact", "fact": "rotated", "step": "rotate", "menu_step": "rotate_pick",
-		"placing": "*", "placing_step": "rotate_now", "building": "house"},
-	{"goal": "house", "kind": "build", "building": "house",
-		"steps": {"open": "open_house", "pick": "pick_house", "place": "place_house"}},
-	{"goal": "move", "kind": "fact", "fact": "moved", "step": "move",
-		"placing": "__move__", "placing_step": "move_place"},
-	{"goal": "practice_road", "kind": "fact", "fact": "road_placed", "step": "road_open",
-		"menu_step": "road_pick", "placing": "road", "placing_step": "road_place", "building": "road"},
-	{"goal": "demolish", "kind": "fact", "fact": "demolished", "step": "demolish"},
-	{"goal": "gold_mine", "kind": "build", "building": "gold_mine",
-		"steps": {"open": "open_gold_mine", "pick": "pick_gold_mine", "place": "place_gold_mine"}},
-	{"goal": "market", "kind": "build", "building": "market",
-		"steps": {"open": "open_market", "pick": "pick_market", "place": "place_market"}},
-	{"goal": "warehouse", "kind": "build", "building": "warehouse",
-		"steps": {"open": "open_warehouse", "pick": "pick_warehouse", "place": "place_warehouse"}},
-	{"goal": "laboratory", "kind": "build", "building": "laboratory",
-		"steps": {"open": "open_laboratory", "pick": "pick_laboratory", "place": "place_laboratory"}},
+	# Se entrena en el Cuartel: tocarlo y pulsar ENTRENAR en su ficha. Sin poder
+	# pagar el soldado, el paso es de ESPERA (need_train), no una flecha (2026-10-24).
+	{"goal": "train", "kind": "fact", "fact": "trained", "step": "train", "needs": "barracks", "unit": "infantry"},
+	# La primera batalla: MISIONES y ¡A LA MISION! (la primera escaramuza, un
+	# enemigo debil); en el tablero manda el combate guiado (leccion basics).
+	{"goal": "battle", "kind": "fact", "fact": "battle_done", "step": "battle", "needs": "train",
+		"wait_fact": "unit_home", "wait_step": "wait_unit", "panel_fact": "missions_open", "panel_step": "battle_launch"},
 ]
 
 ## Las metas que tenia el tutorial antes de 2026-10-16: una partida vieja sin la
@@ -103,73 +90,46 @@ const GUIDE_GOALS := [
 const LEGACY_GOALS := ["sawmill", "house"]
 
 ## Los pasos, con lo que ve el jugador. `n` es el numero de "PASO n DE
-## GUIDE_TOTAL": un paso por edificio (abrir, elegir y colocar la casa son el 7).
-## `ok`: tarjeta de leer, con un boton (esa clave de Tr) que cumple su `fact`.
-## `building`: el edificio cuyas cifras salen con iconos en la tarjeta.
+## GUIDE_TOTAL". `ok`: tarjeta de leer, con un boton (esa clave de Tr) que cumple
+## su `fact`. `building`: el edificio cuyas cifras salen con iconos en la tarjeta.
 const GUIDE_STEPS := {
-	"goal":             {"n": 1,  "text": "GUIDE_GOAL",            "target": "", "ok": "BTN_GUIDE_GOAL_OK", "fact": "goal_seen"},
-	"core":             {"n": 2,  "text": "GUIDE_CORE",            "target": "core", "ok": "BTN_GUIDE_OK", "fact": "core_seen", "building": "nucleo"},
-	"open_build":       {"n": 3,  "text": "GUIDE_OPEN_BUILD",      "target": "build_button", "building": "sawmill"},
-	"pick_sawmill":     {"n": 3,  "text": "GUIDE_PICK_SAWMILL",    "target": "card:sawmill", "building": "sawmill"},
-	"place_sawmill":    {"n": 3,  "text": "GUIDE_PLACE_SAWMILL",   "target": "forest", "building": "sawmill"},
-	"wait_sawmill":     {"n": 3,  "text": "GUIDE_WAIT_SAWMILL",    "target": "building:sawmill"},
-	"collect":          {"n": 4,  "text": "GUIDE_COLLECT",         "target": "built:sawmill|building:sawmill"},
-	# El Cuartel (2026-10-17): abrir, elegir, colocar y esperar la obra.
-	"open_barracks":    {"n": 5,  "text": "GUIDE_OPEN_BARRACKS",   "target": "build_button", "building": "barracks"},
-	"pick_barracks":    {"n": 5,  "text": "GUIDE_PICK_BARRACKS",   "target": "card:barracks", "building": "barracks"},
-	"place_barracks":   {"n": 5,  "text": "GUIDE_PLACE_BARRACKS",  "target": "", "building": "barracks"},
-	"wait_barracks":    {"n": 5,  "text": "GUIDE_WAIT_BARRACKS",   "target": "building:barracks", "building": "barracks"},
-	"train":            {"n": 5,  "text": "GUIDE_TRAIN",           "target": "info_train|building:barracks", "building": "barracks"},
-	"open_farm":        {"n": 6,  "text": "GUIDE_OPEN_FARM",       "target": "build_button", "building": "farm"},
-	"pick_farm":        {"n": 6,  "text": "GUIDE_PICK_FARM",       "target": "card:farm", "building": "farm"},
-	"place_farm":       {"n": 6,  "text": "GUIDE_PLACE_FARM",      "target": "", "building": "farm"},
-	# Girar: con la Casa en la mano, antes de colocarla.
-	"rotate":           {"n": 7,  "text": "GUIDE_ROTATE",          "target": "build_button", "building": "house"},
-	"rotate_pick":      {"n": 7,  "text": "GUIDE_ROTATE_PICK",     "target": "card:house", "building": "house"},
-	"rotate_now":       {"n": 7,  "text": "GUIDE_ROTATE_NOW",      "target": "rotate_button", "building": "house"},
-	"open_house":       {"n": 7,  "text": "GUIDE_OPEN_HOUSE",      "target": "build_button", "building": "house"},
-	"pick_house":       {"n": 7,  "text": "GUIDE_PICK_HOUSE",      "target": "card:house", "building": "house"},
-	"place_house":      {"n": 7,  "text": "GUIDE_PLACE_HOUSE",     "target": "", "building": "house"},
-	# Mover: la ficha de un edificio, MOVER, y otro sitio. Gratis.
-	"move":             {"n": 8,  "text": "GUIDE_MOVE",            "target": "info_move|built:house"},
-	"move_place":       {"n": 8,  "text": "GUIDE_MOVE_PLACE",      "target": ""},
-	# Derribar: un tramo de carretera puesto para eso, y DEMOLER en su ficha.
-	"road_open":        {"n": 9,  "text": "GUIDE_ROAD_OPEN",       "target": "build_button", "building": "road"},
-	"road_pick":        {"n": 9,  "text": "GUIDE_ROAD_PICK",       "target": "card:road", "building": "road"},
-	"road_place":       {"n": 9,  "text": "GUIDE_ROAD_PLACE",      "target": "", "building": "road"},
-	"demolish":         {"n": 9,  "text": "GUIDE_DEMOLISH",        "target": "info_demolish_confirm|info_demolish|practice_road"},
-	"open_gold_mine":   {"n": 10, "text": "GUIDE_OPEN_GOLD_MINE",  "target": "build_button", "building": "gold_mine"},
-	"pick_gold_mine":   {"n": 10, "text": "GUIDE_PICK_GOLD_MINE",  "target": "card:gold_mine", "building": "gold_mine"},
-	"place_gold_mine":  {"n": 10, "text": "GUIDE_PLACE_GOLD_MINE", "target": "deposit:gold_vein", "building": "gold_mine"},
-	"open_market":      {"n": 11, "text": "GUIDE_OPEN_MARKET",     "target": "build_button", "building": "market"},
-	"pick_market":      {"n": 11, "text": "GUIDE_PICK_MARKET",     "target": "card:market", "building": "market"},
-	"place_market":     {"n": 11, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "market"},
-	"open_warehouse":   {"n": 12, "text": "GUIDE_OPEN_WAREHOUSE",  "target": "build_button", "building": "warehouse"},
-	"pick_warehouse":   {"n": 12, "text": "GUIDE_PICK_WAREHOUSE",  "target": "card:warehouse", "building": "warehouse"},
-	"place_warehouse":  {"n": 12, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "warehouse"},
-	"open_laboratory":  {"n": 13, "text": "GUIDE_OPEN_LABORATORY", "target": "build_button", "building": "laboratory"},
-	"pick_laboratory":  {"n": 13, "text": "GUIDE_PICK_LABORATORY", "target": "card:laboratory", "building": "laboratory"},
-	"place_laboratory": {"n": 13, "text": "GUIDE_PLACE_ANYWHERE",  "target": "", "building": "laboratory"},
-	"done":             {"n": 13, "text": "GUIDE_DONE",            "target": "objective"},
+	# Los recursos: para que sirve cada uno, con su icono (resource_facts).
+	"resources":        {"n": 1,  "text": "GUIDE_RESOURCES",       "target": "resources", "ok": "BTN_GUIDE_OK", "fact": "resources_seen"},
+	"open_build":       {"n": 2,  "text": "GUIDE_OPEN_BUILD",      "target": "build_button", "building": "sawmill"},
+	"pick_sawmill":     {"n": 2,  "text": "GUIDE_PICK_SAWMILL",    "target": "card:sawmill", "building": "sawmill"},
+	"place_sawmill":    {"n": 2,  "text": "GUIDE_PLACE_SAWMILL",   "target": "forest", "building": "sawmill"},
+	"wait_sawmill":     {"n": 2,  "text": "GUIDE_WAIT_SAWMILL",    "target": "building:sawmill"},
+	"collect":          {"n": 3,  "text": "GUIDE_COLLECT",         "target": "built:sawmill|building:sawmill"},
+	"open_gold_mine":   {"n": 4,  "text": "GUIDE_OPEN_GOLD_MINE",  "target": "build_button", "building": "gold_mine"},
+	"pick_gold_mine":   {"n": 4,  "text": "GUIDE_PICK_GOLD_MINE",  "target": "card:gold_mine", "building": "gold_mine"},
+	"place_gold_mine":  {"n": 4,  "text": "GUIDE_PLACE_GOLD_MINE", "target": "deposit:gold_vein", "building": "gold_mine"},
+	"wait_gold_mine":   {"n": 4,  "text": "GUIDE_WAIT_GOLD_MINE",  "target": "building:gold_mine", "building": "gold_mine"},
+	"collect_gold":     {"n": 5,  "text": "GUIDE_COLLECT_GOLD",    "target": "built:gold_mine|building:gold_mine"},
+	"open_barracks":    {"n": 6,  "text": "GUIDE_OPEN_BARRACKS",   "target": "build_button", "building": "barracks"},
+	"pick_barracks":    {"n": 6,  "text": "GUIDE_PICK_BARRACKS",   "target": "card:barracks", "building": "barracks"},
+	"place_barracks":   {"n": 6,  "text": "GUIDE_PLACE_BARRACKS",  "target": "", "building": "barracks"},
+	"wait_barracks":    {"n": 6,  "text": "GUIDE_WAIT_BARRACKS",   "target": "building:barracks", "building": "barracks"},
+	"train":            {"n": 7,  "text": "GUIDE_TRAIN",           "target": "info_train|building:barracks", "building": "barracks"},
+	# La primera batalla (2026-10-24): esperar al soldado, MISIONES, ¡A LA MISION!.
+	"wait_unit":        {"n": 8,  "text": "GUIDE_WAIT_UNIT",       "target": "building:barracks"},
+	"battle":           {"n": 8,  "text": "GUIDE_BATTLE",          "target": "bar_missions|menu_button"},
+	"battle_launch":    {"n": 8,  "text": "GUIDE_BATTLE_LAUNCH",   "target": "mission_launch"},
+	"done":             {"n": 8,  "text": "GUIDE_DONE",            "target": "objective"},
 	# Consigue lo que falta (2026-10-17, fix/tutorial-materiales): el paso de un
-	# edificio que aun no se puede pagar (recursos, material del taller o
-	# trabajadores). En vez de "Toca CONSTRUIR" con el boton apagado, dice que
-	# falta y como conseguirlo, y senala donde (need_target). Al tenerlo todo,
-	# vuelve solo al paso de construir. `need`: el texto lleva el nombre.
-	"need_sawmill":     {"n": 3,  "text": "GUIDE_NEED", "target": "", "building": "sawmill", "need": true},
-	"need_barracks":    {"n": 5,  "text": "GUIDE_NEED", "target": "", "building": "barracks", "need": true},
-	"need_farm":        {"n": 6,  "text": "GUIDE_NEED", "target": "", "building": "farm", "need": true},
-	"need_house":       {"n": 7,  "text": "GUIDE_NEED", "target": "", "building": "house", "need": true},
-	"need_road":        {"n": 9,  "text": "GUIDE_NEED", "target": "", "building": "road", "need": true},
-	"need_gold_mine":   {"n": 10, "text": "GUIDE_NEED", "target": "", "building": "gold_mine", "need": true},
-	"need_market":      {"n": 11, "text": "GUIDE_NEED", "target": "", "building": "market", "need": true},
-	"need_warehouse":   {"n": 12, "text": "GUIDE_NEED", "target": "", "building": "warehouse", "need": true},
-	"need_laboratory":  {"n": 13, "text": "GUIDE_NEED", "target": "", "building": "laboratory", "need": true},
+	# edificio (o del soldado) que aun no se puede pagar. En vez de "Toca
+	# CONSTRUIR" con el boton apagado, dice que falta y como conseguirlo, y senala
+	# donde (need_target). Al tenerlo todo, vuelve solo al paso de construir.
+	"need_sawmill":     {"n": 2,  "text": "GUIDE_NEED", "target": "", "building": "sawmill", "need": true},
+	"need_gold_mine":   {"n": 4,  "text": "GUIDE_NEED", "target": "", "building": "gold_mine", "need": true},
+	"need_barracks":    {"n": 6,  "text": "GUIDE_NEED", "target": "", "building": "barracks", "need": true},
+	"need_train":       {"n": 7,  "text": "GUIDE_NEED", "target": "", "building": "barracks", "unit": "infantry", "need": true},
 }
 ## Prefijo de los pasos "consigue lo que falta": "need_" + id del edificio.
 const NEED_PREFIX := "need_"
+## En `short` (guide_facts), una unidad que no se puede pagar: "unit:infantry".
+const UNIT_SHORT_PREFIX := "unit:"
 ## El mayor `n` de GUIDE_STEPS (una prueba lo comprueba: al insertar pasos, se sube).
-const GUIDE_TOTAL := 13
+const GUIDE_TOTAL := 8
 
 ## Los pasos en los que el tutorial deja ver la ficha de un edificio
 ## (BuildingInfoPanel) sin esconderse: lo que ensenan ocurre dentro de ella.
@@ -208,12 +168,22 @@ var combat_lessons_done: Array[String] = []
 ## de 2026-10-19. La tormenta de prueba llega GameConfig.storm_trial_after_guide
 ## despues (StormManager.trial_due_at). Va en la partida.
 var guide_finished_at: float = -1.0
+## Gratis en el tutorial (2026-10-24): los edificios de las metas que ya se
+## levantaron gratis en esta partida. Solo el PRIMERO de cada uno sale gratis
+## (derribarlo y volver a ponerlo cuesta lo de siempre). Va en la partida.
+var free_builds_used: Array[String] = []
 
 ## El prologo esta pedido y espera a que no haya nada encima (menu principal,
 ## pausa, selector de modo).
 var _prologue_pending := false
+## El prologo que sale solo en una partida nueva va precedido de "De que va"
+## (AboutScreen, 2026-10-24); "Historia" desde el menu, no. Lo recoge TutorialPanel.
+var _about_first := false
 var _step := ""
 var _menu_open := false
+## MISIONES (SkirmishPanel) abierta: el paso de la primera batalla es pulsar
+## ¡A LA MISION! (2026-10-24).
+var _missions_open := false
 var _placing_id := ""
 var _last_scan := 0.0
 var _last_check := 0.0
@@ -269,6 +239,12 @@ const TIPS := {
 	"island":         {"title": "HELP_T_ISLAND",    "body": "HELP_B_ISLAND"},
 	# Carretera larga: la primera vez que se coge la carretera fuera de la guia.
 	"road_drag":      {"title": "HELP_T_ROAD_DRAG", "body": "HELP_B_ROAD_DRAG"},
+	# Lo que salio del tutorial corto (2026-10-24): sale cuando hace falta, despues
+	# del tutorial, uno a la vez (HelperPanel), y queda en AYUDA.
+	"house":          {"title": "TIP_HOUSE_T",      "body": "TIP_HOUSE_B"},
+	"food_low":       {"title": "TIP_FOOD_T",       "body": "TIP_FOOD_B"},
+	"placing":        {"title": "TIP_PLACING_T",    "body": "TIP_PLACING_B"},
+	"building_actions": {"title": "TIP_BUILDING_T", "body": "TIP_BUILDING_B"},
 }
 
 ## Paneles cuya primera apertura merece un consejo: nombre del nodo en Main.tscn
@@ -306,6 +282,11 @@ func _ready() -> void:
 	EventBus.unit_trained.connect(_on_unit_trained)
 	# El paso ENTRENAR se cumple al pulsar ENTRENAR (no al acabar el recluta).
 	EventBus.unit_training_started.connect(func(_id, _d): note_guide_fact("trained"))
+	# La primera batalla del tutorial corto (2026-10-24): cualquier pelea en el
+	# tablero, ganada o no, la cumple; y una salida que acaba sin tablero tambien.
+	EventBus.encounter_ended.connect(func(_victory, _turns): note_guide_fact("battle_done"))
+	# El soldado sale del Cuartel: el paso de esperar pasa al de MISIONES ya.
+	EventBus.army_changed.connect(_refresh_guide)
 	EventBus.army_upkeep_unpaid.connect(_on_upkeep_unpaid)
 	EventBus.consumption_failed.connect(_on_consumption_failed)
 	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
@@ -333,6 +314,7 @@ func _ready() -> void:
 	EventBus.tutorial_guide_finished.connect(func(_skipped): _show_pending_repair.call_deferred())
 	_connect_news()
 	_connect_combat_lessons()
+	_connect_after_guide_tips()
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Prologo ──
@@ -340,6 +322,7 @@ func _ready() -> void:
 
 func _on_game_started() -> void:
 	_menu_open = false
+	_missions_open = false
 	_placing_id = ""
 	if not repair_lesson_done and _extra_step == "":
 		_repair_node = _first_damaged()
@@ -364,6 +347,12 @@ func prologue_variant() -> String:
 		GameMode.Mode.SANDBOX:
 			return "none"
 	return "full"
+
+## TutorialPanel: ¿va "De que va" delante de este prologo? Se gasta al leerlo.
+func take_about_first() -> bool:
+	var first := _about_first
+	_about_first = false
+	return first
 
 func is_prologue_pending() -> bool:
 	return _prologue_pending
@@ -409,6 +398,7 @@ func _process(delta: float) -> void:
 	_last_scan = 0.0
 	if can_show_prologue_now():
 		_prologue_pending = false
+		_about_first = true
 		show_prologue()
 
 ## No hay menu principal, pausa ni dialogo delante, y existe quien lo pinte.
@@ -472,8 +462,7 @@ func start_guide(from_scratch: bool = true) -> void:
 	# Una isla que ya tiene aserradero y casa es una partida jugada (vieja, sin
 	# la marca): no se le ensena nada, tampoco recoger, la Granja ni los
 	# edificios que llegaron despues al tutorial (2026-10-04, 2026-10-16).
-	var legacy: Array = GUIDE_GOALS.filter(func(g): return String(g["goal"]) in LEGACY_GOALS)
-	if not from_scratch and derive_step(guide_facts(), legacy) == "done":
+	if not from_scratch and LEGACY_GOALS.all(func(id): return GridManager.count_by_id(String(id)) > 0):
 		# Nada que ensenar: ya se hizo todo (partida vieja sin la marca).
 		guide_state = GUIDE_DONE
 		EventBus.tutorial_guide_finished.emit(false)
@@ -532,6 +521,42 @@ func _note_guide_finished() -> void:
 func is_guide_active() -> bool:
 	return guide_state == GUIDE_ACTIVE
 
+## Gratis en el tutorial (2026-10-24): mientras dura el tutorial guiado de verdad
+## (no un repaso pedido desde AYUDA), el PRIMERO de cada edificio que pide el
+## tutorial no cuesta nada, y la carretera tampoco (la automatica y el tramo de
+## practicar). Asi cada paso se puede dar a la primera, sin esperar a juntar oro.
+## Sin abuso: uno de cada (free_builds_used, en la partida), solo si aun no hay
+## ninguno en la isla, y derribar uno regalado no devuelve nada (meta
+## "tutorial_free", PlacementRules.demolish). Al acabar el tutorial, precios de siempre.
+func is_free_build(building_id: String) -> bool:
+	if not GameConfig.tutorial_free_builds or guide_state != GUIDE_ACTIVE or is_replay():
+		return false
+	# Solo en una partida arrancada (no en pruebas ni pantallas sueltas).
+	if not GameManager.has_begun():
+		return false
+	if building_id == Rules.ROAD_ID:
+		return true
+	if not building_id in _goal_buildings() or building_id in free_builds_used:
+		return false
+	return GridManager.count_by_id(building_id) == 0
+
+## Un edificio del tutorial se levanto gratis: queda apuntado (no hay otro gratis)
+## y lleva la marca para que derribarlo no devuelva nada.
+func _note_free_build(data: Resource, cell: Vector2i) -> void:
+	if data == null or not GameConfig.tutorial_free_builds or guide_state != GUIDE_ACTIVE or is_replay():
+		return
+	var id := String(data.get("id"))
+	if id == Rules.ROAD_ID or not id in _goal_buildings() or id in free_builds_used:
+		return
+	# Al emitirse building_placed ya esta en la rejilla: el que acaba de entrar
+	# es el unico (si hubiera otro, no habria salido gratis).
+	if GridManager.count_by_id(id) != 1:
+		return
+	free_builds_used.append(id)
+	var node: Node = GridManager.get_building_at(cell)
+	if node != null:
+		node.set_meta("tutorial_free", true)
+
 ## Nada que interrumpa llega mientras se aprende (queja de Bryan, 2026-10-19:
 ## "la primera tormenta esta llegando aunque este haciendo el tutorial"): con el
 ## tutorial guiado en marcha, o pendiente de empezar en una partida ya arrancada
@@ -573,6 +598,16 @@ static func derive_step(f: Dictionary, goals: Array = GUIDE_GOALS) -> String:
 			continue
 		if String(g.get("kind", "build")) == "fact":
 			if not bool(f.get(String(g["fact"]), false)):
+				# Una meta que se cumple pagando una unidad (entrenar): sin
+				# poder pagarla, antes conseguir lo que falta (need_<meta>).
+				if g.has("unit") and (UNIT_SHORT_PREFIX + String(g["unit"])) in short:
+					return NEED_PREFIX + String(g["goal"])
+				# Algo que aun no ha pasado (el soldado entrenandose): se espera.
+				if g.has("wait_fact") and not bool(f.get(String(g["wait_fact"]), false)):
+					return String(g["wait_step"])
+				# Con su ventana abierta (MISIONES), el paso de dentro.
+				if g.has("panel_fact") and bool(f.get(String(g["panel_fact"]), false)):
+					return String(g["panel_step"])
 				var want := String(g.get("placing", ""))
 				if g.has("placing_step") and placing != "" and (want == "*" or want == placing):
 					return String(g["placing_step"])
@@ -606,6 +641,10 @@ func guide_facts() -> Dictionary:
 		"placing": _placing_id,
 		"skip": _blocked_goals.duplicate(),
 		"short": short_goals(),
+		# La primera batalla (2026-10-24): un soldado en casa (o la columna ya
+		# fuera) y MISIONES abierta.
+		"unit_home": not Objectives.first_sortie_party().is_empty() or CombatManager.has_active_expedition(),
+		"missions_open": _missions_open,
 	}
 	for key in now:
 		f[key] = int(now[key]) - int(guide_baseline.get(key, 0))
@@ -631,6 +670,11 @@ func note_guide_fact(fact: String) -> void:
 static func short_goals() -> Array:
 	var out: Array = []
 	for g in GUIDE_GOALS:
+		if g.has("unit"):
+			var u := String(g["unit"])
+			if not unit_missing_cost(u).is_empty() and not (UNIT_SHORT_PREFIX + u) in out:
+				out.append(UNIT_SHORT_PREFIX + u)
+			continue
 		var b := String(g.get("building", ""))
 		if b == "" or b in out:
 			continue
@@ -649,6 +693,29 @@ static func can_pay_now(building_id: String) -> bool:
 		return true
 	return workers_short(data) <= 0 and Rules.missing_cost(data).is_empty()
 
+## Lo que le falta al jugador para pagar una `unit_id` (nombre -> cantidad), o {}.
+static func unit_missing_cost(unit_id: String) -> Dictionary:
+	var out := {}
+	var cost: Dictionary = GameConfig.get_unit_def(unit_id).get("cost", {})
+	for res in cost:
+		var type: int = ResourceManager.name_to_type(String(res))
+		if type == -1:
+			continue
+		var short: int = int(cost[res]) - ResourceManager.get_amount(type)
+		if short > 0:
+			out[String(res)] = short
+	return out
+
+## Lo que pide un paso need_<x>: levantar un edificio o entrenar una unidad, como
+## objetivo de Objectives ({"kind": "build"|"train", "id", "count": 1}). {} si no es need.
+static func need_goal(step_id: String) -> Dictionary:
+	var e: Dictionary = GUIDE_STEPS.get(step_id, {})
+	if not bool(e.get("need", false)):
+		return {}
+	if e.has("unit"):
+		return {"kind": "train", "id": String(e["unit"]), "count": 1}
+	return {"kind": "build", "id": String(e["building"]), "count": 1}
+
 ## Cuantos trabajadores libres le faltan a `data` (0 si ninguno).
 static func workers_short(data: BuildingData) -> int:
 	if data == null or data.workers_required <= 0:
@@ -663,16 +730,30 @@ static func need_target(building_id: String) -> String:
 	var data := Rules.load_building_data(building_id)
 	if data == null:
 		return ""
+	return _need_target_of({"kind": "build", "id": building_id, "count": 1}, data)
+
+## Que senalar en un paso need_<x> (edificio o unidad).
+static func need_target_for_step(step_id: String) -> String:
+	var goal := need_goal(step_id)
+	if goal.is_empty():
+		return ""
+	if String(goal["kind"]) == "build":
+		return need_target(String(goal["id"]))
+	return _need_target_of(goal, null)
+
+static func _need_target_of(goal: Dictionary, data: BuildingData) -> String:
 	# Lo que senala es el paso de ahora de la lista (need_plan): recoger en el
 	# edificio que guarda lo que falta, su productor, la veta, CONSTRUIR...
-	var from_plan: String = Objectives.item_target(need_plan(building_id).get("current", {}))
+	var from_plan: String = Objectives.item_target(_trimmed_plan(goal).get("current", {}))
 	if from_plan != "":
 		return from_plan
-	for res in Rules.missing_cost(data):
+	var missing: Dictionary = Rules.missing_cost(data) if data != null \
+		else unit_missing_cost(String(goal["id"]))
+	for res in missing:
 		var t := _target_for_resource(String(res))
 		if t != "":
 			return t
-	if workers_short(data) > 0 \
+	if data != null and workers_short(data) > 0 \
 			and PopulationManager.get_population() >= PopulationManager.get_max_population():
 		return "build_button"
 	return ""
@@ -740,8 +821,13 @@ func _refresh_guide() -> void:
 	EventBus.tutorial_step_changed.emit(step)
 
 ## Recoger cualquier produccion cumple la meta "collected" del tutorial.
-func _on_production_collected(_node: Node, _collected: Dictionary) -> void:
-	note_guide_fact("collected")
+## Tutorial corto (2026-10-24): la madera del Aserradero y el oro de la Mina, cada
+## uno el suyo.
+func _on_production_collected(_node: Node, collected: Dictionary) -> void:
+	if collected.has("gold"):
+		note_guide_fact("collected_gold")
+	if collected.has("wood") or not collected.has("gold"):
+		note_guide_fact("collected")
 
 # ── Que ningun paso se atasque ───────────────────────────────────────
 
@@ -870,13 +956,13 @@ static func has_reachable_deposit(data: BuildingData, map_gen: Node) -> bool:
 ## pasos de construir (abrir, elegir, colocar, conseguir). Antes, con pocos
 ## trabajadores, se callaba lo que faltaba de recursos (2026-10-17).
 static func step_hint(step_id: String) -> String:
-	var b := building_for_step(step_id)
-	if b == "":
-		return ""
 	# "Consigue lo que falta" (2026-10-19): la lista de pasos con su estado, la
 	# misma de ¿QUE HACER? (Objectives.plan_for), no "Edificio: falta esto".
 	if is_need_step(step_id):
-		return "\n".join(Objectives.plan_lines(need_plan(b)["items"]))
+		return "\n".join(Objectives.plan_lines(need_plan_for_step(step_id)["items"]))
+	var b := building_for_step(step_id)
+	if b == "":
+		return ""
 	var data := Rules.load_building_data(b)
 	if data == null:
 		return ""
@@ -906,11 +992,11 @@ static func step_how(step_id: String) -> String:
 			if node.has_meta("staffed") and not bool(node.get_meta("staffed")):
 				return Tr.t("GUIDE_HOW_STOPPED")
 		return ""
+	if is_need_step(step_id):
+		return String(need_plan_for_step(step_id).get("current", {}).get("how", ""))
 	var b := building_for_step(step_id)
 	if b == "":
 		return ""
-	if is_need_step(step_id):
-		return String(need_plan(b).get("current", {}).get("how", ""))
 	var data := Rules.load_building_data(b)
 	if data == null:
 		return ""
@@ -968,7 +1054,7 @@ static func step_text(step_id: String) -> String:
 		# 2026-10-19): "Construye un Cuartel". Debajo van los pasos (step_hint)
 		# y como dar el de ahora (step_how). Solo faltar otra Casa es un paso mas
 		# de la lista ("Construye otra Casa (+6 trabajadores)").
-		return Objectives.goal_title({"kind": "build", "id": String(e["building"]), "count": 1})
+		return Objectives.goal_title(need_goal(step_id))
 	return text
 
 ## Los pasos de levantar `building_id` para la tarjeta del tutorial: la lista de
@@ -976,7 +1062,17 @@ static func step_text(step_id: String) -> String:
 ## lineas: el objetivo, los pasos y como dar el de ahora).
 const NEED_PLAN_ITEMS := 3
 static func need_plan(building_id: String) -> Dictionary:
-	var p: Dictionary = Objectives.plan_for({"kind": "build", "id": building_id, "count": 1})
+	return _trimmed_plan({"kind": "build", "id": building_id, "count": 1})
+
+## La lista de un paso need_<x> (edificio o unidad).
+static func need_plan_for_step(step_id: String) -> Dictionary:
+	var goal := need_goal(step_id)
+	if goal.is_empty():
+		return {}
+	return _trimmed_plan(goal)
+
+static func _trimmed_plan(goal: Dictionary) -> Dictionary:
+	var p: Dictionary = Objectives.plan_for(goal)
 	p["items"] = Objectives._trim_items(p["items"], NEED_PLAN_ITEMS)
 	return p
 
@@ -1004,7 +1100,7 @@ static func step_number(step_id: String) -> int:
 static func step_target(step_id: String) -> String:
 	var e: Dictionary = _step_def(step_id)
 	if bool(e.get("need", false)):
-		return need_target(String(e["building"]))
+		return need_target_for_step(step_id)
 	return String(e.get("target", ""))
 
 ## El paso es una tarjeta de leer (la meta, el Nucleo, reparar), con boton.
@@ -1043,6 +1139,10 @@ static func building_facts(building_id: String) -> Array:
 	var data := Rules.load_building_data(building_id)
 	if data == null:
 		return out
+	# Gratis en el tutorial (2026-10-24): lo primero, para que se vea que no
+	# hace falta juntar nada.
+	if data.is_tutorial_free():
+		out.append({"icon": "", "text": Tr.t("LBL_TUTORIAL_FREE")})
 	var prod: Dictionary = data.get_production()
 	for res in prod:
 		out.append({"icon": String(res), "text": Tr.t("GUIDE_FACT_PRODUCES") % [int(prod[res]),
@@ -1059,6 +1159,18 @@ static func building_facts(building_id: String) -> Array:
 		var gain := GameConfig.army_capacity_gain(ArmyManager.barracks_count())
 		if gain > 0:
 			out.append({"icon": "", "text": Tr.t("GUIDE_FACT_ARMY") % gain})
+	return out
+
+## La tarjeta de RECURSOS del tutorial corto (2026-10-24): cada recurso con su
+## icono y su nombre (para que sirve lo dice el texto de la tarjeta,
+## GUIDE_RESOURCES). Los seis: oro, madera, comida, acero, petroleo y los
+## materiales del taller (con el icono de los tablones).
+const RESOURCE_CARD := ["gold", "wood", "food", "steel", "oil", "planks"]
+static func resource_facts() -> Array:
+	var out: Array = []
+	for res in RESOURCE_CARD:
+		var label: String = Tr.t("GUIDE_RES_MATERIALS") if res == "planks" else Tr.res_name(res)
+		out.append({"icon": res, "text": label})
 	return out
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1127,6 +1239,7 @@ func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 var _batch_depth := 0
 
 func _on_building_placed(data: Resource, cell: Vector2i) -> void:
+	_note_free_build(data, cell)
 	if data != null and String(data.get("id")) == "barracks":
 		offer_tip("barracks")
 	# Aire y mar: el primer Astillero o Aerodromo explica los medios y quien gana
@@ -1168,6 +1281,7 @@ func _on_expedition_started(_expedition_id: int, _node_count: int) -> void:
 
 ## Ganar una salida, la que sea, cumple la primera escaramuza.
 func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictionary) -> void:
+	note_guide_fact("battle_done")
 	if result == Expedition.RESULT_WON:
 		first_sortie_done = true
 		# Tres campanas: con la primera escaramuza ganada se abre la de Tierra.
@@ -1183,7 +1297,8 @@ func is_first_sortie_done() -> bool:
 func _on_unit_trained(_unit_id: String) -> void:
 	# La primera unidad va a pelear ya: primero donde (☰ MENU > ESCARAMUZAS),
 	# despues lo que cobra.
-	if not first_sortie_done:
+	# En el tutorial lo dice su paso (MISIONES): el consejo seria repetirlo.
+	if not first_sortie_done and not (guide_state == GUIDE_ACTIVE and not is_replay()):
 		offer_tip("first_sortie")
 	offer_tip("upkeep")
 
@@ -1206,10 +1321,16 @@ func _on_window_opened(window: CanvasLayer) -> void:
 	if wname == "ConstructionMenu":
 		_menu_open = true
 		_refresh_guide()
+	elif wname == "SkirmishPanel":
+		_missions_open = true
+		_refresh_guide()
 
 func _on_window_closed(window: CanvasLayer) -> void:
 	if window != null and String(window.name) == "ConstructionMenu":
 		_menu_open = false
+		_refresh_guide()
+	elif window != null and String(window.name) == "SkirmishPanel":
+		_missions_open = false
 		_refresh_guide()
 
 # ── Girar, mover y derribar (2026-10-16) ─────────────────────────────
@@ -1332,6 +1453,7 @@ func get_save_data() -> Dictionary:
 		"combat_lessons_done": combat_lessons_done.duplicate(),
 		"repair_lesson_done": repair_lesson_done,
 		"guide_finished_at": guide_finished_at,
+		"free_builds_used": free_builds_used.duplicate(),
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -1404,6 +1526,14 @@ func load_save_data(data: Dictionary) -> void:
 	# Sin la clave (guardado de antes): -1, la tormenta de prueba a su hora de siempre.
 	var gfa: Variant = data.get("guide_finished_at", -1.0)
 	guide_finished_at = float(gfa) if (gfa is float or gfa is int) else -1.0
+	# Sin la clave (guardado de antes): vacia; lo que ya esta en la isla no sale
+	# gratis igualmente (is_free_build pide que no haya ninguno).
+	free_builds_used.clear()
+	var fb: Variant = data.get("free_builds_used", [])
+	if fb is Array:
+		for b in fb:
+			if b is String and not b in free_builds_used:
+				free_builds_used.append(b)
 	_extra_step = ""
 	_repair_node = null
 	_repair_pending = false
@@ -1427,6 +1557,7 @@ func reset() -> void:
 	_clear_combat_lesson(false)
 	repair_lesson_done = false
 	guide_finished_at = -1.0
+	free_builds_used.clear()
 	_extra_step = ""
 	_repair_node = null
 	_repair_pending = false
@@ -1435,9 +1566,47 @@ func reset() -> void:
 	_skip_noticed = []
 	_last_check = 0.0
 	_prologue_pending = false
+	_about_first = false
 	_step = ""
 	_menu_open = false
+	_missions_open = false
 	_placing_id = ""
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Lo que salio del tutorial corto (2026-10-24) ──
+# ══════════════════════════════════════════════════════════════════════
+# Casa, Granja, girar/cancelar, mover/derribar: ya no son pasos del tutorial;
+# salen como consejo la primera vez que hacen falta, y nunca en medio de el.
+
+func _connect_after_guide_tips() -> void:
+	EventBus.workers_changed.connect(_on_tip_workers)
+	EventBus.resource_changed.connect(_on_tip_resource)
+	EventBus.building_selected_for_placement.connect(func(_d):
+		if _tips_after_guide():
+			offer_tip("placing"))
+	EventBus.building_clicked.connect(func(_n, _d):
+		if _tips_after_guide():
+			offer_tip("building_actions"))
+
+## Estos consejos esperan a que acabe el tutorial de verdad (un repaso no frena).
+func _tips_after_guide() -> bool:
+	return guide_state != GUIDE_PENDING and not (guide_state == GUIDE_ACTIVE and not is_replay())
+
+## Sin manos libres y sin sitio en las casas: hace falta una Casa.
+func _on_tip_workers(used: int, total: int) -> void:
+	if not _tips_after_guide() or total - used > 0:
+		return
+	if PopulationManager.get_population() >= PopulationManager.get_max_population():
+		offer_tip("house")
+
+## Queda comida para poco y no hay Granja: hace falta una.
+func _on_tip_resource(resource_type: String, new_amount: int, _delta: int) -> void:
+	if resource_type != "food" or not _tips_after_guide():
+		return
+	if Rules.count_building("farm") > 0:
+		return
+	if new_amount <= PopulationManager.food_due() * 3:
+		offer_tip("food_low")
 
 # ══════════════════════════════════════════════════════════════════════
 # ── Ayudas de las novedades (2026-10-14, docs/23 §3) ──
@@ -1739,9 +1908,12 @@ func _on_lesson_encounter_ended(_victory: bool, _turns: int) -> void:
 	var artillery_done: bool = _lesson == LESSON_ARTILLERY and _fact(_lesson_facts, "art_shown")
 	if basics_done or artillery_done:
 		_finish_lesson()
+		_set_combat_step("")
 	else:
-		_clear_combat_lesson(false)
-	_set_combat_step("")
+		# Avisando al panel: si no, la tarjeta del tablero se quedaba con el paso
+		# de combate a medias encima de la de la colonia (2026-10-24, el "¡Ya
+		# sabes lo basico!" salia con el rotulo "COMBATE · PASO 1 DE 7").
+		_clear_combat_lesson(true)
 
 func _refresh_combat_step() -> void:
 	if _lesson == "":

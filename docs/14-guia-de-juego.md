@@ -198,7 +198,7 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 5 trabajadores. No se puede demoler |
+| <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 10 trabajadores (y empiezas con 10). No se puede demoler |
 | <img src="media/guia/house.png" width="110"> | **Casa** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 / 15 / 20 según la era |
 | <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 2×2 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida (+250 por nivel mejorado). Máximo 5 |
 | | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
@@ -360,15 +360,17 @@ construcción más rápida.
 
 ## 9. El ejército y el combate
 
-El Cuartel entrena tres tipos de unidad. **Cada cuartel entrena una unidad a la vez**;
+El Cuartel entrena tres tipos de unidad. **Para entrenar, toca tu Cuartel y pulsa
+ENTRENAR en su ficha** (los barcos, en el Astillero; los aviones, en el Aeródromo):
+no se entrena desde ningún menú. **Cada cuartel entrena una unidad a la vez**;
 si quieres dos en paralelo, necesitas dos cuarteles (hasta **5 a la vez**: un sexto
 cuartel ya no entrena más rápido). Puedes levantar **tantos cuarteles como quieras**
 (desde el 18-10-2026 no tienen tope), y cada uno lleva en el tejado la bandera de tu
 país. El Cuartel se levanta **ya en la
 era 1** (justo después del primer Aserradero): entonces solo entrena Infantería. La
 Artillería se abre con el acero (Fundición, era 2) y el Tanque con el petróleo
-(Refinería, era 3); el panel EJÉRCITO (☰ MENÚ > COLONIA > EJÉRCITO) lo dice en cada fila
-apagada.
+(Refinería, era 3); la ficha del Cuartel lo dice en cada fila apagada. El panel
+EJÉRCITO (☰ MENÚ > COLONIA > EJÉRCITO) solo enseña lo que tienes, el tope y el sueldo.
 
 | Unidad | Era | Coste | Tarda | Sueldo | Poder |
 |---|---|---|---|---|---|

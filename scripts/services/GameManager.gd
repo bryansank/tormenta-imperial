@@ -644,6 +644,8 @@ func _load_game() -> void:
 					continue
 				if bool(entry.get("workers_off", false)):
 					node.set_meta("workers_off", true)
+				if bool(entry.get("tutorial_free", false)):
+					node.set_meta("tutorial_free", true)
 				# Restore custom name
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
@@ -821,6 +823,11 @@ func _load_game() -> void:
 ## que guardar: los menus lo preguntan antes de llamar a save_game().
 func is_started() -> bool:
 	return _started and _placer != null and _map_gen != null
+
+## La partida ha arrancado (aunque aun no haya placer: pantallas sueltas).
+## TutorialManager.is_free_build lo mira: fuera de una partida nada es gratis.
+func has_begun() -> bool:
+	return _started
 
 ## Un guardado que no se puede leer no se pisa en silencio: _new_game() guarda
 ## encima, y eso era perder la partida sin enterarse. Se aparta una copia con
