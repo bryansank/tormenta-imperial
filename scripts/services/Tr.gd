@@ -1187,6 +1187,15 @@ const _STRINGS := {
 		"HELP_T_RESOURCES": "Recursos y almacén",
 		"HELP_T_CAMERA": "Cámara",
 		"HELP_T_ZOOM": "Zoom y giro",
+		"HELP_T_KEYS": "Teclas",
+		"HELP_B_KEYS": "B: abrir o cerrar CONSTRUIR.
+M: abrir o cerrar MISIONES.
+H: abrir la AYUDA.
+Espacio: pausa y reanudar.
+1 / 2: velocidad del juego.
+Esc: cierra la ventana de arriba.
+W A S D o flechas: mover el mapa. Q / E: girarlo.
+En combate: Enter termina el turno, D defiende y E espera.",
 		"HELP_T_MENUS": "☰ MENÚ",
 		"HELP_B_MENUS": "Pausa y lo tiene todo: paneles, guardar, ajustes y AYUDA.",
 		"HELP_T_SKIRMISH": "Misiones",
@@ -3723,6 +3732,15 @@ Abre ☰ MENÚ → ARCHIPIÉLAGO para ver el mapa, o MISIONES → IMPERIO para s
 		"HELP_T_RESOURCES": "Resources and storage",
 		"HELP_T_CAMERA": "Camera",
 		"HELP_T_ZOOM": "Zoom and rotation",
+		"HELP_T_KEYS": "Keys",
+		"HELP_B_KEYS": "B: open or close BUILD.
+M: open or close MISSIONS.
+H: open HELP.
+Space: pause and resume.
+1 / 2: game speed.
+Esc: closes the top window.
+W A S D or arrows: move the map. Q / E: rotate it.
+In combat: Enter ends the turn, D defends and E waits.",
 		"HELP_T_MENUS": "☰ MENU",
 		"HELP_B_MENUS": "Pauses the game and has it all: panels, save, settings and HELP.",
 		"HELP_T_SKIRMISH": "Missions",
