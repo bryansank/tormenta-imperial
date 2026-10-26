@@ -37,15 +37,15 @@ func test_the_default_view_is_3d() -> void:
 	assert_str(fresh.ui_view_mode).is_equal("3d")
 	fresh.free()
 
-func test_the_view_mode_survives_a_settings_reload() -> void:
+## 0.9 beta: la 2D esta oculta en Ajustes; una preferencia guardada "2d" carga en 3D.
+func test_a_saved_2d_preference_loads_as_3d() -> void:
 	GameConfig.ui_view_mode = "2d"
 	GameConfig.save_user_settings()
-	GameConfig.ui_view_mode = "3d"
-	GameConfig.load_user_settings()
-	assert_str(GameConfig.ui_view_mode).is_equal("2d")
 	var cf := ConfigFile.new()
 	cf.load(SETTINGS)
 	assert_str(String(cf.get_value("ui", "view_mode", ""))).is_equal("2d")
+	GameConfig.load_user_settings()
+	assert_str(GameConfig.ui_view_mode).is_equal("3d")
 
 func test_a_garbage_value_in_the_file_is_ignored() -> void:
 	var cf := ConfigFile.new()
@@ -65,7 +65,7 @@ func test_saving_other_settings_keeps_the_view_mode() -> void:
 	GameConfig.save_user_settings()
 	GameConfig.ui_view_mode = "3d"
 	GameConfig.load_user_settings()
-	assert_str(GameConfig.ui_view_mode).is_equal("2d")
+	assert_str(GameConfig.ui_view_mode).is_equal("3d")
 
 func test_the_command_line_flag_is_understood() -> void:
 	assert_str(ViewMode.parse_cmdline(PackedStringArray(["--view=2d"]))).is_equal("2d")

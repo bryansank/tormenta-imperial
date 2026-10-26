@@ -255,22 +255,11 @@ static func _surface(k: String, hc: bool) -> Dictionary:
 const SURFACE_KEYS := ["BG", "CARD", "CARD_ALT", "WELL", "BORDER", "CARD_BORDER", "TRIM", "TEXT",
 	"TEXT_DIM", "NEUTRAL", "OFF", "OFF_INK", "SHADOW"]
 
-## Tema de las ventanas, a eleccion del jugador (Ajustes > Pantalla > Tema;
-## settings.cfg [interfaz] window_theme): "dark" = bunker (de serie desde la
-## piel dieselpunk, 2026-10-25) y "light" = papel crema sobrio. El HUD es
-## oscuro en los dos. Lo pone DeviceProfile.apply_theme() antes de
-## UITheme.configure().
-## El de serie va primero: el selector de Ajustes los pinta en este orden y
-## Restablecer elige el primero.
-const WINDOW_THEMES := ["dark", "light"]
-const WINDOW_THEME_DEFAULT := "dark"
-static var window_theme := WINDOW_THEME_DEFAULT
-
 ## "hud" (fichas sobre el mapa, barra de abajo) o "window" (ventanas grandes).
 static func kind(role: String) -> String:
 	if role == "hud":
 		return "light" if surface == "light" else "dark"
-	return "dark" if (surface == "dark" or window_theme == "dark") else "light"
+	return "dark"  # las ventanas son siempre bunker (sin modo claro, 0.9 beta)
 
 ## Un color de la superficie de `role` (BG, CARD, TEXT...) o un semantico.
 static func c(role: String, key: String) -> Color:
@@ -2064,7 +2053,7 @@ static var _switch_tex := {}
 ## El carril del interruptor (76x40) con su bolita, en textura: CheckButton
 ## pinta iconos. Se dibuja una vez por estado.
 static func switch_texture(on: bool, disabled: bool) -> Texture2D:
-	var key := "%s|%s|%s|%s|%s|%s" % [on, disabled, UITheme.palette, UITheme.high_contrast, surface, window_theme]
+	var key := "%s|%s|%s|%s|%s" % [on, disabled, UITheme.palette, UITheme.high_contrast, surface]
 	if _switch_tex.has(key):
 		return _switch_tex[key]
 	var w := 76

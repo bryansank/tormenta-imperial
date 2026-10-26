@@ -747,11 +747,6 @@ var ui_scale_pct := 0
 var ui_text_size := "auto"
 ## Paleta de colores (UITheme.PALETTES), alto contraste y opacidad de paneles.
 var ui_palette := "default"
-## Tema de las ventanas (CartoonTheme.window_theme): "dark" (bunker, de serie
-## desde la piel dieselpunk, 2026-10-25) o "light" (papel crema sobrio). Se
-## guarda en [interfaz] window_theme; la clave vieja ui_theme (el tema de la
-## piel caricatura, que tenia "light" de serie) se ignora a proposito.
-var ui_theme := "dark"
 var ui_high_contrast := false
 var ui_panel_opacity := 1.0
 ## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
@@ -899,8 +894,10 @@ func load_user_settings() -> void:
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_instructors_visible = bool(cf.get_value("ui", "instructors_visible", ui_instructors_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
-	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
-	ui_view_mode = view if view in ["3d", "2d"] else ui_view_mode
+	# La vista 2D esta oculta en Ajustes (0.9 beta, no rinde en movil): una
+	# preferencia guardada "2d" se ignora y carga 3D. `--view=2d` por linea de
+	# comandos sigue funcionando (ViewMode.requested()).
+	ui_view_mode = "3d"
 	var touch_mode := String(cf.get_value("ui", "touch_controls", ui_touch_controls))
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
@@ -931,8 +928,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	var pal := str(cf.get_value("interfaz", "palette", ui_palette))
 	ui_palette = pal if pal in UITheme.PALETTES else "default"
 	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
-	var theme_s := str(cf.get_value("interfaz", "window_theme", ui_theme))
-	ui_theme = theme_s if theme_s in ["light", "dark"] else "dark"
+	# window_theme / ui_theme de settings.cfg: ya no hay modo claro, se ignoran.
 	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
 	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
@@ -994,9 +990,9 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "text_size", ui_text_size)
 	cf.set_value("interfaz", "palette", ui_palette)
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
-	cf.set_value("interfaz", "window_theme", ui_theme)
-	if cf.has_section_key("interfaz", "ui_theme"):
-		cf.erase_section_key("interfaz", "ui_theme")
+	for old_key in ["window_theme", "ui_theme"]:
+		if cf.has_section_key("interfaz", old_key):
+			cf.erase_section_key("interfaz", old_key)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
 	cf.set_value("interfaz", "combat_view", ui_combat_view)

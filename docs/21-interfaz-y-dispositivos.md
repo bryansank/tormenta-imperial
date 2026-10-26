@@ -1315,15 +1315,15 @@ las cantidades en Plex Condensed Bold al tamaño de título.
 
 ### Tema de las ventanas
 
-`CartoonTheme.window_theme`: **`dark` (búnker) de serie** y `light` (papel
-crema sobrio: el texto claro de la paleta como papel, la Pizarra como tinta,
-filos de latón oscurecido). Se conserva el papel porque es coherente con la
-piel (mismas formas y fuentes) y hay quien lee mejor en claro; el HUD es
-oscuro en los dos. Ajustes > Pantalla > Tema muestra Oscuro primero;
-Restablecer vuelve a Oscuro. Se guarda en `settings.cfg [interfaz]
-window_theme`; la clave vieja `ui_theme` (de la piel caricatura, con "light"
-de serie, que se escribía siempre) se ignora y se borra al guardar, para que
-nadie se quede en papel sin haberlo elegido.
+Solo hay tema oscuro (búnker). El modo claro (papel) se quitó en la 0.9 beta
+(decisión del dueño): ya no existen `CartoonTheme.window_theme`, la fila
+"Tema" de Ajustes ni `GameConfig.ui_theme`. Las ventanas son siempre búnker
+(`CartoonTheme.kind("window")` devuelve `dark`). Una clave `window_theme` o
+`ui_theme` vieja en `settings.cfg [interfaz]` se ignora y se borra al guardar.
+
+Igual en la 0.9 beta: el selector de vista 2D/3D está oculto en Ajustes (la 2D
+no rinde en móvil) y una preferencia `view_mode=2d` guardada carga en 3D. El
+código 2D y `-- --view=2d` por línea de comandos siguen (desarrolladores y tests).
 
 ### Rendimiento
 

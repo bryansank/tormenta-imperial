@@ -50,7 +50,7 @@ func test_every_tab_but_game_has_its_reset() -> void:
 
 func test_the_old_rows_still_exist() -> void:
 	var p = _open()
-	for n in ["LanguageRow", "ViewModeRow", "TouchControlsRow", "MusicQuickButton", "ProfileRow", "ScaleRow",
+	for n in ["LanguageRow", "TouchControlsRow", "MusicQuickButton", "ProfileRow", "ScaleRow",
 			"TextSizeRow", "PaletteRow", "HighContrastCheck", "PalettePreview", "EditLayoutButton", "ResetLayoutButton"]:
 		assert_object(p.find_child(n, true, false)).override_failure_message(n).is_not_null()
 
