@@ -846,3 +846,25 @@ de pruebas); triángulos contados al hornear:
   marcha, sin edificios dañados ni paneles abiertos (las ayudas y el tutorial se
   ocultan). Las obras, la ceniza sobre edificios dañados y la lista de construcción
   abierta cuestan más (§5.2, §5.5).
+
+## Coste de la 1.2: camiones, amenazas de costa y barco (2026-10-25, `integracion/v1.2b`)
+
+Medido con `tools/perf_probe.gd -- --scenario=grande --quality=minima --v12=on|off`,
+`--rendering-method gl_compatibility --rendering-driver opengl3`, 1280×720, en el PC de
+desarrollo con otros procesos de Godot abiertos (dos pasadas; la primera salió a 10 fps
+en las dos variantes por carga ajena y no cuenta). `on` = 2 amenazas pedidas (cabe 1 en
+la orilla de la colonia grande), el barco atracado y los camiones (6 en la calle);
+`off` = sin camiones, sin marcas y sin barco.
+
+| Variante | fps | 1 % bajo | p99 ms | pico proceso ms | render CPU ms | GPU ms | draw calls | primitivas | nodos | scripts con `_process` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| on  | 60 | 44 | 21,2 | 21,09 | 10,67 | 8,02 | 557 | 209 500 | 5274 | 47 |
+| off | 60 | 45 | 18,6 | 20,16 | 10,11 | 7,23 | 553 | 206 972 | 5267 | 46 |
+
+Diferencia: **+4 draw calls, ~+2 500 primitivas, +7 nodos, un `_process` más**
+(`RoadTraffic`, que se apaga solo sin camiones) y menos de 1 ms de CPU de render;
+dentro del ruido de la máquina. En la **Mínima real** del juego
+(`GraphicsQuality.is_minimal()`) los camiones son 0 (`traffic_truck_cap_minimal`); la
+sonda emula Mínima con calidad "low", así que esta tabla es el peor caso. Las marcas de
+amenaza y el barco no tienen `_process` (malla cacheada por tipo; el barco, Tweens solo
+al llegar e irse). Falta medirlo en un móvil de gama baja de verdad.

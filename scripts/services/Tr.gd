@@ -2415,7 +2415,7 @@ Abre ☰ MENÚ → ARCHIPIÉLAGO para ver el mapa, o MISIONES → IMPERIO para s
 		"END_BURN_CODA": "Por primera vez en tres generaciones, sale el sol. Sigue jugando: la isla es tuya.",
 		"END_BURN_TITLE": "Quemó el libro",
 		"MSG_END_BURN": "El libro arde. La isla es libre.",
-		"OBJ_WHY_BOOK": "Ganaste. El libro del Impuesto está en tu mesa: decide si lo firmas o lo quemas.",
+		"OBJ_WHY_BOOK": "Ganaste. El libro del Impuesto está en tu mesa: ¿lo firmas o lo quemas?",
 	},
 	"en": {
 		# UI v2 CONSTRUIR (feat/ui2-construir): BUILD, building sheet, Market, Research
@@ -4780,7 +4780,7 @@ Open ☰ MENU → ARCHIPELAGO to see the map, or MISSIONS → EMPIRE to set out.
 		"END_BURN_CODA": "For the first time in three generations, the sun comes up. Keep playing: the island is yours.",
 		"END_BURN_TITLE": "Burned the book",
 		"MSG_END_BURN": "The book burns. The island is free.",
-		"OBJ_WHY_BOOK": "You won. The Tax book is on your table: decide whether to sign it or burn it.",
+		"OBJ_WHY_BOOK": "You won. The Tax book is on your table: sign it or burn it?",
 	},
 }
 
