@@ -25,6 +25,10 @@ const BLOCKS := [["build", "ABOUT_BUILD"], ["army", "ABOUT_ARMY"], ["storm", "AB
 
 var _root: Control
 var _window: Control
+## Lo de window() (root, panel, body...): place_center lo pide entero.
+var _win: Dictionary
+var _scroll: ScrollContainer
+var _inner: VBoxContainer
 var _row: BoxContainer
 var _open := false
 var _small := false
@@ -45,6 +49,7 @@ func _build() -> void:
 	add_child(_root)
 	_root.add_child(CT.veil())
 	var w := CT.menu_window(Tr.t("ABOUT_TITLE"), CT.sem("INFO"), _small, false)
+	_win = w
 	_window = w["root"]
 	_window.name = "AboutWindow"
 	_root.add_child(_window)
@@ -56,7 +61,9 @@ func _build() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(scroll)
+	_scroll = scroll
 	var inner := VBoxContainer.new()
+	_inner = inner
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inner.add_theme_constant_override("separation", 14)
 	scroll.add_child(inner)
@@ -94,16 +101,33 @@ func _block(glyph: String, text_s: String) -> Control:
 	box.add_child(l)
 	return box
 
+## Telefono: la ventana de siempre (place_window). PC y tablet: centrada, 760
+## de ancho y el alto de lo que lleva dentro (antes ocupaba 760x520 con media
+## ventana vacia).
 func _relayout() -> void:
 	if _window == null or not is_inside_tree():
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	CT.place_window(_window, vp, MAX_SIZE, _small)
+	if _small:
+		_scroll.custom_minimum_size.y = 0.0
+		CT.place_window(_window, vp, MAX_SIZE, _small)
+		return
+	# El scroll no pide alto: se le da el de su contenido (cabe entero en PC).
+	_scroll.custom_minimum_size.y = minf(_inner.get_combined_minimum_size().y, vp.y - 200.0)
+	CT.place_center(_win, vp, Vector2(MAX_SIZE.x, 0))
+
+## Las frases se parten segun el ancho: el alto bueno sale despues de la
+## primera colocacion.
+func _relayout_twice() -> void:
+	_relayout()
+	await get_tree().process_frame
+	if _open:
+		_relayout()
 
 func open() -> void:
 	_open = true
 	visible = true
-	_relayout()
+	_relayout_twice()
 
 ## `silent`: se cierra sin avisar (quien la cierra no quiere el lore detras).
 func close(silent: bool = false) -> void:

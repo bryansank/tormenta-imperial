@@ -38,7 +38,8 @@ func _draw() -> void:
 	if sz <= 1.0:
 		return
 	var center := size * 0.5
-	draw_circle(center, sz * 0.5, Color("f7e7c4"))
+	# El hueco de la cara, como CartoonTheme.CaptainFace (token de la piel).
+	draw_circle(center, sz * 0.5, CartoonTheme.c("hud", "CARD_ALT"))
 	var h := sz * 2.15
 	var w := h * 0.8
 	var rect := Rect2(Vector2(size.x * 0.5 - w * 0.5, -0.1 * h), Vector2(w, h))

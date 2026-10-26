@@ -29,7 +29,7 @@ func _run() -> void:
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = false
 	GameConfig.ui_touch_controls = "auto"
-	GameConfig.ui_theme = "light"
+	GameConfig.ui_theme = _arg("theme") if _arg("theme") in CartoonTheme.WINDOW_THEMES else CartoonTheme.WINDOW_THEME_DEFAULT
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()

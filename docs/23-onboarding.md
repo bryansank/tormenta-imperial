@@ -163,7 +163,9 @@ No es el lore (eso es el prólogo) ni el tutorial (eso son las marcas).
 >    (`build` Construye y junta recursos · `army` Entrena tu ejército · `storm` Aguanta la
 >    Tormenta y gana), botón **¡VAMOS!**. La abre `TutorialPanel` cuando el prólogo sale
 >    solo en una partida nueva (`TutorialManager.take_about_first()`); "Historia" desde el
->    menú va directa al lore.
+>    menú va directa al lore. Con la piel dieselpunk (integración v1.3): en PC y tablet
+>    va centrada, 760 de ancho y el alto de su contenido (`CT.place_center`; antes
+>    760×520 con media ventana vacía); en teléfono sigue con `place_window`.
 > 2. **Lore corto**: el prólogo `full` pasa de 4 folios a 2 (`PRO_2` la Tormenta y `PRO_3`
 >    quiénes somos), cada uno de una o dos frases. `PRO_1`/`PRO_4` siguen en Tr.
 > 3. **Tutorial práctico, 8 pasos** (`GUIDE_GOALS` / `GUIDE_STEPS`, `GUIDE_TOTAL = 8`):

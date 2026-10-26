@@ -9,7 +9,8 @@ extends "res://tools/revision_probe_runner.gd"
 ##
 ## Argumentos tras `--`: --shot-size=WxH, --profile=pc|tablet|phone,
 ## --canvas=WxH (fuerza ese lienzo logico: los de telefono 640x360, 800x360,
-## 400x720 no salen en un monitor de PC), --theme=dark, --view=2d, --tag=x,
+## 400x720 no salen en un monitor de PC), --theme=dark|light (sin el, el de
+## serie: oscuro desde la piel dieselpunk), --view=2d, --tag=x,
 ## --shots (guarda captura de cada pantalla; sin el, solo de las que se salen),
 ## --only=pantalla1,pantalla2 (solo esas tomas, por prefijo).
 ##
@@ -18,6 +19,7 @@ extends "res://tools/revision_probe_runner.gd"
 const Scan := preload("res://tests/ui/overflow_scan.gd")
 const OUT := "res://docs/media/dev/desbordes"
 const HelpCatalogRef := preload("res://scripts/ui/HelpCatalog.gd")
+const FinalAuditScript := preload("res://scripts/combat/FinalAudit.gd")
 
 var _hits_total := 0
 var _screens_hit: Array = []
@@ -45,13 +47,14 @@ func _run() -> void:
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = false
 	GameConfig.ui_touch_controls = "auto"
-	GameConfig.ui_theme = "dark" if _arg("theme") == "dark" else "light"
+	var theme_arg := _arg("theme")
+	GameConfig.ui_theme = theme_arg if theme_arg in CartoonTheme.WINDOW_THEMES else CartoonTheme.WINDOW_THEME_DEFAULT
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()
 	var logical := get_tree().root.get_visible_rect().size
 	_tag = "%s_%s_%dx%d%s%s" % [_arg("view", "3d"), DeviceProfile.current(), win.x, win.y,
-		"_oscuro" if _arg("theme") == "dark" else "",
+		"_claro" if GameConfig.ui_theme == "light" else "",
 		("_" + _arg("tag")) if _arg("tag") != "" else ""]
 	print("desborde_probe: ventana=%s lienzo=%s telefono=%s perfil=%s" % [win, logical,
 		CartoonTheme.phone, DeviceProfile.current()])
@@ -103,6 +106,14 @@ func _run() -> void:
 	var tut: Node = main.get_node_or_null("TutorialPanel")
 	if tut:
 		(tut as CanvasLayer).visible = true
+		# "De que va" (tutorial corto): antes del prologo en una partida nueva.
+		var about: CanvasLayer = tut.about()
+		if about:
+			about.open()
+			await _frames(15)
+			await _shot("de_que_va")
+			about.close(true)
+			await _frames(5)
 		var pro: CanvasLayer = tut.prologue()
 		if pro and pro.has_method("open"):
 			pro.open("full")
@@ -438,9 +449,95 @@ func _run() -> void:
 		"tithes_repelled": 3, "audit_summons": 1, "mode": "campaign"})
 	await _frames(20)
 	await _shot("g_victoria")
+	await _v12_shots(main)
 	print("desborde_probe: RESUMEN %d desbordes en %d pantallas %s" % [_hits_total,
 		_screens_hit.size(), _screens_hit])
 	_finish()
+
+## Las pantallas de la 1.2 (como tools/v12_probe_runner.gd): amenaza de costa,
+## ATAQUES RAPIDOS con amenazas, el barco del contrabandista y el final con
+## eleccion (victoria, EL LIBRO, QUEMAR, FIRMAR, el archipielago, IMPERIO).
+func _v12_shots(main: Node) -> void:
+	var victory: Node = main.get_node_or_null("VictoryScreen")
+	if victory and victory.has_method("dismiss"):
+		victory.dismiss()
+	await _frames(5)
+	var spots: Dictionary = ThreatManager.free_spots()
+	var land: Array = spots.get("land", [])
+	if land.size() > 2:
+		var a: Vector2i = land[0]
+		var b: Vector2i = land[land.size() / 2]
+		var threats := [
+			{"id": 1, "type": "vanguard", "x": a.x, "y": a.y, "water": false, "seed": 5, "era": 3,
+				"born": 0.0, "ends": 99999.0, "state": "idle", "explore_ends": 0.0, "seen": false},
+			{"id": 2, "type": "wreck", "x": b.x, "y": b.y, "water": false, "seed": 6, "era": 3,
+				"born": 0.0, "ends": 99999.0, "state": "idle", "explore_ends": 0.0, "seen": false},
+		]
+		ThreatManager.load_save_data({"threats": threats, "next_spawn_at": 99999.0, "next_id": 3})
+		await _frames(10)
+		EventBus.threat_clicked.emit(1)
+		await _frames(15)
+		await _shot("v12_amenaza_tarjeta")
+		var card := main.find_child("ThreatCard", true, false)
+		if card and card.has_method("close"):
+			card.close()
+		await _frames(5)
+	var skirmish: Node = main.get_node_or_null("SkirmishPanel")
+	if skirmish and land.size() > 2:
+		skirmish.open_threat(1)
+		await _frames(15)
+		await _shot("v12_misiones_amenazas")
+		skirmish._close()
+		await _frames(5)
+	var offers := [
+		{"kind": "parts", "give": {"parts": 3}, "price": 180, "sold": false},
+		{"kind": "material", "give": {"beams": 6}, "price": 312, "sold": false},
+		{"kind": "buy", "ask": {"wood": 60}, "pay": 230, "sold": false},
+	]
+	EconomyManager.load_save_data({"ship": {"wait_left": 300.0, "docked_left": 80.0, "offers": offers, "visits": 1}})
+	var smuggler = load("res://scripts/ui/SmugglerPanel.gd").open_in(get_tree())
+	await _frames(15)
+	await _shot("v12_barco")
+	if smuggler:
+		smuggler.close()
+	await _frames(5)
+	if victory == null:
+		return
+	EmpireManager.reset()
+	var audit = FinalAuditScript.create(5, {"infantry": 3}, 3, 70.0)
+	audit.state = FinalAudit.State.WON
+	ProgressionManager.final_audit = audit
+	victory._on_victory_achieved({"time_played": 11100.0, "buildings_built": 64, "trades_completed": 12,
+		"milestones": 9, "storms_survived": 11, "tithes_repelled": 9, "audit_summons": 1, "mode": "campaign"})
+	await _frames(20)
+	await _shot("v12_final_victoria")
+	victory.show_choice()
+	await _frames(20)
+	await _shot("v12_final_el_libro")
+	victory.choose("burn")
+	await _frames(20)
+	await _shot("v12_final_quemar")
+	victory.dismiss()
+	await _frames(5)
+	EmpireManager.reset()
+	victory.show_choice()
+	await _frames(10)
+	victory.choose("sign")
+	await _frames(20)
+	await _shot("v12_final_firmar")
+	victory.open_archipelago()
+	await _frames(25)
+	await _shot("v12_archipielago")
+	var arch := main.get_node_or_null("ArchipelagoPanel")
+	if arch and arch.has_method("close"):
+		arch.close()
+	await _frames(5)
+	if skirmish:
+		skirmish.open_conquest("gulls")
+		await _frames(15)
+		await _shot("v12_misiones_imperio")
+		skirmish._close()
+		await _frames(5)
 
 ## Tutorial: tarjeta de un paso need_* (sin oro ni madera) y el recordatorio.
 func _tutorial_shots(main: Node) -> void:
