@@ -149,6 +149,8 @@ calma lejana (salvo en `tormenta`), con el tutorial hecho y con `dev_mode` apaga
 `--quality=auto|high|low|minima`, `--view=3d|2d`, `--size=1280x720`, `--seed=`,
 `--vsync=1` (por defecto se mide **sin vsync ni tope**, para ver el margen),
 `--profile=` (segundos del perfil por script, 4; 0 lo apaga), `--tag=` y `--shot=0`.
+Desde §4.7, también `--device=pc|tablet|phone` (fuerza el perfil del dispositivo) y
+`--quality=minimal` (la Mínima de verdad del juego, frente a `minima`, la emulada).
 
 `--quality=minima` **emula** la propuesta de §7 desde la sonda: calidad baja, sin
 sombras (`shadow_enabled = false` en todas las luces), sin SSAO, SSIL, glow ni SSR,
@@ -512,6 +514,51 @@ Mínima **emulada** en `grande` (la de §4.2): 132 fps · 64, 497 draw calls, VR
   La sonda pone ahora `fps_background` y `fps_paused` a 0 y `ui_fps_cap = "unlimited"`.
 
 Informe completo (toque, pantallas y estas cifras): `tormenta-imperial-contexto/29_QA_TABLET.md`.
+
+#### 4.7.3 Teléfono (2026-10-26, rama `qa-telefono`)
+
+Medido **después** de las optimizaciones de §6, con `--device=phone` (perfil de
+teléfono) y ventana 1600×720 (móvil HD+ en apaisado), misma máquina y binario del
+editor, sin vsync ni tope, 15 s, semilla 1, con el cerrojo `perf.lockdir` y 5-17
+procesos de Godot ajenos. La colonia `grande` de hoy tiene 81 edificios (astilleros,
+aeródromos, granjas) y 4532 nodos: no es la de §4.1. Informe completo, con la QA
+de interfaz en 640×360, en el contexto privado (`30_QA_TELEFONO.md`).
+
+| Renderizador · calidad | Escenario | fps | 1 % | máx ms | render CPU | GPU | draw calls | prim. k | VRAM | proceso |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Compatibility · Mínima emulada | inicio | 115 | 64 | 18 | 6,5 | 6,1 | 316 | 37 | 105 | 569 |
+| | media | 107 | 15 | 643 (1 tirón) | 6,3 | 5,9 | 354 | 85 | 172 | 638 |
+| | grande | 100 | 57 | 22 | 7,1 | 6,0 | 559 | 217 | 114 | 586 |
+| | combate | 106 | 58 | 22 | 6,0 | 6,5 | 386 | 33 | 82 | 551 |
+| | grande_2d | **52** | **27** | 39 | 14,8 | 7,9 | 1342 | 28 | 174 | 641 |
+| Mobile · auto (Baja) | inicio | 326 | 187 | 16 | 1,4 | 1,1 | 331 | 56 | 165 | 1017 |
+| | media | 272 | 146 | 18 | 1,6 | 1,1 | 450 | 159 | 170 | 987 |
+| | grande | 198 | 102 | 21 | 2,4 | 1,2 | 822 | 450 | 181 | 999 |
+| | combate | 255 | 140 | 14 | 1,3 | 0,3 | 386 | 40 | 182 | 999 |
+| | grande_2d | 106 | 62 | 18 | 3,6 | 0,7 | 1348 | 27 | 95 | 893 |
+| Mobile · **Mínima del juego** | inicio | 326 | 172 | 7 | 1,4 | 0,5 | 313 | 36 | 88 | 982 |
+| | media | 198 | 100 | 22 | 2,1 | 0,7 | 389 | 108 | 94 | 984 |
+| | grande | 159 | 81 | 27 | 2,8 | 0,8 | 678 | 294 | 105 | 994 |
+| | combate | 194 | 102 | 26 | 1,7 | 0,3 | 372 | 30 | 102 | 998 |
+| | grande_2d | 104 | 64 | 16 | 3,6 | 1,3 | 1350 | 27 | 95 | 897 |
+
+- Frente a §4.1, `grande` en Compatibility Mínima pasa de 53 a 100 fps y de 2501 a
+  559 draw calls; en Mobile auto de 47 a 198 fps y de 4502 a 822 draw calls.
+- **VRAM**: Mínima 88-105 MB, dentro del presupuesto del móvil (≤ 150); "auto"
+  165-182 MB, fuera. En teléfono tiene que acabar en Mínima.
+- **La 2D sigue siendo la vista más cara** (52 fps en Compatibility frente a 100 de
+  la 3D, 1342 draw calls): `Building2D` 1,0-1,2 ms, `StatusBadge2D` 0,7-0,8 ms y
+  `StockIcon2D` por nodo. §7.3 sigue sin cumplirse.
+- **Regresión**: `ProductionManager._process` 0,43-0,60 ms por fotograma en
+  `grande` (0,13 en §4.3): recorre cada productor con `is_full()` y
+  `get_cycle_seconds()` en cada fotograma.
+- Con `--quality=minimal` siguen 21 caminantes (§7.6 dice 12): a comprobar.
+- Un tirón de 643 ms (y otro de 277) en `media` con Compatibility, sin repetir en
+  Mobile: sin identificar.
+- La sonda aprende `--device=pc|tablet|phone`, `--quality=minimal` (la Mínima real,
+  no la emulada) y anota `frames_over_50ms` y `hitches_over_100ms` (segundo y ms).
+  Ya no recrea la swapchain antes de medir: hacerlo metía un fotograma de ~250 ms en
+  Vulkan en cada medida.
 
 ---
 

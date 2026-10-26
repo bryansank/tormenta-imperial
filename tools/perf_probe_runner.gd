@@ -19,6 +19,7 @@ extends Node
 const SAVE_PATH := "user://save_game.json"
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 const BACKUP_PATH := "user://save_game.perf_probe.bak"
 const OUT_DIR := "res://reports/perf"
 const CSV_NAME := "perf_runs.csv"
@@ -73,6 +74,13 @@ func _run() -> void:
 	_saved_view = GameConfig.ui_view_mode
 	_saved_quality = GameConfig.ui_graphics_quality
 	GameConfig.ui_graphics_quality = "low" if quality == "minima" else quality
+	# --device=phone|tablet|pc: el perfil manda en la escala de la interfaz y en el
+	# tope de caminantes. apply_all() pone el tope de FPS del perfil: se quita otra vez.
+	if String(options.get("device", "")) != "":
+		GameConfig.ui_device_profile = String(options["device"])
+		DeviceProfile.apply_all()
+		if not bool(options.get("vsync", false)):
+			Engine.max_fps = 0
 	ViewMode.set_preference(view)
 	_rng.seed = int(options.get("seed", 1)) * 7919 + 17
 	_write_save(scenario)
@@ -90,7 +98,7 @@ func _run() -> void:
 		# La Minima de verdad del juego (Ajustes): WorldLook ya la leyo al cargar la
 		# escena; lo que va fuera de el (humo, rejilla, caminantes) se aplica aqui
 		# como lo haria DeviceProfile al cambiarla.
-		preload("res://scripts/services/GraphicsQuality.gd").apply_runtime(get_tree())
+		GraphicsQuality.apply_runtime(get_tree())
 		var walkers := _walkers()
 		if walkers and walkers.has_method("reconcile"):
 			walkers.reconcile()
@@ -102,6 +110,14 @@ func _run() -> void:
 	_dismiss_overlays()
 	if quality == "minima":
 		_hide_fx()
+	# El perfil (o la Minima de PC) puede haber vuelto a poner su tope de FPS.
+	# Cambiar el vsync recrea la swapchain (en Vulkan, un fotograma de ~250 ms):
+	# solo si alguien lo volvio a encender, y con un segundo de margen.
+	if not bool(options.get("vsync", false)):
+		Engine.max_fps = 0
+		if DisplayServer.window_get_vsync_mode() != DisplayServer.VSYNC_DISABLED:
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+			await _seconds(1.0)
 	var m := await _measure(float(options.get("seconds", 15.0)), rid)
 	var prof: Array = []
 	if float(options.get("profile", 4.0)) > 0.0:
@@ -168,8 +184,21 @@ func _measure(seconds: float, rid: RID) -> Dictionary:
 	var mean := {}
 	for k in sums:
 		mean[k] = sums[k] / maxf(1.0, float(n))
+	# Tirones: fotogramas largos y en que segundo de la medida caen (un pico
+	# periodico, como un guardado o un tick, sale con el mismo intervalo).
+	var hitches: Array = []
+	var over_50 := 0
+	var acc := 0.0
+	for ms in frame_ms:
+		acc += float(ms)
+		if float(ms) > 50.0:
+			over_50 += 1
+		if float(ms) > 100.0 and hitches.size() < 20:
+			hitches.append([snappedf(acc / 1000.0, 0.1), snappedf(float(ms), 0.1)])
 	return {
 		"frames": n,
+		"frames_over_50ms": over_50,
+		"hitches_over_100ms": hitches,
 		"seconds": elapsed_s,
 		"frames_capped": capped,
 		"frames_unfocused": unfocused,
