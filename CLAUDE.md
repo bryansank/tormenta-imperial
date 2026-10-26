@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3090 tests (`func test_`) in 228 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3120 tests (`func test_`, 3129 cases) in 234 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -153,7 +153,8 @@ Main2D (Node2D, ViewRouter view_mode="2d") -- world nodes replaced, UI identical
   +-- OnScreenControls ... TitleMenu -- the same 26 UI nodes as above (BottomBar included)
 
 Created at runtime, not in either .tscn:
-  PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, three folios in plain language
+  AboutScreen (layer 33, scripts/ui/AboutScreen.gd, group "about_screen") -- child of TutorialPanel: "De qué va", the first screen of a new game (what the game is and the goal, three icons, ¡VAMOS!); centred at 760 wide and its content's height on PC/tablet, `place_window` on phone (docs/23 §2)
+  PrologueScreen (layer 32, scenes/ui/PrologueScreen.tscn) -- child of TutorialPanel: the lore, two folios in plain language since the short tutorial (2026-10-24; "Historia" from the menu shows the same)
   QuickGuide (layer 33, scripts/ui/QuickGuide.gd, group "quick_guide") -- child of TutorialPanel: one screen with four blocks; no longer opens by itself (2026-10-14), texts in AYUDA
   WorkerWalkers (scripts/map/WorkerWalkers.gd) -- child of both placers: workers and citizens walking the roads (view only, docs/04)
   HelpIndexPanel (scenes/ui/HelpIndexPanel.tscn, group "help_index") -- child of HelperPanel: the AYUDA index, opened from the bottom bar (Ayuda)
@@ -1135,7 +1136,7 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `instructors_visible` (the instructor busts, docs/23 §9), `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
-- `[interfaz]`: `ui_theme` (`light` cream windows / `dark` blue-grey windows, `CartoonTheme.window_theme`), device profile, UI scale, text size, palette, high contrast, panel
+- `[interfaz]`: `window_theme` (`dark` slate bunker windows, the default since the dieselpunk skin of 2026-10-25, / `light` sober paper; `CartoonTheme.window_theme`, `GameConfig.ui_theme`; the old `ui_theme` key of the cartoon skin is ignored and erased on save), device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout, `touch_controls_size` (size of the
   on-screen controls: `auto` = the profile's, PC 100 % / tablet 115 % / phone
   130 %, or `small` … `xlarge`; docs/21 §9), `fps_cap` (`auto` / `30`…`120` /
@@ -1272,7 +1273,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 228 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 234 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -1281,8 +1282,8 @@ tormenta-imperial/
 |   +-- main/Main2D.tscn             # The 2D view: same UI nodes, 2D world nodes
 |   +-- buildings/BuildingPlacer.tscn
 |   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
-|   +-- ui/                          # One .tscn per panel (26), incl. PrologueScreen and HelpIndexPanel
-+-- scripts/                         # 155 .gd files, ~61k lines
+|   +-- ui/                          # One .tscn per panel (29), incl. PrologueScreen and HelpIndexPanel
++-- scripts/                         # 207 .gd files, ~100k lines
 |   +-- buildings/
 |   |   +-- BuildingData.gd          # Resource class for building definitions (get_display_name())
 |   |   +-- BuildingPlacer.gd        # 3D placement/move/demolish + mesh spawning
