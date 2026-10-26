@@ -79,7 +79,11 @@ func test_construction_shows_the_phase_of_its_progress() -> void:
 	var b: Node2D = Building2D.new()
 	b.setup(data)
 	add_child(b)
-	# 10 % hecho: fase de valla.
+	# 10 % hecho: fase de valla. La obra se queda quieta mientras se mira: la
+	# ronda de Building2DClock dura 0,5 s reales y, con la obra corta del modo
+	# dev, la velocidad x2 o el tic acumulado que deje otra suite, pasaba de la
+	# valla (fallaba solo en la suite entera). after_test lo vuelve a encender.
+	ProductionManager.set_process(false)
 	ProductionManager.register_building(b, data, GameConfig.get_build_time(data.build_time) * 0.9)
 	await _settle()
 	assert_int(b.get_look()["look"]).is_equal(LookRule.Look.CONSTRUCTION)
