@@ -704,6 +704,12 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		deal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		deal.visible = data.first_discount_factor() < 1.0
 		row.add_child(deal)
+		# Gratis en el tutorial guiado (TutorialManager.is_free_build, 2026-10-24).
+		var free_tag := CT.badge(Tr.t("LBL_TUTORIAL_FREE"), CT.sem("POSITIVE"))
+		free_tag.name = "CardTutorialFree"
+		free_tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		free_tag.visible = data.is_tutorial_free()
+		row.add_child(free_tag)
 		# Lleno: una palabra en vez del coste, y el atajo para mejorar uno.
 		var full := CT.badge(Tr.t("TOPE_CARD_FULL"), CT.sem("WARNING"))
 		full.name = "CardFull"
@@ -728,7 +734,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 			_select_building(data)
 			_on_build_pressed())
 		row.add_child(hammer)
-		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer, "deal": deal}
+		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer, "deal": deal, "free": free_tag}
 
 	card.tooltip_text = row_tooltip(data)
 
@@ -1116,7 +1122,8 @@ func _refresh_cost() -> void:
 	var cost := Rules.cost_by_name(_selected_data)
 	CT.fill_cost_strip(_detail_cost, cost, Rules.missing_cost(_selected_data))
 	if cost.is_empty() and _detail_cost.get_child_count() == 0:
-		var free := CT.label(Tr.t("LBL_FREE"), "button", CT.positive_text())
+		var free := CT.label(Tr.t("LBL_TUTORIAL_FREE") if _selected_data.is_tutorial_free() else Tr.t("LBL_FREE"),
+			"button", CT.positive_text())
 		_detail_cost.add_child(free)
 		_detail_cost.remove_meta("strip_sig")
 
@@ -1202,6 +1209,8 @@ func _update_card_costs() -> void:
 		(parts["full"] as Control).visible = full
 		if parts.has("deal"):
 			(parts["deal"] as Control).visible = not full and data.first_discount_factor() < 1.0
+		if parts.has("free"):
+			(parts["free"] as Control).visible = not full and data.is_tutorial_free()
 		(parts["up"] as Control).visible = full and Rules.upgrade_does_something(data) \
 			and HelpText.lowest_upgradable(data.id) != null
 		var hammer: Button = parts["hammer"]
@@ -1218,7 +1227,15 @@ func _data_by_id(id: String) -> BuildingData:
 
 func _on_build_pressed() -> void:
 	if _selected_data and Rules.purchase_block_detail(_selected_data) == "":
-		EventBus.building_selected_for_placement.emit(_selected_data)
+		var chosen := _selected_data
+		# La lista se abre la proxima vez sin nada elegido: si no, al volver a
+		# CONSTRUIR seguia elegido el edificio ya puesto (el Cuartel) con su boton
+		# CONSTRUIR, como si fuera otra vez el objetivo (queja de Bryan, 2026-10-24).
+		# Decoraciones y carretera se ponen en serie: esas se quedan elegidas.
+		if not Rules.keeps_placing(chosen):
+			_show_no_selection()
+			_mark_selected_card()
+		EventBus.building_selected_for_placement.emit(chosen)
 		_close()
 
 # ══════════════════════════════════════════════════════════════════════

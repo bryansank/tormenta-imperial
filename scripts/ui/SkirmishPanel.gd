@@ -257,6 +257,8 @@ func _setup_ui() -> void:
 
 	_launch_btn = CT.pill_button(Tr.t("ARMY2_BTN_ATTACK"), "missions", "primary", CT.h("big"))
 	_launch_btn.name = "LaunchButton"
+	# El tutorial senala ¡A LA MISION! en la primera batalla (HelpTargets "mission_launch").
+	_launch_btn.add_to_group("hud_mission_launch")
 	_launch_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_launch_btn.pressed.connect(_on_launch_pressed)
 	actions.add_child(_launch_btn)
@@ -781,6 +783,12 @@ func _toggle_panel() -> void:
 func _open() -> void:
 	_is_open = true
 	_holder.visible = true
+	# La primera escaramuza: el soldado de casa ya va elegido, basta con ¡A LA
+	# MISION! (tutorial corto, 2026-10-24; antes habia que sumarlo con +).
+	if CombatManager.is_first_sortie_due() and _party().is_empty():
+		var first: Dictionary = Objectives.first_sortie_party()
+		for unit_id in first:
+			_selection[unit_id] = int(first[unit_id])
 	_fit()
 	_refresh()
 	UIManager.open_panel(self)

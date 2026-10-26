@@ -154,6 +154,57 @@ No es el lore (eso es el prólogo) ni el tutorial (eso son las marcas).
 
 ## 2. Tutorial guiado (`scripts/ui/TutorialPanel.gd`)
 
+> **TUTORIAL CORTO (decisión de Bryan, 2026-10-24, rama `fix/tutorial-flujo`).** Lo que
+> sigue de §2 a §2.11 describe el tutorial largo (13 pasos) y queda como historia; lo
+> vigente es esto:
+>
+> 1. **"De qué va"** (`scripts/ui/AboutScreen.gd`, capa 33): la primera pantalla de una
+>    partida nueva. Qué es el juego y la meta en tres frases (`ABOUT_BODY`) y tres iconos
+>    (`build` Construye y junta recursos · `army` Entrena tu ejército · `storm` Aguanta la
+>    Tormenta y gana), botón **¡VAMOS!**. La abre `TutorialPanel` cuando el prólogo sale
+>    solo en una partida nueva (`TutorialManager.take_about_first()`); "Historia" desde el
+>    menú va directa al lore.
+> 2. **Lore corto**: el prólogo `full` pasa de 4 folios a 2 (`PRO_2` la Tormenta y `PRO_3`
+>    quiénes somos), cada uno de una o dos frases. `PRO_1`/`PRO_4` siguen en Tr.
+> 3. **Tutorial práctico, 8 pasos** (`GUIDE_GOALS` / `GUIDE_STEPS`, `GUIDE_TOTAL = 8`):
+>
+> | # | Paso | Señala | Avanza cuando |
+> |---|---|---|---|
+> | 1 | `resources` (tarjeta de leer) | la fila de recursos del HUD | **Entendido**. Para qué sirve cada recurso (`GUIDE_RESOURCES`) y sus iconos (`resource_facts()`: oro, madera, comida, acero, petróleo, materiales) |
+> | 2 | `open_build` / `pick_sawmill` / `place_sawmill` / `wait_sawmill` | CONSTRUIR, la tarjeta, el bosque, la obra | acaba la obra del Aserradero |
+> | 3 | `collect` | el Aserradero | se recoge madera |
+> | 4 | `open_gold_mine` / `pick_gold_mine` / `place_gold_mine` / `wait_gold_mine` | CONSTRUIR, la tarjeta, la veta, la obra | acaba la obra de la Mina |
+> | 5 | `collect_gold` | la Mina de oro | se recoge oro (`collected_gold`) |
+> | 6 | `open_barracks` … `wait_barracks` | CONSTRUIR, la tarjeta, la obra | acaba el Cuartel |
+> | 7 | `train` / `need_train` | ENTRENAR en la ficha del Cuartel | se pulsa ENTRENAR; sin oro o madera, espera plegada |
+> | 8 | `wait_unit` / `battle` / `battle_launch` | el Cuartel; **Misiones** de la barra; **¡AL ATAQUE!** | acaba la primera pelea en el tablero (`encounter_ended`, o la salida termina: `battle_done`). En el tablero manda el combate guiado (§2.4) |
+> | — | `done` | ☰ MENÚ (¿QUÉ HACER?) | "¡Ya sabes lo básico! Junta recursos y mejóralo todo." |
+>
+> - **Fuera del tutorial**: Casa, Granja, Mercado, Almacén, Laboratorio, girar, mover,
+>   derribar. Salen como **consejos** cuando hacen falta, uno a la vez y nunca durante el
+>   tutorial (`TIPS`: `house` sin manos ni sitio, `food_low` con comida para tres tics y
+>   sin Granja, `placing` al coger un edificio — girar y cancelar —, `building_actions` al
+>   tocar un edificio — mover y derribar —) y siguen en AYUDA (`HelpCatalog`, básicas).
+>   ¿QUÉ HACER? sigue la línea después.
+> - **Gente**: 10 colonos y sitio para 10 en el Núcleo: Aserradero 2 + Mina 3 + Cuartel 1
+>   = 6, más 2 de minar a mano, sin Casa (`tests/tutorial/test_guide_workers.gd`).
+> - **Gratis**: el primero de cada edificio del tutorial (Aserradero, Mina, Cuartel) y la
+>   carretera, solo en una partida arrancada (`GameManager.has_begun()`); el soldado
+>   cuesta lo de siempre (40 oro + 20 madera, se paga con lo de salida).
+> - **Nada interrumpe** hasta acabar la primera batalla: la Tormenta, la de prueba, los
+>   eventos y **también el hambre** (`PopulationManager` no consume ni crece mientras
+>   `TutorialManager.blocks_interruptions()`).
+> - **MISIONES** ya trae elegido al soldado de la primera escaramuza
+>   (`SkirmishPanel._open`, `Objectives.first_sortie_party()`), y su botón está en el grupo
+>   `hud_mission_launch`; el de la barra, `hud_bar_missions` (`HelpTargets` `bar_missions`,
+>   `mission_launch`).
+> - Arreglo de paso: una lección de combate que acaba sin atacar ya no deja su rótulo
+>   ("COMBATE · PASO 1 DE 7") pegado en la tarjeta de la colonia
+>   (`_on_lesson_encounter_ended` avisa al panel).
+> - Sonda: `tools/recorrido_probe.gd -- --pobre` juega el tutorial con la bolsa a cero y
+>   sin rellenar nada; `tools/line_probe.gd` ya no levanta el Laboratorio de la era 1 por
+>   defecto (`--tutorial=1` para la apertura vieja).
+
 Coach marks sobre la interfaz real. Cada paso:
 
 - **oscurece** la pantalla menos el control del que habla, con un marco de latón que
@@ -183,12 +234,12 @@ derribar** un edificio. Trece pasos (doce hasta el 17-10-2026, cuando entró el 
 | # | Paso (`GUIDE_STEPS`) | Señala | Avanza cuando | Qué explica |
 |---|---|---|---|---|
 | 1 | `goal` (tarjeta de leer) | nada: tarjeta abajo al centro | botón **¡A por ello!** (`confirm_step`, hecho `goal_seen`) | **La meta**: 3 eras, Cuartel General a nivel 3, aguantar el Ataque Final de la Regencia, y la Tormenta se detiene para siempre |
-| 2 | `core` (tarjeta de leer) | un aro sobre el Núcleo | botón **Entendido** (hecho `core_seen`) | **Núcleo**: el corazón de la isla; todo va unido a él por carretera. Cifras: +5 viven aquí |
+| 2 | `core` (tarjeta de leer) | un aro sobre el Núcleo | botón **Entendido** (hecho `core_seen`) | **Núcleo**: el corazón de la isla; todo va unido a él por carretera. Cifras: +8 viven aquí |
 | 3 | `open_build` / `pick_sawmill` / `place_sawmill` / `wait_sawmill` | CONSTRUIR, la tarjeta, el bosque más cercano, la obra | se abre la lista, se elige, se coloca, acaba la obra | **Aserradero**: corta madera; casi todo se construye con ella. En la espera, **la carretera**: llega sola desde el Núcleo y sin ella un edificio no trabaja |
 | 4 | `collect` | el aserradero | se recoge algo (`note_guide_fact("collected")`) | recoger lo producido |
-| 5 | `open_barracks` / `pick_barracks` / `place_barracks` / `wait_barracks` | CONSTRUIR, la tarjeta del Cuartel, la obra | se coloca un cuartel y acaba la obra | **Cuartel** (2026-10-17): entrena soldados; con soldados en casa, los Cobradores del Impuesto no se llevan nada. En la espera: dónde se entrena (☰ MENÚ > COLONIA > EJÉRCITO). Si faltan los tablones, `need_barracks` señala el Aserradero ("Serrar tablones"). Cifras: 1 trabaja, +8 soldados |
-| 6 | `open_farm` / `pick_farm` / `place_farm` | CONSTRUIR, la tarjeta de la Granja | se coloca una granja | **Granja**: comida; tu gente come cada poco |
-| 7 | `rotate` / `rotate_pick` / `rotate_now`, y luego `place_house` | CONSTRUIR, la tarjeta de la Casa, y con la Casa en la mano el botón **R ↻** de la pantalla (tablet y móvil; en PC no hay botón: es la tecla R) | **gira** el edificio en la mano (`building_rotate_requested`, hecho `rotated`) y después se coloca la casa | **Girar**: R en PC, R ↻ con el dedo; un cuarto de vuelta cada vez. **Casa**: aquí vive tu gente, +6 trabajadores |
+| 5 | `rotate` / `rotate_pick` / `rotate_now`, y luego `place_house` | CONSTRUIR, la tarjeta de la Casa, y con la Casa en la mano el botón **R ↻** de la pantalla (tablet y móvil; en PC no hay botón: es la tecla R) | **gira** el edificio en la mano (`building_rotate_requested`, hecho `rotated`) y después se coloca la casa | **Girar**: R en PC, R ↻ con el dedo; un cuarto de vuelta cada vez. **Casa**: aquí vive tu gente, +6 trabajadores (va antes del Cuartel desde 2026-10-24, §2.12) |
+| 6 | `open_barracks` / `pick_barracks` / `place_barracks` / `wait_barracks`, `train` / `need_train` | CONSTRUIR, la tarjeta del Cuartel, la obra; después ENTRENAR en su ficha | se coloca un cuartel, acaba la obra y se pulsa ENTRENAR | **Cuartel** (2026-10-17): entrena soldados; con soldados en casa, los Cobradores del Impuesto no se llevan nada. En la espera: se entrena tocando el Cuartel y pulsando ENTRENAR. Sin oro o madera para el soldado, `need_train` es un paso de espera (§2.12). Cifras: 1 trabaja, +8 soldados |
+| 7 | `open_farm` / `pick_farm` / `place_farm` | CONSTRUIR, la tarjeta de la Granja | se coloca una granja | **Granja**: comida; tu gente come cada poco |
 | 8 | `move` / `move_place` | MOVER en la ficha si está abierta (`info_move`); si no, la Casa en el mapa (`built:house`) | se mueve cualquier edificio (`building_moved`, hecho `moved`) | **Mover**: gratis, conserva el nivel |
 | 9 | `road_open` / `road_pick` / `road_place`, y `demolish` | CONSTRUIR, la tarjeta de la Carretera; después Confirmar, DEMOLER o el tramo puesto (`info_demolish_confirm\|info_demolish\|practice_road`) | se pone a mano un tramo de carretera (1 oro, hecho `road_placed`) y se derriba algo (`building_demolished`, hecho `demolished`) | **Derribar**: devuelve la mitad de lo que costó; el Núcleo y la carretera que une edificios no se quitan. Se practica con 1 oro: no se pierde nada importante |
 | 10 | `open_gold_mine` / `pick_gold_mine` / `place_gold_mine` | CONSTRUIR, la tarjeta, la veta de oro más cercana (`deposit:gold_vein`) | se coloca una mina | **Mina de oro**: oro de una veta; paga edificios y soldados |
@@ -197,9 +248,9 @@ derribar** un edificio. Trece pasos (doce hasta el 17-10-2026, cuando entró el 
 | 13 | `open_laboratory` / `pick_laboratory` / `place_laboratory` | CONSTRUIR, la tarjeta del Laboratorio | se coloca un laboratorio | **Laboratorio**: mejoras para siempre (más producción, más sitio, obras más rápidas) |
 | — | `done` | ¿QUÉ HACER? | "Entendido" o 25 s | **La meta otra vez**, en una línea, y que ¿QUÉ HACER? dice el paso siguiente |
 
-El orden de los edificios sigue la línea de ¿QUÉ HACER? (`Objectives.LINE`: aserradero,
-cuartel, granja, mina, casa, mercado, almacén); la casa va antes de la mina porque la mina pide 3
-trabajadores y el Núcleo solo da sitio a 5 (aserradero 2 + cuartel 1 + granja 2). El Laboratorio va el último: no está en la
+El orden de los edificios sigue casi la línea de ¿QUÉ HACER? (`Objectives.LINE`: aserradero,
+cuartel, granja, mina, casa, mercado, almacén); desde el 2026-10-24 la casa va justo después
+de recoger, antes del Cuartel y la Granja (§2.12: con ella llegan 6 trabajadores más de golpe). El Laboratorio va el último: no está en la
 línea, pero la Refinería lo pide (`building_prerequisites`).
 
 Las claves: `GUIDE_GOAL`, `GUIDE_CORE`, `GUIDE_OPEN_<EDIFICIO>` (la frase de para qué
@@ -499,7 +550,8 @@ Sin soldados se llevan un 10 % de la bolsa (tope 40) y el parte (`WarReportScree
 "IMPUESTO DE PRUEBA") explica que con un Cuartel y soldados no se lo habrían llevado.
 Antes, el aviso de la prueba (`STORM_TRIAL_INCOMING`) ya dice "si tienes soldados en
 casa, pelean", y el consejo del Cuartel (`HELP_TIP_BARRACKS_BODY`) explica por qué se
-quiere pronto y dónde se entrena de verdad (☰ MENÚ > COLONIA > EJÉRCITO). Guardado:
+quiere pronto y dónde se entrena de verdad (toca tu Cuartel y pulsa ENTRENAR; hasta el
+2026-10-24 decía ☰ MENÚ > COLONIA > EJÉRCITO, que no es donde se entrena). Guardado:
 `trial_tithe_pending` en la clave `storm`; si se guarda con los Cobradores de prueba en
 la puerta, al cargar vuelven a pedirse. `StormManager.reset()` lo limpia (ya se llama en
 los tres sitios de `GameManager`).
@@ -540,7 +592,7 @@ sacados de lo que falta de verdad:
 | `gather` | falta de la bolsa y no hay nada por recoger | ● Junta 80 de oro (20/80) |
 | `room` | el coste no cabe, o la bolsa está llena y falta algo | ● Haz sitio en el almacén |
 | `workers` | faltan manos | Espera a 1 trabajador más / Construye otra Casa (+6 trabajadores) |
-| `place` | el último | ○ Coloca el Cuartel / Entrena Infantería en EJÉRCITO (0/1) |
+| `place` | el último | ○ Coloca el Cuartel / Entrena Infantería (0/1): lleva al Cuartel, ENTRENAR en su ficha |
 | `action` | `next_step()` es un apoyo que no está en la lista (Granja por comida, vender...) | va el primero, como el de ahora |
 
 El de ahora: lo que se recoge (gratis, y desatasca), si no el que coincide con
@@ -643,6 +695,54 @@ Pruebas: `tests/tutorial/test_tutorial_reminder.gd`. Sonda:
 (y `--profile=pc --shot-size=1920x1080`): tarjeta, recordatorio, resaltado, reabierta,
 "¡Ya puedes!" abierto y plegado, la vuelta plegada, la obra, recoger y el Cuartel sin
 tablones (con CONSTRUIR abierto encima).
+
+### 2.12 Lo que Bryan encontró jugando la 1.1 (2026-10-24, rama `fix/tutorial-flujo`)
+
+Seis quejas, seis arreglos:
+
+1. **"Me indica ENTRENAR sin recursos y me lo sigue marcando."** La meta `train` lleva
+   `unit: infantry`; sin oro o madera para el soldado (`unit_missing_cost`, en `short`
+   como `"unit:infantry"`), `derive_step` da `need_train`: un paso de **espera** como los
+   `need_*` (lista ✓/●/○ "Junta 40 de oro (10/40)", se pliega al recordatorio, sin flecha
+   sobre ENTRENAR). Al tenerlo vuelve solo a `train` ("¡Ya puedes!"). `need_goal`,
+   `need_plan_for_step` y `need_target_for_step` sirven para edificio o unidad.
+2. **"Los soldados no son en MENÚ > EJÉRCITO."** Fuera de todos los textos que mandaban
+   a entrenar allí (`GUIDE_WAIT_BARRACKS`, `TUT_TIP_BARRACKS_BODY`, `HELP_TIP_BARRACKS_BODY`,
+   `OBJ_STEP_TRAIN(_HOW)`, `OBJ_DO_TRAIN`, docs/14): "toca tu Cuartel y pulsa ENTRENAR"
+   (`HELP_B_ARMY` añade Astillero y Aeródromo). El paso de entrenar de ¿QUÉ HACER? lleva al
+   edificio de la unidad (`{"building": ...}`), no al panel EJÉRCITO.
+3. **"Salgo, pulso CONSTRUIR y me vuelve a ofrecer el Cuartel."** La lista de CONSTRUIR
+   recordaba el último edificio elegido: al volver a abrirla salía el Cuartel ya puesto en
+   el detalle, con su botón CONSTRUIR, como si fuera otra vez el objetivo. Ahora
+   `ConstructionMenu._on_build_pressed` deja la lista sin elegir nada (salvo carretera y
+   decoraciones, que se ponen en serie). El paso del tutorial ya salía de lo construido.
+4. **"Me pides la Casa y ya me pides oro."** Mientras dura el tutorial guiado de verdad
+   (no un repaso), **el primero de cada edificio que pide sale gratis**, y la carretera
+   también (`TutorialManager.is_free_build`, que mira `BuildingData.get_cost`: CONSTRUIR,
+   fantasma, cobro, ¿QUÉ HACER? y tutorial lo leen igual). La fila de CONSTRUIR lleva
+   "Gratis en el tutorial" (`LBL_TUTORIAL_FREE`), también el detalle, las cifras de la
+   tarjeta y el aviso al coger el edificio. Sin abuso: uno de cada (`free_builds_used`, en
+   la clave `tutorial`; `reset()` lo vacía), solo si no hay ninguno en la isla, y derribar
+   uno regalado no devuelve nada (meta `tutorial_free`, guardada en su entrada de
+   `buildings`). Al acabar el tutorial, precios de siempre. `GameConfig.tutorial_free_builds`
+   lo apaga (las pruebas de "consigue lo que falta"). El soldado no es gratis: por eso
+   existe `need_train`.
+5. **"Los trabajadores se agotan."** Con 5 colonos el Aserradero, el Cuartel y la Granja
+   los gastaban todos antes de la Casa: ni minar a mano (2) cabía, y sin minar no había
+   oro para la Casa. Ahora **10 colonos y sitio para 10 en el Núcleo** (`population_start`,
+   `nucleo.tres`) y el tutorial corto no pide Casa: 6 trabajan + 2 de minar a mano caben,
+   y detrás aún la Granja. `tests/tutorial/test_guide_workers.gd` lo recorre meta a meta.
+6. **Cancelar, mover y derribar.** La primera colocación (`GUIDE_PLACE_SAWMILL`) dice
+   "¿Te equivocaste? Esc o clic derecho deja de colocar" (con el dedo, "✕ CANCELAR"); el
+   de mover (`GUIDE_MOVE_PLACE`), cómo dejarlo donde estaba. Mover y derribar nombran los
+   botones de la ficha de hoy (MOVER; Derribar, el rojo, y DERRIBAR para confirmar), y
+   AYUDA > Primeros pasos tiene **Dejar de colocar** (`guide_cancel`).
+
+Pruebas: `tests/tutorial/test_guide_never_stuck.gd` (entrenar sin recursos, con la bolsa
+a cero ningún paso se atasca, gratis una vez y sin reembolso, precios al acabar, la
+tarjeta), `test_guide_steps.gd` (orden y números), `test_guide_workers.gd`,
+`tests/economy/test_cuartel_temprano.gd` (textos de entrenar) y
+`tests/ui/test_construction_menu_flow.gd` (el objetivo cumplido no vuelve).
 
 ## 3. Ayudas (`HelperPanel`, `HelpCallout`, `HelpCatalog`)
 

@@ -89,7 +89,7 @@ holds a service's state of its own.
 | 20 | `TechTreeManager` | `scripts/services/TechTreeManager.gd` | 15 techs in 3 branches, permanent bonuses |
 | 21 | `CloudSaveManager` | `scripts/services/CloudSaveManager.gd` | Supabase auth + cloud save/load (unwired) |
 | 22 | `UIManager` | `scripts/services/UIManager.gd` | Panel stacking, ESC-close, slot conflict resolution |
-| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the guided coach-mark tutorial (steps derived from what is built; it opens and closes with the game's goal, explains every starting building with its numbers and teaches rotate/move/demolish; it cannot be skipped or closed, docs/23 §2.5), a one-off repair lesson the first time a building is damaged (docs/23 §2.6), the guided first fights on the board (combat lessons, docs/23 §2.4, no Skip either) and which tips/helps were seen; state saved with the game (docs/23) |
+| 23 | `TutorialManager` | `scripts/services/TutorialManager.gd` | Prologue once per game (after the title menu, never behind it), the short guided coach-mark tutorial (2026-10-24: "De qué va" screen, 2-folio lore, then resources card, sawmill, gold mine, barracks, first soldier and first battle; tutorial buildings free; steps derived from what is built; it opens and closes with the game's goal, explains every starting building with its numbers and teaches rotate/move/demolish; it cannot be skipped or closed, docs/23 §2.5), a one-off repair lesson the first time a building is damaged (docs/23 §2.6), the guided first fights on the board (combat lessons, docs/23 §2.4, no Skip either) and which tips/helps were seen; state saved with the game (docs/23) |
 | 24 | `UILayoutManager` | `scripts/services/UILayoutManager.gd` | Positions panels from `UILayoutConfig` slots, applies theme |
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`; the phone canvas follows the real dp, 360-540 tall in landscape, `phone_content_scale_for`, and turns `CartoonTheme.phone` on), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
@@ -272,7 +272,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
-| Nucleo (core) | 3x3 | Free | 0 | +5 worker room; manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower. Never damaged; a tall monument (8.9 m, own flag mast) on the same 3x3 | - |
+| Nucleo (core) | 3x3 | Free | 0 | +10 worker room (2026-10-24; was 5); manual processes only: its own, every unlocked workshop recipe and hand mining, 1.5x slower. Never damaged; a tall monument (8.9 m, own flag mast) on the same 3x3 | - |
 | House | 2x2 | 50/0/0/30 | 0 | +6 workers (room in houses; 9 / 12 at levels 2 / 3) | 1 |
 | Sawmill | 2x2 | 80/0/0/50 | 2 | 6 wood/12s; makes planks | 1 |
 | Farm | 2x2 | 40/0/0/30 | 2 | Food by crop: 20 / 125 / 600 per 1 / 5 / 20 min; anywhere with a road; max 6 | 1 |
@@ -493,7 +493,7 @@ hand mining there holds `mining_workers`, needs no road and spends no deposit us
 - **PopulationManager** tracks: population, max capacity, used workers, morale. The UI
   calls the people **trabajadores** everywhere ("Trabajadores: 12 de 17", "En su
   puesto: 8 · libres: 4")
-- Nucleo provides 5 starting room. Houses provide 6 each
+- Nucleo provides 10 starting room and the game starts with 10 people (`population_start`, 2026-10-24: the short tutorial — sawmill, gold mine, barracks, first soldier, first battle — runs without a House; with 5 the old tutorial ran out of workers). Houses provide 6 each and arrive full when finished
 - Each production building requires workers (see table above), first built = first served
 - **Workshop queue (2026-10-19):** each ×1 / ×5 / MÁX in a building card ADDS batches to that process (`ProcessManager.enqueue_process` / `enqueue_mining`, paid when queued, capped by `process_batch_max`; `dequeue()` removes batches not started and refunds them in full). One process per building at a time; the save is the same `count` / `total`
 - **Retirar / poner trabajadores:** `PopulationManager.set_workers_off(node, off)` (button

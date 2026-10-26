@@ -35,7 +35,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Produces | Interval |
 |----|------|------|--------------|---------|------------|----------|----------|
-| `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +5 worker room) | — |
+| `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +10 worker room (5 before 2026-10-24)) | — |
 | `sawmill` | Aserradero | 2x2 | 80/0/0/50 | 2 | 5s | 6 wood (+ planks by hand) | 12s |
 | `farm` | Granja | 2x2 | 40/0/0/30 | 2 | 5s | food, by crop (below) | the crop's |
 | `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 (**the first: 60/0/0/40**) | 3 | 8s | 8 gold (+ ingots by hand) | 12s |

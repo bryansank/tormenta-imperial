@@ -1851,8 +1851,10 @@ static func goal_items(goal: Dictionary) -> Array:
 			var count: int = int(goal.get("count", 1))
 			var have: int = mini(_train_progress(goal), count)
 			var def: Dictionary = GameConfig.get_unit_def(unit_id)
+			# Se entrena en el edificio de la unidad (Cuartel, Astillero, Aerodromo):
+			# tocarlo y pulsar ENTRENAR en su ficha. Nunca en un menu (2026-10-24).
 			var final := _item("place", Tr.t("OBJ_STEP_TRAIN") % [Tr.t(String(def.get("name", unit_id))), have, count],
-				Tr.ti("OBJ_STEP_TRAIN_HOW"), {"panel": "ArmyPanel"})
+				Tr.ti("OBJ_STEP_TRAIN_HOW") % your_building(home), {"building": home})
 			final["short"] = Tr.t("OBJ_STEP_TRAIN_SHORT") % [have, count]
 			items.append(final)
 		"research":
@@ -1982,7 +1984,9 @@ static func _collect_item(res: String, have: int, need: int, stock: Dictionary) 
 	var node: Node = stock.get("node")
 	var bid: String = String(stock.get("building", ""))
 	var amount: int = int(stock.get("amount", 0))
-	var item := _item("collect", Tr.t("OBJ_STEP_COLLECT") % [Tr.res_name(res), building_the(bid), amount],
+	# "de el Aserradero" -> "del Aserradero" (recorrido del 2026-10-24).
+	var text_s: String = (Tr.t("OBJ_STEP_COLLECT") % [Tr.res_name(res), building_the(bid), amount]).replace(" de el ", " del ")
+	var item := _item("collect", text_s,
 		Tr.t("OBJ_STEP_BAG_COUNT") % [have, amount, need], {"node": node})
 	item["short"] = Tr.t("OBJ_STEP_COLLECT_SHORT") % [Tr.res_name(res), amount]
 	item["res"] = res
@@ -2131,7 +2135,7 @@ static func _action_go(action: Dictionary) -> Dictionary:
 			var ruined: Node = _ruined_producer()
 			return {"node": ruined} if ruined != null else {"building": id}
 		"train", "rebuild":
-			return {"panel": "ArmyPanel"}
+			return {"building": GameConfig.get_unit_building(id)}
 		"sortie", "campaign", "siege", "resummon":
 			return {"panel": "SkirmishPanel"}
 	return {}

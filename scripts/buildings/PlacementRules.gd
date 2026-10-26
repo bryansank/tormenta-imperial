@@ -1244,9 +1244,12 @@ static func demolish(building: Node) -> Dictionary:
 		if not stranded.is_empty():
 			return {"blocked": move_first_message(stranded), "stranded": stranded}
 	var cell: Vector2i = info["origin_cell"]
-	var cost := data.get_cost()
-	for type in cost:
-		ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
+	# Uno levantado gratis en el tutorial no devuelve nada: si no, levantarlo y
+	# derribarlo seria oro regalado (2026-10-24, TutorialManager.is_free_build).
+	if not bool(building.get_meta("tutorial_free", false)):
+		var cost := data.get_cost()
+		for type in cost:
+			ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
 	ProductionManager.unregister(building)
 	# Demoler con algo en curso ya no lo quema: el proceso se cancela como
 	# cualquier otro y devuelve su parte (la Tasa de Corrupcion).
@@ -1278,6 +1281,9 @@ static func serialize_building(building: Node) -> Dictionary:
 	# El jugador le retiro los trabajadores: se guarda solo si es asi.
 	if bool(building.get_meta("workers_off", false)):
 		entry["workers_off"] = true
+	# Levantado gratis en el tutorial: derribarlo no devuelve nada.
+	if bool(building.get_meta("tutorial_free", false)):
+		entry["tutorial_free"] = true
 	# Solo se guarda si esta tocado: un save viejo sin la clave significa
 	# "entero", que es exactamente lo que queremos por defecto.
 	if building.has_meta("health"):

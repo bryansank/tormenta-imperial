@@ -69,8 +69,8 @@ func test_a_step_shows_its_line_and_number() -> void:
 	await await_idle_frame()
 	_start_guide()
 	await await_idle_frame()
-	# Primero la meta (2026-10-16): paso 1, con su boton.
-	assert_str(panel.current_step()).is_equal("goal")
+	# Primero los recursos (tutorial corto, 2026-10-24): paso 1, con su boton.
+	assert_str(panel.current_step()).is_equal("resources")
 	assert_bool(panel.is_coach_visible()).is_true()
 	assert_str(panel.coach_text()).is_not_empty()
 	var badge: Label = panel.find_child("Badge", true, false)
@@ -84,10 +84,10 @@ func test_the_reading_cards_move_on_with_their_button_and_show_numbers() -> void
 	await await_idle_frame()
 	var ok: Button = panel.find_child("GuideOk", true, false)
 	assert_bool(ok.visible).is_true()
-	assert_str(CartoonTheme.button_text(ok)).is_equal(Tr.t("BTN_GUIDE_GOAL_OK"))
-	ok.pressed.emit()
-	await await_idle_frame()
-	assert_str(panel.current_step()).is_equal("core")
+	assert_str(CartoonTheme.button_text(ok)).is_equal(Tr.t("BTN_GUIDE_OK"))
+	# Los recursos, cada uno con su icono.
+	assert_str(panel.facts_text()).contains(Tr.res_name("gold"))
+	assert_str(panel.facts_text()).contains(Tr.t("GUIDE_RES_MATERIALS"))
 	ok.pressed.emit()
 	await await_idle_frame()
 	assert_str(panel.current_step()).is_equal("open_build")
@@ -186,3 +186,29 @@ func test_the_card_goes_beside_its_target_and_never_on_it() -> void:
 		assert_bool(Rect2(Vector2.ZERO, vp).encloses(card)).is_true()
 		if target.size != Vector2.ZERO:
 			assert_bool(card.intersects(target)).is_false()
+
+# ── "De que va" (tutorial corto, 2026-10-24) ─────────────────────────
+
+## Partida nueva: primero "De que va" (que es el juego y la meta, tres iconos);
+## al cerrarla, el lore corto. "Historia" desde el menu va directa al lore.
+func test_a_new_game_shows_what_it_is_about_before_the_lore() -> void:
+	var panel := _panel()
+	await await_idle_frame()
+	TutorialManager._about_first = true
+	TutorialManager.show_prologue()
+	var about: CanvasLayer = panel.about()
+	assert_bool(about.is_open()).is_true()
+	assert_bool(panel.prologue().is_open()).is_false()
+	assert_int(about.block_texts().size()).is_equal(3)
+	about.close()
+	assert_bool(panel.prologue().is_open()).is_true()
+	assert_int(panel.page_count()).is_equal(2)
+	panel._close()
+	# Pedido otra vez (Historia), sin "De que va".
+	TutorialManager.show_prologue()
+	assert_bool(about.is_open()).is_false()
+	assert_bool(panel.prologue().is_open()).is_true()
+	panel._close()
+	for loc in ["es", "en"]:
+		var body: String = Tr._STRINGS[loc]["ABOUT_BODY"]
+		assert_int(body.split(".", false).size()).is_less_equal(4)

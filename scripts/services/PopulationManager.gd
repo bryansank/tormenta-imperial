@@ -65,6 +65,12 @@ func _process(delta: float) -> void:
 	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:
 		return
 
+	# Mientras se aprende (tutorial guiado, hasta la primera batalla) la gente no
+	# come ni llega gente nueva: nada interrumpe el tutorial, tampoco el hambre
+	# (tutorial corto, 2026-10-24; TutorialManager.blocks_interruptions).
+	if TutorialManager.blocks_interruptions():
+		return
+
 	# Use gentler timers in early phases (1-2)
 	var is_early := ProgressionManager.current_phase < GameConfig.Phase.SURVIVAL
 	var cons_base := GameConfig.early_consumption_interval if is_early else GameConfig.consumption_interval

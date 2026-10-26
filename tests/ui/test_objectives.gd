@@ -344,13 +344,15 @@ func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
 ## La mejora que no cabe en la bolsa no se pide a ciegas: primero el almacen.
 func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
+	# Cuatro Granjas desde que el Nucleo da sitio a 10 (2026-10-24): mas bocas.
+	for id in ["sawmill", "farm", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
 			"refinery", "tower", "tower", "headquarters"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")
 	# Comida para unos ciclos: sin ella el paso seria comprarla (2026-10-04).
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 400})
+	# 600 desde que el Nucleo da sitio a 10 (2026-10-24): hay mas bocas.
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 600})
 	# Era 3 con un almacen: 1000 + 500 = 1500, y la mejora a nivel 2 cuesta 2000.
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")

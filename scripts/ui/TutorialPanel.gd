@@ -26,6 +26,7 @@ extends CanvasLayer
 ## repaso". Sin animaciones: el marco y el aro no laten y el texto sale entero.
 
 const PrologueScene := preload("res://scenes/ui/PrologueScreen.tscn")
+const AboutScript := preload("res://scripts/ui/AboutScreen.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const CoachArrow := preload("res://scripts/ui/CoachArrow.gd")
 const TypeCircleScript := preload("res://scripts/ui/TypeCircle.gd")
@@ -68,6 +69,8 @@ const REOPEN_SECONDS := 8.0
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 var _prologue: CanvasLayer
+## "De que va" (tutorial corto, 2026-10-24): sale antes del lore en una partida nueva.
+var _about: CanvasLayer
 var _coach: Control
 var _dim: Array[ColorRect] = []
 var _frame: Panel
@@ -82,7 +85,7 @@ var _detail: Label
 ## El piquito del bocadillo hacia el busto.
 var _tail: Control
 ## Las cifras del edificio del paso, con iconos (building_facts).
-var _facts: HBoxContainer
+var _facts: HFlowContainer
 var _facts_for := "-"
 var _end_replay_btn: Button
 var _ok_btn: Button
@@ -152,6 +155,10 @@ func _ready() -> void:
 	_prologue.name = "PrologueScreen"
 	add_child(_prologue)
 	_prologue.closed.connect(_on_prologue_closed)
+	_about = AboutScript.new()
+	_about.name = "AboutScreen"
+	add_child(_about)
+	_about.closed.connect(func(): _prologue.open(TutorialManager.requested_variant()))
 	# La guia rapida se crea al pedirla (AYUDA > COMO FUNCIONA), no al arrancar:
 	# ya no sale sola y casi nadie la abre (feat/topes-mejoras-ayuda).
 	_build_coach()
@@ -171,7 +178,15 @@ func _ready() -> void:
 # ══════════════════════════════════════════════════════════════════════
 
 func _open_intro() -> void:
+	# Partida nueva: primero "De que va" y, al cerrarla, el lore. "Historia" desde
+	# el menu va directa al lore.
+	if TutorialManager.take_about_first():
+		_about.open()
+		return
 	_prologue.open(TutorialManager.requested_variant())
+
+func about() -> CanvasLayer:
+	return _about
 
 func _on_prologue_closed() -> void:
 	EventBus.tutorial_intro_closed.emit()
@@ -198,10 +213,12 @@ func prologue() -> CanvasLayer:
 
 ## Nombres de la intro vieja, para quien ya los usaba (PauseMenu, sondas).
 func is_intro_open() -> bool:
-	return _prologue != null and _prologue.is_open()
+	return (_prologue != null and _prologue.is_open()) or (_about != null and _about.is_open())
 
 func _close() -> void:
-	if is_intro_open():
+	if _about != null and _about.is_open():
+		_about.close(true)
+	if _prologue != null and _prologue.is_open():
 		_prologue.close()
 
 func current_page() -> int:
@@ -298,9 +315,11 @@ func _build_coach() -> void:
 	_detail.visible = false
 	col.add_child(_detail)
 	# Las cifras del edificio: [madera] +6 cada 12 s  [trabajadores] 2 trabajan.
-	_facts = HBoxContainer.new()
+	# En varias filas si no caben (los seis recursos de la tarjeta de RECURSOS).
+	_facts = HFlowContainer.new()
 	_facts.name = "Facts"
-	_facts.add_theme_constant_override("separation", 14)
+	_facts.add_theme_constant_override("h_separation", 14)
+	_facts.add_theme_constant_override("v_separation", 4)
 	_facts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_facts.visible = false
 	col.add_child(_facts)
@@ -400,15 +419,24 @@ static func is_waiting_step(step_id: String) -> bool:
 func is_waiting_now() -> bool:
 	if is_waiting_step(_step):
 		return true
-	return _step == "collect" and not _sawmill_has_wood()
+	# Recoger el oro de la Mina, igual que la madera (tutorial corto, 2026-10-24).
+	if _step == "collect":
+		return not _sawmill_has_wood()
+	if _step == "collect_gold":
+		return not _has_stock("gold_mine", "gold")
+	return false
 
 func _sawmill_has_wood() -> bool:
+	return _has_stock("sawmill", "wood")
+
+## Algun `building_id` tiene `res` esperando a que lo recojan.
+func _has_stock(building_id: String, res: String) -> bool:
 	for info in GridManager.buildings_view():
 		var d: Resource = info.get("data")
 		var node: Node = info.get("node")
-		if d == null or node == null or String(d.get("id")) != "sawmill":
+		if d == null or node == null or String(d.get("id")) != building_id:
 			continue
-		if int(ProductionManager.get_stock(node).get("wood", 0)) > 0:
+		if int(ProductionManager.get_stock(node).get(res, 0)) > 0:
 			return true
 	return false
 
@@ -450,15 +478,21 @@ func _reminder_line() -> String:
 		var what := "TUT3_READY_DO"
 		if _step == "collect":
 			what = "TUT3_READY_COLLECT"
+		elif _step == "collect_gold":
+			what = "TUT3_READY_COLLECT_GOLD"
+		elif _step == "battle":
+			what = "TUT3_READY_BATTLE"
 		elif TutorialManager.step_target(_step) == "build_button":
 			what = "TUT3_READY_BUILD"
 		return Tr.t("TUT3_CHIP_READY") % Tr.t(what)
 	if TutorialManager.is_need_step(_step):
-		var cur: Dictionary = TutorialManager.need_plan(TutorialManager.step_building(_step)).get("current", {})
+		var cur: Dictionary = TutorialManager.need_plan_for_step(_step).get("current", {})
 		var short := String(cur.get("short", cur.get("text", "")))
 		if short != "":
 			return short
 		return TutorialManager.step_text(_step)
+	if _step == "wait_unit":
+		return Tr.t("TUT3_CHIP_UNIT")
 	if _step.begins_with("wait_"):
 		var b := _step.substr(5)
 		var data := Rules.load_building_data(b)
@@ -472,6 +506,9 @@ func _reminder_line() -> String:
 	if _step == "collect":
 		var saw := Rules.load_building_data("sawmill")
 		return Tr.t("TUT3_CHIP_COLLECT_WAIT") % (saw.get_display_name() if saw != null else "sawmill")
+	if _step == "collect_gold":
+		var mine := Rules.load_building_data("gold_mine")
+		return Tr.t("TUT3_CHIP_GOLD_WAIT") % (mine.get_display_name() if mine != null else "gold_mine")
 	var main := _res_text.split("
 ", false)
 	return String(main[0]) if not main.is_empty() else ""
@@ -588,6 +625,9 @@ func _on_step_changed(step_id: String) -> void:
 	var facts_for := TutorialManager.step_building(step_id)
 	if step_id == TutorialManager.REPAIR_STEP:
 		facts_for = "__repair__"
+	elif step_id == "resources":
+		# Los recursos, cada uno con su icono (tutorial corto, 2026-10-24).
+		facts_for = "__resources__"
 	elif TutorialManager.is_need_step(step_id):
 		facts_for = ""
 	_render_facts(facts_for)
@@ -635,6 +675,7 @@ func _render_facts(building_id: String) -> void:
 		_facts.remove_child(c)
 		c.queue_free()
 	var facts: Array = TutorialManager.repair_facts() if _step == TutorialManager.REPAIR_STEP \
+		else TutorialManager.resource_facts() if building_id == "__resources__" \
 		else TutorialManager.building_facts(building_id)
 	for f in facts:
 		var chip := HBoxContainer.new()
@@ -697,6 +738,9 @@ func _should_hide() -> bool:
 		if wname == "ConstructionMenu":
 			continue
 		if wname == "BuildingInfoPanel" and _step in TutorialManager.INFO_PANEL_STEPS:
+			continue
+		# La primera batalla: ¡A LA MISION! esta dentro de MISIONES (2026-10-24).
+		if wname == "SkirmishPanel" and _step == "battle_launch":
 			continue
 		return true
 	if CombatManager.is_board_open():

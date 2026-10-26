@@ -134,10 +134,12 @@ func test_why_the_barracks_is_wanted_early_is_said_plainly() -> void:
 	assert_str(Tr._STRINGS["en"]["OBJ_WHY_BARRACKS"]).contains("Collectors")
 	for loc in ["es", "en"]:
 		var tip: String = Tr._STRINGS[loc]["HELP_TIP_BARRACKS_BODY"]
-		# Donde se entrena de verdad: ☰ MENU > COLONIA > EJERCITO.
-		assert_str(tip).contains(Tr._STRINGS[loc]["LBL_MENU_GROUP_COLONY"])
-		assert_str(tip).contains(Tr._STRINGS[loc]["BTN_ARMY"])
-		assert_str(Tr._STRINGS[loc]["TUT_TIP_BARRACKS_BODY"]).contains(Tr._STRINGS[loc]["BTN_ARMY"])
+		# Donde se entrena de verdad: en el Cuartel, con ENTRENAR en su ficha;
+		# nunca en un menu (2026-10-24, queja de Bryan).
+		assert_str(tip).contains(Tr._STRINGS[loc]["BTN_TRAIN"])
+		assert_str(tip).not_contains("> " + Tr._STRINGS[loc]["BTN_ARMY"])
+		assert_str(Tr._STRINGS[loc]["TUT_TIP_BARRACKS_BODY"]).contains(Tr._STRINGS[loc]["BTN_TRAIN"])
+		assert_str(Tr._STRINGS[loc]["TUT_TIP_BARRACKS_BODY"]).not_contains("> " + Tr._STRINGS[loc]["BTN_ARMY"])
 		# Ya no dice "infanteria (era 1)" como si el Cuartel fuera de la era 2.
 		assert_str(tip.to_lower()).not_contains("(era 1)")
 

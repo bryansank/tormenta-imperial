@@ -509,6 +509,9 @@ func _on_building_selected(data: Resource) -> void:
 	_state = State.PLACING
 	_create_preview()
 	_assist.begin()
+	# Gratis en el tutorial (2026-10-24): se dice al cogerlo, junto al fantasma.
+	if _current_data != null and _current_data.id != Rules.ROAD_ID and _current_data.is_tutorial_free():
+		_show_feedback(Tr.t("LBL_TUTORIAL_FREE"))
 
 func _handle_left_click(screen_pos: Vector2) -> void:
 	if _state == State.IDLE:

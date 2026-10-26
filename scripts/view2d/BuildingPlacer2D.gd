@@ -342,6 +342,9 @@ func _on_building_selected(data: Resource) -> void:
 	_auto_face = true
 	_state = State.PLACING
 	_create_ghost()
+	# Gratis en el tutorial (2026-10-24): se dice al cogerlo, junto al fantasma.
+	if _current_data != null and _current_data.id != Rules.ROAD_ID and _current_data.is_tutorial_free():
+		_show_feedback(Tr.t("LBL_TUTORIAL_FREE"))
 
 ## Intenta plantar el edificio en curso en `cell`. Devuelve el nodo o null.
 func try_place(cell: Vector2i) -> Node:
