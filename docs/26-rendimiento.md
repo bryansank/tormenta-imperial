@@ -369,6 +369,42 @@ Solo la interfaz pone unos 350 `Label` y 150 `Button` en todas las escenas.
 6. **El combate pesa lo mismo que su colonia** (la de `media`): el tablero 8×8 es
    interfaz y no añade coste apreciable.
 
+### 4.7 Tablet, renderizador Mobile (2026-10-25, rama `qa-tablet`)
+
+Medido sobre `main` en `4c02f6d` (con las optimizaciones de §6 ya integradas), en el mismo
+portátil (RTX 3060 Laptop), ventana **1280x800**, perfil **tablet** (`settings.cfg [interfaz]
+device_profile="tablet"`), `--rendering-method mobile`, sin vsync ni tope. "Auto" es lo que da la
+detección aquí (Mobile → Baja); "Mínima" es la **de verdad del juego** (`--quality=minimal`, nueva
+en la sonda: `WorldLook` más `GraphicsQuality.apply_runtime`), no la emulada. Con 21-36 procesos de
+Godot ajenos en marcha: comparar entre filas, no tomar el absoluto.
+
+| Escenario | Auto fps · 1 % | Mínima fps · 1 % | draw calls auto / mín. | VRAM MB auto / mín. | proceso MB auto / mín. |
+|---|---|---|---|---|---|
+| inicio | 208 · 119 | 244 · 133 | 370 / 352 | 158 / 88 | 988 / 978 |
+| media | 158 · 72 | 170 · 84 | 491 / 430 | 164 / 93 | 998 / 995 |
+| grande | 118 · 56 | 138 · 65 | 867 / 723 | 175 / 104 | 999 / 1024 |
+| tormenta | 128 · 47 | 125 · 57 | 713 / 573 | 175 / 104 | 993 / 998 |
+| combate | 170 · 83 | 173 · 81 | 438 / 422 | 176 / 102 | 990 / 1025 |
+| grande_2d | 77 · 52 | 77 · 53 | 1440 / 1427 | 93 / 93 | 940 / 910 |
+
+Mínima **emulada** en `grande` (la de §4.2): 132 fps · 64, 497 draw calls, VRAM 137 MB.
+
+- Frente a §4.1 (Mobile auto): la colonia grande pasa de 47 a **118 fps** y de 4502 a **867 draw
+  calls**; la 2D grande, de 14 a **77 fps**. La 2D es ahora la vista más lenta y la de más draw
+  calls.
+- VRAM dentro del presupuesto de tablet (≤ 200 MB); en Mínima, 88-104 MB. La RAM del proceso
+  (~1 GB, binario del editor en Vulkan) sigue el doble del presupuesto: falta medirla en el APK.
+- Perfil por script en `grande`: `ProductionManager` **784 µs** (131 en §4.3), `ContractManager`
+  164-193 µs (nuevo, con `_process` siempre activo), `WorkerWalkers` 282, `BuildingPlacer` 187. En
+  `grande_2d`, `Building2D` 1412 y `StatusBadge2D` 1048 (81 nodos cada uno).
+- La Mínima real dibuja más que la emulada (723 frente a 497 draw calls y 295 k frente a 220 k
+  primitivas): algo que la emulación apaga sigue encendido en el juego.
+- **Trampa de la sonda, arreglada**: en una máquina compartida otra ventana roba el foco y
+  `DeviceProfile` baja el tope a `fps_background` (10). Dos escenarios salieron clavados a 10 fps.
+  La sonda pone ahora `fps_background` y `fps_paused` a 0 y `ui_fps_cap = "unlimited"`.
+
+Informe completo (toque, pantallas y estas cifras): `tormenta-imperial-contexto/29_QA_TABLET.md`.
+
 ---
 
 ## 5. Auditoría estática
