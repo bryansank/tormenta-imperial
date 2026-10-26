@@ -78,24 +78,74 @@ Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In 
 "Keep playing" leaves a sandbox: the Storm is halted for good and the WHAT TO DO? panel
 (`Objectives.next_step()`) says so. **Since `feat/volverse-imperio` (below) that is only
 true in modes without the empire phase**: in Campaña and Supervivencia the victory
-screen says "Ahora el Imperio eres tú" and opens the archipelago.
+leads to the Tax book (below, "Final con elección").
+
+## Final con elección (1.2, `integracion/v1.2b`, decisión de Bryan 2026-10-25)
+
+Ganar el Ataque Final deja **el libro del Impuesto en tu mesa**. El juego no decide por
+ti qué gobernante eres (`27_CRITICA_Y_PROPUESTAS.md` §3.5 E3 del contexto privado):
+mantiene la ironía del lore (`03_LORE.md` §8, *"Ahora firmas tú"*) sin convertirla en
+la única salida, y baja el tono bélico para quien no quiera conquistar.
+
+1. **Victoria** (`VictoryScreen`, paso `victory`): las cifras de siempre y la coda
+   "Los Cobradores se dejaron algo en tu mesa". El botón verde es **EL LIBRO** (no
+   SEGUIR); Nueva partida sigue.
+2. **La mesa** (paso `choice`): "Los Cobradores huyeron y dejaron el libro del
+   Impuesto. Quien lo tiene, cobra. ¿Qué haces con él?" y dos tarjetas, cada una con la
+   cara de su instructor (`InstructorFace`, quieta) y una frase:
+   - **FIRMAR** (latón) — Sargento Bombarda: «Fírmalo. Ahora cobramos nosotros. Que
+     paguen otros, para variar.» Debajo: "Las islas vecinas te pagarán a ti… si las
+     conquistas."
+   - **QUEMAR** (naranja, el fuego) — Capitana Remache: «Quémalo. Nadie debería pedir
+     permiso para respirar. Ni ellos ni nosotros.» Debajo: "Sin libro no hay Impuesto.
+     Nadie vuelve a cobrar, tampoco tú."
+3. **El final elegido** (paso `sign` / `burn`), con la última palabra del otro
+   instructor:
+   - **AHORA FIRMAS TÚ**: "Firmaste. La Tormenta no volverá y el Impuesto ahora lo
+     cobras tú. Seis islas a sotavento esperan tu bandera." Remache, preocupada: «Así
+     empezó la Regencia. Que no se nos olvide.» Botones VER EL ARCHIPIÉLAGO y Seguir
+     jugando. Empieza la fase de abajo.
+   - **LA ISLA ES LIBRE**: "El libro arde en la plaza. Sin libro no hay Impuesto: nadie
+     vuelve a cobrar en esta isla." Bombarda: «Buen fuego. Ahora trabajamos para
+     nosotros, no para el libro.» Premio: el **emblema Sol** para la bandera (antes de
+     su rango 16) y el título "Quemó el libro" junto al del rango. Coda: "Por primera
+     vez en tres generaciones, sale el sol. Sigue jugando: la isla es tuya." La
+     Tormenta ya paró al ganar; sin fase del archipiélago no hay cobros de nadie:
+     ¿QUÉ HACER? queda en mundo libre.
+
+**Cómo está hecho.** `EmpireManager` es el dueño de la elección (la clave `empire`
+del guardado ya era suya): `choice_pending()` (modo con la fase + Ataque Final ganado
++ sin elegir), `choose_ending("sign" | "burn")` (una vez; emite `ending_chosen`; firmar
+llama a `_maybe_start()`, quemar avisa `MSG_END_BURN`; guarda en el acto),
+`ending()`, `is_free()`, y `is_active()` pide ahora haber firmado. El premio de quemar
+entra por la misma puerta que los de las islas (`unlocks_piece` → `ColonyIdentity.empire_grants`)
+y el título por `title_key()` (`END_BURN_TITLE`). Guardado: `ending` dentro de
+`empire`; un guardado ganado sin elegir vuelve a la mesa al cargar
+(`VictoryScreen._offer_pending_choice`, tras `game_load_completed`); uno de la rama
+del imperio que ya había empezado la fase cuenta como firmado. ¿QUÉ HACER? dice
+`OBJ_WHY_BOOK` mientras el libro sigue en la mesa. Constructor (gana sin asedio) y
+Sandbox (sin victoria) no tienen libro. Textos: bloque `FINAL CON ELECCION` de `Tr.gd`
+(`END_*`, ES/EN). Pruebas: `tests/ui/test_final_choice.gd`. Capturas:
+`tools/v12_probe.gd` (`final_1_victoria` … `final_6_misiones_imperio`).
 
 ## Volverse el Imperio (1.2, rama `feat/volverse-imperio`, sin medir)
 
-Decisión de Bryan (2026-10-18): tras **ganar** el Ataque Final la partida no se
-acaba ni se queda en "mundo libre". Es una **fase nueva en la misma isla**: la
+Decisión de Bryan (2026-10-18), y desde el 2026-10-25 **solo si se FIRMA el libro**
+(ver "Final con elección" arriba): tras **ganar** el Ataque Final la partida no se
+acaba. Es una **fase nueva en la misma isla**: la
 Tormenta para para siempre y ahora eres tú quien cobra el Impuesto a las **islas
 vecinas**. Es el final que ya contaba el lore (`03_LORE.md` §8): *"No has roto el
 sistema. Te has quedado con él. Ahora firmas tú."*
 
 ### Qué ve el jugador
 
-1. **La victoria** (`VictoryScreen`): título "AHORA EL IMPERIO ERES TÚ", subtítulo
-   ("…las islas vecinas te pagarán a ti, si las conquistas"), las cifras de siempre,
-   la coda "Ahora firmas tú." y un botón grande **VER EL ARCHIPIÉLAGO** (además de
-   CONTINUAR y NUEVA PARTIDA). Constructor y Sandbox siguen como antes.
-2. **El archipiélago** (`ArchipelagoPanel`, ☰ MENÚ → COLONIA → ARCHIPIÉLAGO, o el
-   botón de la victoria, o MISIONES → IMPERIO → VER EL ARCHIPIÉLAGO): un mapa dibujado
+1. **La victoria** (`VictoryScreen`): ver "Final con elección"; tras FIRMAR, la
+   pantalla "AHORA FIRMAS TÚ" lleva el botón **VER EL ARCHIPIÉLAGO**. Constructor y
+   Sandbox siguen como antes.
+2. **El archipiélago** (`ArchipelagoPanel`, ventana de CartoonTheme: mapa a la
+   izquierda, ficha de la isla a la derecha; desde la tarjeta de la colonia —tocar el
+   rango— → ARCHIPIÉLAGO, desde el final o desde MISIONES → IMPERIO → VER EL
+   ARCHIPIÉLAGO): un mapa dibujado
    (mar, rutas punteadas, tu isla en el centro con tu bandera y seis vecinas con su
    escudo; al conquistar una, **ondea tu bandera** en ella), arriba el Sargento
    Bombarda (la primera vez cuenta de qué va; luego señala el siguiente objetivo; al
@@ -175,8 +225,8 @@ Regla `empire_phase` (`GameMode.empire_enabled()` = victoria + asedio + regla):
 
 | Modo | Fase |
 |---|---|
-| Campaña (Colono y Gobernador) | Sí |
-| Supervivencia | Sí (si ganas su único asedio) |
+| Campaña (Colono y Gobernador) | Sí, si firmas el libro |
+| Supervivencia | Sí, si ganas su único asedio y firmas |
 | Constructor | No: gana con el CG nv3, sin asedio que ganar |
 | Sandbox | No: no hay victoria |
 

@@ -152,15 +152,18 @@ still takes from the raw amount. Looks: one procedural mesh per type
 -- --only=windmill,...` bakes `assets/models/toy/<id>.tscn`; then `UtilityToys.create`
 picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 
-### Defensa y vida (1.2, `feat/edificios-defensa-vida`)
+### Defensa (1.2, `feat/edificios-defensa-vida`)
 
-Doc 21 §6.3 n.º 11, 12 and 18, and §6.4 (D9 = A). Content of 1.2. Their areas
+Doc 21 §6.3 n.º 11, 12 and 18. Content of 1.2. **The neighbourhood beauty of the
+branch (doc 21 §6.4, D9 = A) did not make the 1.2** (Bryan, 2026-10-25): it was taken
+out whole in `integracion/v1.2b` (metas, `BeautyTrim`, room and morale, the
+`beauty_changed` signal, its tip and texts). Their areas
 are computed by `scripts/buildings/DefenseLifeEffects.gd`, called by
 `ProductionManager._refresh_areas()` right after `UtilityEffects` (grouped and
 deferred) when something is placed, moved, demolished, finished, ruined,
 repaired or upgraded, when the staffing changes (`workers_changed`) and on load —
-never per frame. Results are building metas (`bastion_cover`, `scrap_cover`,
-`beauty`, `beauty_level`, `beauty_room`, `beauty_morale`) and three runtime values
+never per frame. Results are building metas (`bastion_cover`, `scrap_cover`) and
+three runtime values
 (`GameConfig.defense_cover_cells`, `contract_extra_slots`,
 `contract_duration_mult`), cleared by `DefenseLifeEffects.clear()` from
 `ProductionManager.reset()` (the three new-game paths). Nothing new goes in the
@@ -171,22 +174,11 @@ lot, active fx) are added by `_register_defense_life_buildings()`.
 | ID | Name | Size | Cost G/S/O/W + mat. | Workers | Build | Caps (era 1/2/3) | Prereqs | Effect |
 |----|------|------|------|---|---|---|---|---|
 | `bastion` | Bastión | **2x1** | 60/25/0/30 | 0 | 6s | 6/10/14 | foundry + barracks | Buildings within `bastion_radius` (3) **behind** the wall (towards the island centre, `land_bounds()`; flush with the wall also counts) take −`bastion_storm_reduction` (30 %) storm damage; multiplies with the Well (0.7 × 0.8). On defensive boards (Tithe and siege) puts 1 cover cell per `bastion_per_cover_cell` (3) standing bastions, up to `bastion_board_cover_max` (2), in the player's back row: +`bastion_cover_defense` (2) defence for a surface unit standing on it (docs/15 §3, "Cobertura del Bastión") |
-| `scrapyard` | Chatarrería | 2x2 | 160/40/0/90 + 6 planks | 2 | 14s | 1/2/2 | foundry | While staffed: repairs within `scrapyard_radius` (4) cost −`scrapyard_repair_discount` (40 %) (`BuildingHealth.repair_cost`). When a Storm ends (`StormManager._scrap_salvage`), each ruin in its area gives `scrapyard_steel_per_ruin` (12) steel, one part per `scrapyard_ruins_per_part` (2) ruins (max `scrapyard_parts_max` 3 per scrapyard and storm), and the crews lift `scrapyard_brigade_lifts` (1) ruin to `scrapyard_brigade_lift_ratio` (35 %) health, free (`BuildingHealth.lift_ruin`, emits `building_repaired`). Blueprint building (`combat_blueprint_buildings`) |
+| `scrapyard` | Chatarrería | 2x2 | 160/40/0/90 + 6 planks | 2 | 14s | 1/2/2 | foundry | While staffed: repairs within `scrapyard_radius` (4) cost −`scrapyard_repair_discount` (40 %) (`BuildingHealth.repair_cost`). When a Storm ends (`StormManager._scrap_salvage`), each ruin in its area gives `scrapyard_steel_per_ruin` (12) steel, one part per `scrapyard_ruins_per_part` (2) ruins (max `scrapyard_parts_max` 3 per scrapyard and storm), and the crews lift `scrapyard_brigade_lifts` (1) ruin to `scrapyard_brigade_lift_ratio` (35 %) health, free (`BuildingHealth.lift_ruin`, emits `building_repaired`). **Rank 4** (1.2: no blueprints, see "Unlocks in the 1.2") |
 | `telegraph` | Telégrafo | 2x2 | 200/60/0/80 + 4 beams | 1 | 12s | 1/1/1 | foundry + warehouse | While staffed: +`telegraph_extra_contracts` (1) slot on the contract board (`ContractBoard.WIRE`, "El telégrafo": orders from any open source, stored with `from`; reputation and scale are that source's) and new orders last +`telegraph_duration_bonus` (50 %) (`ctx.duration_mult` in `ContractBoard.build_contract`) |
 
-**Neighbourhood beauty (D9 = A).** Every standing decoration gives its beauty
-(`GameConfig.beauty_values`; unlisted decorations `max(1, morale / 2)`; the road
-none; upgraded ones ×`upgrade_morale_multiplier`) to every connected, standing
-house within `beauty_radius` (3). A house with ≥ 10 points is **pretty** (level 2:
-+1 room, +2 morale points); ≥ 25 **elegant** (level 3: +2 room, +4 morale points)
-(`beauty_levels`, `beauty_room`, `beauty_morale`; `PopulationManager._recalculate_all`
-adds them; `ProductionManager` asks for a recount and emits
-`EventBus.beauty_changed` when a level changes). Looks: in 3D `BeautyTrim.gd`
-(child of the house model, like `LevelTrim`: window boxes with flowers, hedges and
-flowers at the door; elegant adds ivy, two lit lamps and bunting; one cached mesh
-per level and size); in 2D `BuildingArt2D.draw_beauty()` from `Building2D` (the
-level is in its signature). The info panel says the points and the next threshold
-(`DefenseLifeEffects.info_line`).
+The info panel's status line says what each one covers (`DefenseLifeEffects.info_line`:
+"Protege 4 edificios de detrás…", "Tras un Bastión: −30 %…").
 
 Looks: one procedural mesh per type (`DefenseToys.gd`) until baked — the bakes
 are in `assets/models/toy/` (`build_toy_models.gd -- --only=bastion,scrapyard,telegraph`:
@@ -283,10 +275,11 @@ Todos 2x2, con carretera como todo, 2 obreros cada uno, sin mejora (no producen:
 | `exchange` | Casa de cambio | 350/120/0/100 + 8 lingotes, 4 vigas | 2 | 12 s | 1 | Mercado + Fundición (era 2) | −10 puntos de spread en el Mercado (30 % → 20 %, suelo 8 %); en Gobernador, 1 % de interés por minuto sobre el oro guardado (tope 20) |
 | `diesel_plant` | Central diésel | 320/160/80/60 + 6 vigas, 4 combustible | 2 | 14 s | 2 | Refinería (era 3) | Quema 1 combustible cada 45 s; los aserraderos, minas de oro, fundiciones y refinerías a ≤ 5 casillas rinden +15 % (no se suma entre Centrales) |
 
-**Nivel de Núcleo y plano (propuesta, lo cablea la rama del Núcleo y los planos):**
-Puerto, Núcleo 3; Casa de cambio, Núcleo 3 + plano; Central diésel, Núcleo 4 + plano
-(la Central ya está en `combat_blueprint_buildings`). Esta rama no toca
-`core_level_unlocks` ni `blueprint_required`.
+**Desbloqueo en la 1.2 (sin Núcleo 1-5 ni planos, `integracion/v1.2b`):** la rama
+del Núcleo y los planos no entró, así que la propuesta "Núcleo N + plano" se cambió por
+era, requisitos y rango (ver "Unlocks in the 1.2" abajo): Puerto = Mercado + Fundición
+(era 2); Casa de cambio = Mercado + Fundición + **rango 6**; Central diésel = Refinería
+(era 3) + **rango 9**. El barco no vende planos menores (`smuggler_plan_chance = 0`).
 
 **Quién lleva qué.**
 - `EconomyManager` (autoload, el último): el reloj del barco (modelo puro
@@ -312,7 +305,8 @@ combate abierto, el reloj espera. Tres huecos de oferta:
    misiones) o, si queda alguno, un **plano menor**: un edificio que abre el rango por
    encima del de ahora (`rank_rewards`), a 40 de oro por rango (mínimo 120). Nunca un
    plano obligatorio de misión. Comprado, `RankManager.is_building_unlocked()` lo da
-   por abierto.
+   por abierto. **En la 1.2 está apagado** (`smuggler_plan_chance = 0`, sin planos):
+   el hueco exclusivo son siempre repuestos.
 2. **Material:** tablones, lingotes, vigas o combustible ya hechos, un poco por encima
    de lo que cuesta fabricarlos (`smuggler_material_offers`).
 3. **Recursos:** te vende madera/comida/acero/petróleo al 75 % del precio de compra del
@@ -512,7 +506,29 @@ que se abre el recurso, como cualquier edificio.
   el pecio de las amenazas de costa (doc 21 §3.2).
 - **Pendiente:** el "+comida minima" del Huerto vecinal y el "+moral en
   festivales" del Escenario (doc 21 §6.4) no estan: hoy dan solo moral. La
-  belleza del barrio (casas bonitas) es de otra rama (`feat/belleza-barrio`).
+  belleza del barrio (casas bonitas) no entro en la 1.2.
+
+### Unlocks in the 1.2 (no Núcleo 1-5, no blueprints)
+
+Decision of Bryan (2026-10-25): the Núcleo levels and the blueprints are postponed, so
+the era caps of `building_limits_by_era` stay and the 1.2 buildings that asked for a
+Núcleo level or a blueprint open by era, requisites and rank. Block "Integracion de la
+1.2" at the end of `GameConfig` (`V12_RANK_BUILDINGS`, `_register_v12_unlocks()`):
+
+| Building | Branch proposal | 1.2 |
+|---|---|---|
+| Trade port | Núcleo 3 | Market + Foundry (era 2) |
+| Scrapyard | mission blueprint | Foundry (era 2) + **rank 4** |
+| Exchange house | Núcleo 3 + blueprint | Market + Foundry (era 2) + **rank 6** |
+| Diesel plant | Núcleo 4 + blueprint | Refinery (era 3) + **rank 9** |
+| Bastion, Telegraph | — | their requisites (Foundry + Barracks / Warehouse) |
+
+Why these ranks: the rank curve (100 + 60·(n−1) XP per step) puts rank 4 around the
+first Foundry, rank 6 around the second era's Market trades and rank 9 inside era 3,
+so each opens about when its era does without arriving before it. Unmeasured with the
+line probe. `combat_blueprint_buildings` keeps only the military branch's two
+(no `.tres`, never offered); nobody calls `CombatManager.blueprint_locked()` yet.
+Tests: `tests/buildings/test_v12_unlocks.gd`.
 
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.

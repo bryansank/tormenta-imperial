@@ -229,13 +229,6 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 
 ### Decoraciones (suben la moral)
 
-**Barrios bonitos (1.2).** Cada decoración da además **belleza** a las casas que
-tiene a 3 casillas o menos (estatua 10, fuente 6, jardín 4, mástil 3, árbol, macetero
-y palmeras 2, el resto 1; mejoradas valen más). Una casa con **10** de belleza es
-**bonita**: +1 sitio y +2 de moral para la colonia, con jardineras y setos. Con **25**
-es **elegante**: +2 sitios y +4 de moral, con hiedra, farolas y banderines. La ficha
-de la casa dice cuánta belleza tiene y cuánta le falta.
-
 | | Edificio | Coste | Moral |
 |---|---|---|---|
 | <img src="media/guia/road.png" width="90"> | **Carretera** (1×1) | 1 oro | +2 |
@@ -668,6 +661,21 @@ la partida no sirve para buscar uno más fácil.
 ciclo de la tormenta para siempre**: el cielo se despeja, dejan de caer cenizas y no
 vuelve a haber Impuesto. Primero se calla el mundo y después sale la pantalla de
 victoria. Esa es la Victoria Imperial.
+
+**Y entonces, el libro (1.2).** Los Cobradores huyen y dejan en tu mesa el **libro del
+Impuesto**: quien lo tiene, cobra. Tú decides qué haces con él (pulsa **EL LIBRO**):
+
+- **FIRMAR** — lo que pide el Sargento Bombarda: ahora cobras tú. Se abre el
+  **ARCHIPIÉLAGO** (en la tarjeta de tu colonia, tocando tu rango, y en MISIONES →
+  IMPERIO): seis islas vecinas que conquistar con misiones de tierra, mar y aire, y
+  que luego te pagan tributo. La Capitana Remache te recuerda que así empezó la
+  Regencia.
+- **QUEMAR** — lo que pide la Capitana Remache: sin libro no hay Impuesto, ni para
+  ellos ni para ti. La isla queda libre, sigues jugando sin que nadie cobre, y tu
+  bandera gana el emblema del **Sol** (por primera vez en tres generaciones, sale el
+  sol).
+
+Solo se elige una vez. Si sales sin elegir, la mesa te espera al volver.
 
 > **Esto es la Campaña**, el único modo que ofrece hoy la Nueva partida. En los otros
 > modos (apartados, pero vivos en el código y en las partidas viejas) cambia el final

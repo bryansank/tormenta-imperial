@@ -63,13 +63,13 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-30 autoloads in `project.godot`: the 29 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager` and `EconomyManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
+32 autoloads in `project.godot`: the 31 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager`, `EconomyManager`, `ThreatManager` and `EmpireManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 141 signals in 30 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 162 signals in 36 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -97,7 +97,7 @@ holds a service's state of its own.
 | 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
 | 29 | `EconomyManager` | `scripts/services/EconomyManager.gd` | The 1.2 economy buildings (`feat/edificios-economia`): the smuggler's ship of the Trade port (pure `scripts/economy/SmugglerShip.gd`: clock, 3 offers, deals through `take_offer()`), minor blueprints bought from it (`has_plan()`, read by `RankManager.is_building_unlocked`), the Diesel plants' fuel (`burn_fuel()`) and the Exchange's Governor interest; emits `smuggler_*`, `diesel_plant_fuel_changed`, `exchange_interest_paid`, `economy_changed`; saved as `economy`. See `docs/03-buildings.md` "Economía de la 1.2" |
 | 30 | `ThreatManager` | `scripts/services/ThreatManager.gd` | Coastal threats (1.2, optional loot only): ticks the pure `scripts/combat/ThreatBoard.gd` on a 5 s Timer, finds free shore cells only when a mark is due, launches the 1-fight pure-domain raid through `CombatManager.launch_threat_offer()`, closes it on `expedition_ended`, sends workers to wrecks (`busy_workers()`, read by PopulationManager) and pays them; emits `threat_*`; saved as `threats`. See `docs/15-combat.md` §14 |
-| 29 | `EmpireManager` | `scripts/services/EmpireManager.gd` | Volverse el Imperio (1.2): after the Final Audit is **won** (Campaña/Supervivencia, rule `empire_phase`), owns the pure `scripts/empire/Archipelago.gd` (6 neighbouring islands, conquest progress, tribute clock), launches conquest missions through `CombatManager.launch_conquest_mission()`, records them on `expedition_ended`, pays the periodic tribute and grants the unique rewards; emits `empire_*`, `conquest_mission_won`, `island_conquered`; saved as `empire`. See `docs/06-progression-victory.md` §Volverse el Imperio |
+| 31 | `EmpireManager` | `scripts/services/EmpireManager.gd` | The **ending with a choice** and Volverse el Imperio (1.2): after the Final Audit is **won** (Campaña/Supervivencia, rule `empire_phase`) the Tax book waits on the table (`choice_pending()`); `choose_ending("sign"|"burn")` stores the choice once (`ending`, in the `empire` key, emits `ending_chosen`): signing opens the archipelago phase (`is_active()`), burning frees the island (`is_free()`: no phase, title `END_BURN_TITLE`, the Sun flag emblem). For the phase it owns the pure `scripts/empire/Archipelago.gd` (6 neighbouring islands, conquest progress, tribute clock), launches conquest missions through `CombatManager.launch_conquest_mission()`, records them on `expedition_ended`, pays the periodic tribute and grants the unique rewards; emits `empire_*`, `conquest_mission_won`, `island_conquered`; saved as `empire`. See `docs/06-progression-victory.md` §Volverse el Imperio |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -271,7 +271,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Steel | Advanced construction | 0 | Era 2 (Foundry) |
 | Oil | Late-game construction | 0 | Era 3 (Refinery) |
 
-### Buildings (55 total, `data/buildings/*.tres`)
+### Buildings (61 total, `data/buildings/*.tres`)
 
 | Building | Size | Cost (G/S/O/W + materials) | Workers | Production | Era |
 |----------|------|-----------------|---------|------------|-----|
@@ -302,13 +302,12 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 | Shipyard (1.1) | 2x2 | 220/80/0/120 + 10 planks, 4 beams | 3 | Trains ships; must touch the coast; needs a Foundry; no cap (2026-10-18) | 2 |
 | Aerodrome (1.1) | 2x2 | 320/140/60/80 + 8 beams, 6 fuel | 4 | Trains planes and airships; needs a Refinery; no cap (2026-10-18) | 3 |
 | Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food + 3 gold/30s, no crop; on the coast with a school of fish within reach 4 (2 docks per school); caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
-| Fishing dock (1.1) | 2x2 | 60/0/0/40 | 2 | 12 food/30s, no crop; on the shore touching a school of fish; caps 3/4/6; process "Ahumar pescado" 15 wood → 25 food | 1 |
 | Trade port (1.2) | 2x2 | 300/100/0/160 + 12 planks, 6 beams | 2 | The smuggler's ship docks every 6-10 min for 90 s with 3 offers; on the coast, faces the water; needs Market + Foundry; max 1 | 2 |
-| Exchange house (1.2) | 2x2 | 350/120/0/100 + 8 ingots, 4 beams | 2 | Market spread −10 points (30 % → 20 %, floor 8 %); Governor: 1 % interest on stored gold per minute (cap 20); needs Market + Foundry; max 1 | 2 |
-| Diesel plant (1.2) | 2x2 | 320/160/80/60 + 6 beams, 4 fuel | 2 | Burns 1 fuel / 45 s; sawmills, gold mines, foundries, refineries within 5 cells +15 %; needs a Refinery; max 2; mission blueprint | 3 |
+| Exchange house (1.2) | 2x2 | 350/120/0/100 + 8 ingots, 4 beams | 2 | Market spread −10 points (30 % → 20 %, floor 8 %); Governor: 1 % interest on stored gold per minute (cap 20); needs Market + Foundry; **rank 6**; max 1 | 2 |
+| Diesel plant (1.2) | 2x2 | 320/160/80/60 + 6 beams, 4 fuel | 2 | Burns 1 fuel / 45 s; sawmills, gold mines, foundries, refineries within 5 cells +15 %; needs a Refinery; **rank 9** (1.2: no blueprints); max 2 | 3 |
 | 10 cheap decorations | 2x2 | 10-40 gold + 5-30 wood | 0 | +1 to +3 morale; no cap; Street lamp, Bench, Hedge, Street tree, Colony sign free; Flower pots, Hay cart rank 2; Bonfire 3; Flagpole 5; Palm trees 13 | deco |
 | Bastion (1.2) | **2x1** | 60/25/0/30 | 0 | Wall: −30 % storm damage to what stands behind it (towards the island centre) within 3 cells; a +2 defence cover cell on defensive boards (1 per 3 bastions, max 2); needs Foundry + Barracks; caps 6/10/14 | 2 |
-| Scrapyard (1.2) | 2x2 | 160/40/0/90 + 6 planks | 2 | Repairs −40 % within 4 cells; after each Storm: 12 steel per ruin in its area, 1 part per 2 ruins (max 3), lifts 1 ruin to 35 %; blueprint building; caps 1/2/2 | 2 |
+| Scrapyard (1.2) | 2x2 | 160/40/0/90 + 6 planks | 2 | Repairs −40 % within 4 cells; after each Storm: 12 steel per ruin in its area, 1 part per 2 ruins (max 3), lifts 1 ruin to 35 %; needs a Foundry; **rank 4**; caps 1/2/2 | 2 |
 | Telegraph (1.2) | 2x2 | 200/60/0/80 + 4 beams | 1 | +1 contract slot ("El telégrafo", orders from any source) and new contracts last +50 %; needs Foundry + Warehouse; max 1 | 2 |
 | 18 more decorations (1.2) | 2x2 (Governor's plaza 3x3) | 40-500 gold, steel from era 2, oil from era 3 | 0 | +4 to +18 morale; no cap; ranks 4-18, Museum cannon / Storm column by refused Taxes; boat and wreck coast only | deco |
 
@@ -337,23 +336,25 @@ GameConfig is created. Baked toy model `assets/models/toy/fishing_dock.tscn`; 2D
 ¿QUÉ HACER? only offers it as food support when no Farm fits. Detail: docs/02
 "Yacimientos de mar", docs/03 "Muelle de pesca".
 
-**Defensa y vida (1.2, `feat/edificios-defensa-vida`, doc 21 §6.3 n.º 11, 12, 18 and §6.4):**
-the three "(1.2)" rows and the **neighbourhood beauty**. Areas in
+**Defensa (1.2, `feat/edificios-defensa-vida`, doc 21 §6.3 n.º 11, 12, 18):** the
+Bastion, Scrapyard and Telegraph rows. **The neighbourhood beauty of that branch did
+not make the 1.2** (Bryan, 2026-10-25): no `beauty*` metas, no `BeautyTrim`, no extra
+room or morale for houses, no `beauty_changed` signal (`tests/buildings/test_v12_unlocks.gd`
+and `test_defense_life.gd` check it stays out). Areas in
 `scripts/buildings/DefenseLifeEffects.gd` (called right after `UtilityEffects` from
 `ProductionManager._refresh_areas()`, on build/demolish/finish/ruin/repair/upgrade/
-staffing, never per frame; metas `bastion_cover`, `scrap_cover`, `beauty*`; runtime
+staffing, never per frame; metas `bastion_cover`, `scrap_cover`; runtime
 `GameConfig.defense_cover_cells`, `contract_extra_slots`, `contract_duration_mult`,
 cleared in `ProductionManager.reset()`). All numbers in the GameConfig block
 "Defensa y vida" at the end of the file; `_register_defense_life_buildings()` adds
-their table rows. **Beauty:** every standing decoration gives its beauty
-(`beauty_values`, unlisted ones `max(1, morale/2)`) to houses within 3 cells; ≥ 10 =
-pretty (+1 room, +2 morale points), ≥ 25 = elegant (+2, +4), added by
-`PopulationManager`; looks: `BeautyTrim.gd` (3D, cached like `LevelTrim`) and
-`BuildingArt2D.draw_beauty` (2D). **Bastion cover** is pure combat model:
+their table rows. **Bastion cover** is pure combat model:
 `Encounter.cover` + `CombatRules.damage(..., cover)`; a board without bastions is
 unchanged (docs/15 §3). **Telegraph** slot: `ContractBoard.WIRE` (saved in
-`contracts`, with `from`). Looks: `DefenseToys.gd` + bakes in `assets/models/toy/`;
-2D `BuildingArt2D._bastion/_scrapyard/_telegraph`. Detail: docs/03 "Defensa y vida".
+`contracts`, with `from`; ENCARGOS shows "El telégrafo · <who>"). The building panel
+shows what each one covers in its status line (`DefenseLifeEffects.info_line`).
+Looks: `DefenseToys.gd` + bakes in `assets/models/toy/`; 2D
+`BuildingArt2D._bastion/_scrapyard/_telegraph`. Detail: docs/03 "Defensa".
+
 **Economy buildings (1.2, feat/edificios-economia, doc 21 §6.3 n.º 13, 14, 16; doc 14
 §P4):** `trade_port`, `exchange`, `diesel_plant`. Numbers in the GameConfig block
 "Economia" at the end of the file (`_register_economy_buildings()` adds their rows to
@@ -362,11 +363,11 @@ limits, prerequisites, construction/lot styles and active fx). The Trade port is
 (autoload, last) runs the smuggler's ship (pure `scripts/economy/SmugglerShip.gd`):
 no clock without a working port (standing, road, workers), first ship 75 s after,
 then every 6-10 min; never in Ash/Storm (it sails early if the Ash comes); waits while
-a board is open. Three offers: exclusive (2-4 spare parts at 60 gold, or a **minor
-blueprint** = a rank-locked building above your rank, 40 gold per rank, never a
-mission blueprint), a workshop material, and a resource deal (sells at 75 % of the
-Market buy price or buys at 1.6× its sell price). A bought blueprint opens the
-building early (`RankManager.is_building_unlocked` asks `EconomyManager.has_plan`).
+a board is open. Three offers: exclusive (2-4 spare parts at 60 gold; the **minor
+blueprint** of the branch is off in the 1.2, `smuggler_plan_chance = 0`, see below), a
+workshop material, and a resource deal (sells at 75 % of the Market buy price or buys
+at 1.6× its sell price). The panel is a CartoonTheme window (`SmugglerPanel`, modal,
+dodge of the ☰).
 The Exchange's spread cut is `GameConfig.market_spread_cut` (runtime, set by
 `UtilityEffects.refresh`), read through `GameConfig.effective_market_spread()` by
 `MarketManager`. The Diesel plant's area is the meta `diesel_bonus` on industrials
@@ -377,10 +378,18 @@ picked by `EconomyToys.create()` without `model_scene`), 2D in `BuildingArt2D`; 
 ship is `scripts/map/SmugglerShip3D.gd` (one shared ~320-tri mesh, Tweens, no
 `_process`) and `scripts/view2d/SmugglerShip2D.gd`, children of the placers; tapping it
 (`EconomyManager.ship_hit`) or VER EL BARCO on the port opens `scripts/ui/SmugglerPanel.gd`
-(created on demand, not in the scenes). **Proposed (wired by the Núcleo/blueprints
-branch, not here):** port Núcleo 3; exchange Núcleo 3 + blueprint; diesel plant Núcleo 4
-+ blueprint (already in `combat_blueprint_buildings`). Detail: docs/03 "Economía de la
-1.2", docs/02, docs/05 "Casa de cambio".
+(created on demand, not in the scenes). Detail: docs/03 "Economía de la 1.2", docs/02,
+docs/05 "Casa de cambio".
+
+**Unlocks without blueprints (1.2 integration, `integracion/v1.2b`):** the Núcleo
+1-5 + blueprints branch did not make the 1.2, so the era caps stay
+(`building_limits_by_era`) and the buildings that asked for "Núcleo N + blueprint"
+open by era, requisites and rank (block "Integracion de la 1.2" at the end of
+GameConfig, `V12_RANK_BUILDINGS`): Trade port = Market + Foundry (era 2); Scrapyard =
+Foundry + **rank 4**; Exchange = Market + Foundry + **rank 6**; Diesel plant = Refinery
+(era 3) + **rank 9**. None of them is in `combat_blueprint_buildings` any more (only
+the military branch's two, which have no `.tres`), and the smuggler sells no
+blueprints. Tests: `tests/buildings/test_v12_unlocks.gd`.
 
 **Cheap decorations (feat/decoraciones-1):** `lamp_post`, `park_bench`, `hedge`,
 `avenue_tree`, `flower_planter`, `colony_sign`, `hay_cart`, `bonfire`, `flagpole`,
@@ -658,21 +667,40 @@ Per mode: **Constructor** wins directly at HQ 3 (`GameMode.capstone_wins()`, no 
 **Supervivencia** gets one siege only — losing it emits `run_ended` and seals the save;
 **Sandbox** never summons it on its own (only from the SANDBOX tab) and has no victory.
 
-**Volverse el Imperio (1.2, `feat/volverse-imperio`).** Winning the Final Audit in
-Campaña or Supervivencia (`GameMode.empire_enabled()`) no longer leaves a sandbox: the
-victory screen says "AHORA EL IMPERIO ERES TÚ" with a SEE THE ARCHIPELAGO button, and
-`EmpireManager` opens a new phase on the same island. Six neighbouring islands
+**The ending with a choice (1.2, Bryan's decision 2026-10-25, `integracion/v1.2b`).**
+Winning the Final Audit in Campaña or Supervivencia (`GameMode.empire_enabled()`) no
+longer ends on one screen. `VictoryScreen` shows the victory (stats) with **EL LIBRO**
+instead of SEGUIR; the next window is the table with the Tax book and two cards, each
+with its instructor's face and line (`InstructorFace.gd`, a still bust in a circle):
+**FIRMAR** (Sergeant Bombarda: "Sign it. Now we collect.") or **QUEMAR** (Captain
+Remache: "Burn it. Nobody should need permission to breathe."). `EmpireManager.choose_ending()`
+stores it once and saves:
+- **Sign** → "AHORA FIRMAS TÚ" (Remache: "That is how the Regency started.") and the
+  archipelago phase below.
+- **Burn** → "LA ISLA ES LIBRE": the Storm already stopped for good, there is no phase
+  and nobody collects; keep playing (¿QUÉ HACER? = free world), title "Quemó el libro"
+  next to the rank and the **Sun** flag emblem before its rank (the lore: the sun comes
+  up for the first time in three generations).
+A save won with the book still on the table asks again on load
+(`VictoryScreen._offer_pending_choice`); ¿QUÉ HACER? says `OBJ_WHY_BOOK` meanwhile. Old
+saves of the empire branch that had started the phase count as signed. Constructor
+keeps its own victory (no book). Texts: block `FINAL CON ELECCION` of `Tr.gd` (`END_*`).
+Tests: `tests/ui/test_final_choice.gd`.
+
+**Volverse el Imperio (1.2, `feat/volverse-imperio`) — after signing.** `EmpireManager`
+opens a new phase on the same island. Six neighbouring islands
 (`GameConfig.empire_islands`: crest, difficulty 1-3, islands needed first, a 2-3
 mission chain of pure-domain fights — sea or air first, the land landing last, a boss
 in the Ash Citadel — periodic tribute and a unique reward: a decoration before its
 rank, flag pieces or a title). Missions are offers `{kind: "conquest", island, mission,
 domain, ...}` built by the pure `scripts/empire/ConquestGenerator.gd`, launched from
-MISSIONS → EMPIRE tab (`SkirmishPanel`) and shown on `ArchipelagoPanel` (☰ MENÚ →
-COLONIA → ARCHIPIÉLAGO; mounted at runtime by `VictoryScreen` as a sibling, so neither
-`.tscn` changes). ¿QUÉ HACER? proposes the next conquest (`Objectives.empire_step()`).
-Imperial titles by islands held show next to the rank title. An old save with the
-Audit already won enters the phase on load. Values unmeasured (`empire_*` at the end of
-`GameConfig`).
+MISIONES → IMPERIO tab (`SkirmishPanel`, island pills, the campaign track) and shown on
+`ArchipelagoPanel` (a CartoonTheme window: map left, island card right; opened from the
+colony card — tap the rank — ARCHIPIÉLAGO, from the IMPERIO tab or from the signing
+screen; mounted at runtime by `VictoryScreen` as a sibling, so neither `.tscn`
+changes). ¿QUÉ HACER? proposes the next conquest (`Objectives.empire_step()`).
+Imperial titles by islands held show next to the rank title. Values unmeasured
+(`empire_*` at the end of `GameConfig`).
 Full detail in `docs/15-combat.md` §6 and `docs/20-modos-de-juego.md`.
 
 ### Governor Rank — full doc: `docs/06-progression-victory.md` §Governor rank
@@ -981,9 +1009,12 @@ single **pure-domain** fight (land troops on the shore, ships only on the water;
 2 workers for 60 s, no fight. Loot: gold/wood (steel from the vanguard), spare parts
 and sometimes a workshop material (`_apply_loot` now handles `planks/ingots/beams/fuel`).
 Tapping a mark (both placers, only on a cell with no building/deposit) opens
-`ThreatCard` (child of SkirmishPanel): what it is, time left, enemies, odds, loot,
+`ThreatCard` (child of SkirmishPanel; a CartoonTheme side card on the right, no veil,
+its content in a scroll): what it is, time left, enemies (discs), odds, loot,
 ¡AL ATAQUE! (opens MISIONES > ATAQUES RÁPIDOS with it picked: `SkirmishPanel.open_threat`)
-or EXPLORAR. Threats are listed in ATAQUES RÁPIDOS next to the sortie raids. One
+or EXPLORAR. Threats are listed in ATAQUES RÁPIDOS next to the sortie raids
+(`SkirmishPanel.raid_offers()`, the troop picker filtered by `pure_domain()`), wrecks
+as EXPLORAR rows. One
 `notice` per new mark; leaving/clearing go to the log. ¿QUÉ HACER? only gets the second
 line (`THREAT_WHY_EASY`, last in `sortie_reason()`): an unseen mark with easy loot.
 Model `ThreatBoard` (pure), service `ThreatManager`, save key `threats`, tunables
@@ -1224,7 +1255,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config (version 1.0.0), 30 autoloads (29 game + BeckettRuntime), renderer override hook
++-- project.godot                    # Engine config (version 1.0.0), 32 autoloads (31 game + BeckettRuntime), renderer override hook
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -1301,7 +1332,7 @@ tormenta-imperial/
 |   +-- economy/SmugglerShip.gd      # PURE model: the smuggler's ship of the Trade port (clock, 3 offers, own RNG; 1.2)
 |   +-- empire/                      # PURE models of Volverse el Imperio: Archipelago.gd (islands, progress, tribute) and ConquestGenerator.gd (conquest missions)
 |   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
-|   +-- services/                    # The 29 game autoloads (table above) + BeckettGate.gd
+|   +-- services/                    # The 31 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -1437,7 +1468,7 @@ guarnición), cañoneros (not dotación). Code identifiers (`tithe`, `audit`, `g
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (29 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (31 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 

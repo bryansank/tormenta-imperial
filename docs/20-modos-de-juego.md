@@ -329,10 +329,11 @@ Tras ganar el Ataque Final, la fase del archipiélago
 su bloque final, sin tocar la tabla), consulta `GameMode.empire_enabled()`, que pide
 además `victory` y `audit_on_capstone`:
 
-- **Campaña** (Colono y Gobernador): sí. Gobernador pelea las conquistas con su
-  enemigo más duro (`expedition_enemy_mult`, como las campañas).
-- **Supervivencia**: sí, si se gana su único asedio. Perderlo sella la partida, así
-  que nunca llega.
+- **Campaña** (Colono y Gobernador): sí, **si se firma el libro** (final con
+  elección, 1.2: quemarlo deja la isla libre, sin fase). Gobernador pelea las
+  conquistas con su enemigo más duro (`expedition_enemy_mult`, como las campañas).
+- **Supervivencia**: sí, si se gana su único asedio y se firma. Perderlo sella la
+  partida, así que nunca llega.
 - **Constructor**: no. Gana con el CG nv3 sin asedio; su victoria sigue igual.
 - **Sandbox**: no. No hay victoria.
 

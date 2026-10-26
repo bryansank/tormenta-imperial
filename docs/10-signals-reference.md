@@ -462,8 +462,10 @@ Con un Telégrafo en pie (1.2) hay un cuarto hueco, `source = "telegraph"`
 
 | Signal | Params | Emitted By | Consumed By |
 |--------|--------|------------|-------------|
-| `beauty_changed` | — | ProductionManager (`_refresh_areas`, cuando `DefenseLifeEffects.refresh()` cambia la belleza de alguna casa) | BuildingPlacer (`_sync_beauty`, adornos `BeautyTrim`), TutorialManager (ayuda `beauty`) |
 | `scrap_salvaged` | `steel: int, parts: int, lifted: int` | StormManager (`_scrap_salvage`, al acabar la Tormenta) | *(no listener: el aviso va por `notification_posted`)* |
+
+La belleza del barrio de la rama (`beauty_changed`) no entró en la 1.2.
+
 ## Economía (1.2)
 
 Los emite solo `EconomyManager` (`feat/edificios-economia`): el barco del
@@ -547,3 +549,15 @@ Not on this list, despite looking thin in the tables above: `process_started`,
 `mining_started`, `process_cancelled`, `construction_started` and
 `building_upgrade_started` each have exactly one consumer, `BuildingStatusBadge`,
 which connects through a `var bus := EventBus` alias. They are wired.
+
+## Final con elección (1.2, `integracion/v1.2b`)
+
+Decisión de Bryan (2026-10-25): tras ganar el Ataque Final, el libro del Impuesto
+queda en la mesa y el jugador elige (docs/06 §Final con elección).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `ending_chosen` | `choice: String` (`"sign"` firma, `"burn"` quema) | EmpireManager (`choose_ending()`, una vez por partida) | RankPanel (título y entrada ARCHIPIÉLAGO) |
+
+Firmar arranca la fase con `empire_phase_started` (como antes); quemar avisa por
+`notification_posted` (`MSG_END_BURN`). Las dos emiten `empire_changed`.

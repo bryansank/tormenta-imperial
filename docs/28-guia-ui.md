@@ -527,3 +527,22 @@ serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
   el ☰ mientras se ve (no tiene X que apartar); el paso a paso de `CartoonPicker`
   pide el ancho de su opción más larga (96-170) y parte en dos líneas antes que
   poner puntos; la cabecera de ENTRENAR deja 22 de margen a la derecha.
+
+## 20. Pantallas de la 1.2 (integración `integracion/v1.2b`, 2026-10-25)
+
+Las ramas de la 1.2 se escribieron con el estilo viejo; al integrarlas pasaron a esta
+guía. Capturas: `tools/v12_probe.gd` (640×360 teléfono y 1280×720 PC,
+`docs/media/dev/v12/`).
+
+| Pantalla | Cómo queda |
+|---|---|
+| **El barco** (`SmugglerPanel`) | `modal_window` con cinta de latón, velo y ✕ (dodge del ☰); arriba el barco dibujado y "El barco zarpa en 1:20"; una tarjeta por oferta: qué es (palabra de color), [icono] cifra (`cost_row`, en rojo lo que falta) y TRATO HECHO verde, gris con su porqué al mantener; el pie solo en PC |
+| **Amenaza de costa** (`ThreatCard`) | Ficha lateral a la derecha sin velo (la marca se sigue viendo), debajo del ☰ y encima de la barra; cinta de una palabra (AMENAZA roja, PECIO azul) y el nombre dentro; reloj, discos de enemigos, Favorable/Difícil, botín en iconos; ¡AL ATAQUE! o EXPLORAR fijos abajo; el resto en un scroll |
+| **MISIONES · Ataques rápidos** | Las amenazas libres son pastillas más (ancla en el mar, tormenta en tierra) y los pecios, una fila con EXPLORAR; la pestaña cuenta incursiones + amenazas |
+| **MISIONES · IMPERIO** | Pestaña con estrella (solo con la fase); pastillas por isla (azul la elegida), el recorrido de campaña, el candado y VER EL ARCHIPIÉLAGO; jefe y "toma la isla" como líneas con icono |
+| **El archipiélago** (`ArchipelagoPanel`) | Ventana azul: el Sargento (cara quieta, sin mover la boca) y su frase arriba; el mapa a la izquierda (en teléfono solo se nombra la isla elegida, las demás "n/m"); la ficha de la isla a la derecha con su scroll y PREPARAR EL ASALTO verde (gris con el candado) |
+| **Final con elección** (`VictoryScreen`) | Victoria → EL LIBRO (verde) → la mesa: dos tarjetas lado a lado con la cara del instructor, su frase y FIRMAR (latón) / QUEMAR (naranja) → el final (cinta latón "AHORA FIRMAS TÚ" o verde "LA ISLA ES LIBRE") con la última palabra del otro instructor |
+
+Todas sin `Tween` ni animación, el ☰ apartado de la ✕ y nada fuera de la ventana en
+640×360 (lo largo va en scroll o al mantener pulsado).
+
