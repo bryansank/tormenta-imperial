@@ -1,11 +1,10 @@
 extends GdUnitTestSuite
 ## Pulido de la piel dieselpunk (rama feat/piel-dieselpunk-pulido, docs/21
-## §17): iconos de linea, la Capitana a dos tintas, la X neutra, la Orden de la
+## §17): iconos de linea, la X neutra, la Orden de la
 ## Regencia que espera a la tarjeta del tutorial, esquinas de la piel, botones
 ## en mayusculas sin tocar su texto y el sello en los momentos grandes.
 
 const Icon := preload("res://scripts/ui/CartoonIcon.gd")
-const Bust := preload("res://scripts/ui/InstructorBust.gd")
 const SettingsParking := preload("res://tests/save/settings_parking.gd")
 
 var _parked: Dictionary
@@ -54,23 +53,6 @@ func test_line_icons_take_the_text_colour_not_toy_colours() -> void:
 func test_hud_icons_use_the_hud_ink() -> void:
 	var ic: Control = auto_free(CartoonTheme.make_glyph("sun", 30, Color(0, 0, 0, 0), "hud"))
 	assert_str(String(ic.get("role"))).is_equal("hud")
-
-# ── 2. La Capitana a dos tintas ──────────────────────────────────────
-
-func test_the_captain_keeps_her_size_and_draws_every_face() -> void:
-	assert_vector(Bust.BASE_SIZE).is_equal(Vector2(112, 140))
-	assert_vector(Bust.SMALL_SIZE).is_equal(Vector2(88, 110))
-	# Dos tintas de la paleta: laton y Pizarra.
-	assert_object(Bust.ada_brass()).is_equal(UITheme.ACCENT)
-	assert_float(Bust.ada_slate().get_luminance()).is_less(0.15)
-	var b: Control = auto_free(Bust.new())
-	b.size = Bust.BASE_SIZE
-	add_child(b)
-	for e in Bust.EXPRESSIONS:
-		b.show_as(Bust.COLONY, e, 1)
-		b.mouth_open = true
-		b.queue_redraw()
-		await await_idle_frame()
 
 # ── 3. Cerrar no es destruir ─────────────────────────────────────────
 

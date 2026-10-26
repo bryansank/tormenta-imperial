@@ -1350,12 +1350,8 @@ del filo es un `draw_line` en el `draw` del panel. Tres ficheros de fuente
   la moral). Como salen también sobre el mapa (ficha de "listo para recoger",
   números flotantes), llevan un halo de tinta y el cuerpo de las formas
   cerradas relleno de Pizarra: se leen sobre la hierba y sobre el disco claro.
-- **La Capitana Remache** (`InstructorBust`, `_draw_ada`): grabado a dos tintas
-  estilo cartel, la figura en latón y las tallas y el fondo en Pizarra, rayos
-  Art Déco detrás de la cabeza y rayado en la sombra; sin piel, mejillas ni
-  rojos. Mismo tamaño (112 × 140, 88 × 110 en teléfono), mismas seis caras y
-  la boca que habla (tallada). El marco va a 4 px. El Sargento Bombarda no se
-  ha tocado (lo lleva otro frente).
+- **El retrato de la Capitana Remache no se toca aquí**: Bryan quiere otra
+  dirección para el personaje y se decidirá aparte (sigue la caricatura).
 - **Cerrar no es destruir**: `UITheme.make_close_button` (la X de la Orden de
   la Regencia) era roja; ahora es la X oscura de la piel con el icono de línea.
 - **La tarjeta del tutorial manda**: si se ve y cae sobre la Orden de la
@@ -1385,7 +1381,8 @@ Tests: `tests/ui/test_piel_pulido.gd`.
 
 ### Lo que no cambió (y desentona algo)
 
-- El Sargento Bombarda sigue en caricatura.
+- La Capitana Remache y el Sargento Bombarda siguen en caricatura (el
+  personaje se decide aparte).
 - Los colores de recurso y el prólogo (docs/24 §6).
 
 ### Tests
