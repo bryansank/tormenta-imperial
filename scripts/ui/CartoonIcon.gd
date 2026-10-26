@@ -12,7 +12,10 @@ extends Control
 const GLYPHS := ["build", "army", "missions", "market", "research", "help", "menu",
 	"settings", "upgrade", "move", "demolish", "close", "lock", "star", "clock",
 	"sound", "music", "screen", "controls", "access", "game", "anchor", "plane",
-	"tank", "raid", "check", "storm", "plus", "minus", "back", "next", "workers_off", "sun", "wrench"]
+	"tank", "raid", "check", "storm", "plus", "minus", "back", "next", "workers_off", "sun", "wrench",
+	# Materiales del taller (feat/recetas-tarjetas): no tienen PNG como los
+	# recursos; la tarjeta de receta los pide con CartoonTheme.res_glyph().
+	"mat_planks", "mat_ingots", "mat_beams", "mat_fuel"]
 
 ## Tinta del contorno: la misma de los instructores (InstructorBust.INK).
 const INK := Color(0.12, 0.09, 0.06)
@@ -292,6 +295,34 @@ static func draw_glyph(ci: CanvasItem, r: Rect2, id: String, tint: Color = Color
 			_circle(ci, _p(r, 0.42, 0.24), r.size.x * 0.14, col, r, ink)
 			_shape(ci, _ell(_p(r, 0.42, 0.78), r.size.x * 0.28, r.size.y * 0.3, PI, TAU), col, r, ink)
 			_rect(ci, r, 0.62, 0.62, 0.96, 0.74, Color(0.9, 0.3, 0.25), ink, r.size.x * 0.04)
+		"mat_planks":
+			# Tres tablones apilados con su veta.
+			var wood := t if has_t else Color(0.86, 0.6, 0.32)
+			for i in 3:
+				var v0 := 0.2 + 0.22 * float(i)
+				_rect(ci, r, 0.08, v0, 0.92, v0 + 0.2, wood.darkened(0.08 * float(i)), ink, r.size.x * 0.04)
+				_line(ci, r, [0.2, v0 + 0.1, 0.62, v0 + 0.1], Color(wood.darkened(0.35), 0.8), 0.6)
+		"mat_ingots":
+			# Lingotes en piramide: dos abajo y uno encima.
+			var gold := t if has_t else Color(1.0, 0.78, 0.2)
+			_shape(ci, _pts(r, [0.04, 0.88, 0.12, 0.62, 0.42, 0.62, 0.5, 0.88]), gold.darkened(0.08), r, ink)
+			_shape(ci, _pts(r, [0.5, 0.88, 0.58, 0.62, 0.88, 0.62, 0.96, 0.88]), gold.darkened(0.08), r, ink)
+			_shape(ci, _pts(r, [0.27, 0.6, 0.35, 0.34, 0.65, 0.34, 0.73, 0.6]), gold, r, ink)
+			_line(ci, r, [0.4, 0.42, 0.56, 0.42], Color(1, 1, 1, 0.7), 0.6)
+		"mat_beams":
+			# Viga en doble T, de acero.
+			var steel := t if has_t else Color(0.62, 0.68, 0.76)
+			_shape(ci, _pts(r, [0.1, 0.12, 0.9, 0.12, 0.9, 0.3, 0.6, 0.3, 0.6, 0.7, 0.9, 0.7, 0.9, 0.88,
+				0.1, 0.88, 0.1, 0.7, 0.4, 0.7, 0.4, 0.3, 0.1, 0.3]), steel, r, ink)
+			_line(ci, r, [0.16, 0.2, 0.84, 0.2], Color(1, 1, 1, 0.55), 0.6)
+		"mat_fuel":
+			# Bidon de combustible con asa y tapon.
+			var can := t if has_t else Color(0.88, 0.3, 0.22)
+			_rect(ci, r, 0.62, 0.06, 0.78, 0.2, Color(0.35, 0.35, 0.38), ink)
+			_shape(ci, _pts(r, [0.16, 0.22, 0.5, 0.22, 0.62, 0.16, 0.84, 0.16, 0.86, 0.94, 0.16, 0.94]), can, r, ink)
+			_rect(ci, r, 0.24, 0.3, 0.46, 0.38, INK, false)
+			_line(ci, r, [0.3, 0.5, 0.74, 0.84], Color(can.darkened(0.35), 0.9), 0.9)
+			_line(ci, r, [0.74, 0.5, 0.3, 0.84], Color(can.darkened(0.35), 0.9), 0.9)
 
 ## Un caracter centrado (el "?" de la ayuda) en la letra de titulos.
 static func _glyph_text(ci: CanvasItem, r: Rect2, txt: String, col: Color) -> void:
