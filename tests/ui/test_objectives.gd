@@ -272,7 +272,8 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 		"build:market",
 		"build:warehouse", "build:foundry", "train:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
-		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
+		# feat/ritmo-colono: los tanques del final, antes de las campanas (y del CG 2).
+		"train:vehicle", "campaign:land", "upgrade:headquarters", "upgrade:headquarters"]
 	var cursor := 0
 	for entry in visited:
 		if cursor < expected.size() and entry == expected[cursor]:
@@ -370,8 +371,10 @@ func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	# Comida para unos ciclos: sin ella el paso seria comprarla (2026-10-04).
 	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 400})
 	# Las piezas de las campanas (feat/ritmo-colono) ya en casa: lo que se prueba
-	# es la bolsa del CG nivel 2, no las campanas que van antes en la linea.
+	# es la bolsa del CG nivel 2, no las campanas (ni los tanques) que van antes.
 	_with_all_pieces()
+	for i in range(Objectives.SIEGE_VEHICLES):
+		_add_unit("vehicle")
 	# Era 3 con un almacen: 1000 + 500 = 1500, y la mejora a nivel 2 cuesta 2000.
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
@@ -737,8 +740,8 @@ func test_the_panel_says_what_is_missing_and_how_to_get_it() -> void:
 
 # ── Tres campanas (feat/tres-campanas) ───────────────────────────────
 
-## Las piezas en la linea (feat/ritmo-colono): con el Cuartel General en pie, lo
-## siguiente son las campanas (Tierra primero: es lo que le queda al capitulo II).
+## Las piezas en la linea (feat/ritmo-colono): con el Cuartel General en pie y
+## los seis tanques en casa, lo siguiente son las campanas (Tierra primero: es lo que le queda al capitulo II).
 ## Aqui, sin tropa en casa, el panel pide tropa de su medio; la ruta tiene la fila
 ## de la pieza y la puerta dice que piezas faltan.
 func test_with_the_hq_standing_the_panel_asks_for_the_pieces() -> void:
@@ -750,6 +753,10 @@ func test_with_the_hq_standing_the_panel_asks_for_the_pieces() -> void:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")
+	# Antes de las campanas, los seis tanques del final.
+	assert_str(String(Objectives._first_open_line_step().get("id", ""))).is_equal("vehicle")
+	for i in range(Objectives.SIEGE_VEHICLES):
+		_add_unit("vehicle")
 	ResourceManager.set_amounts({"gold": 2000, "wood": 500, "steel": 500, "oil": 300, "food": 400})
 	assert_str(String(Objectives._first_open_line_step().get("kind", ""))).is_equal("campaign")
 	assert_array(Objectives.gate_domains()).is_equal(["land", "sea", "air"])

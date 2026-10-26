@@ -546,6 +546,14 @@ func _launch_campaign(domain: String, forced: bool) -> bool:
 	if domain == "land" and not forced:
 		room = mini(room, total - maxi(HOME_LAND_MIN, int(floor(total / 3.0))))
 	var party: Dictionary = _campaign_party(domain, home, room)
+	# Como una persona que mira la prevision (feat/ritmo-colono): si la columna de
+	# lo mas pesado sale mas fuerte que la mezclada (4 tanques y 2 canones contra
+	# el Coronel de Hierro, 100 %), sale esa.
+	var strong: Dictionary = _strongest_party(domain, home, room)
+	if CombatManager.roster_size(strong) >= CombatManager.roster_size(party) and not strong.is_empty():
+		var offer_now: Dictionary = CombatManager.campaign_offer(domain)
+		if float(CombatManager.sortie_preview(offer_now, strong).get("player_power", 0.0)) 				> float(CombatManager.sortie_preview(offer_now, party).get("player_power", 0.0)):
+			party = strong
 	var size: int = CombatManager.roster_size(party)
 	# Con la linea pidiendola (tras el CG nv3) se sale con la columna llena, la
 	# "bien formada" de docs/15 §13: con 4 se perdia la mitad de las veces y cada
@@ -568,6 +576,19 @@ func _launch_campaign(domain: String, forced: bool) -> bool:
 			str(party), float(preview.get("player_power", 0.0)), float(preview.get("enemy_power", 0.0))], true)
 		return true
 	return false
+
+## La columna de lo mas pesado: llena `room` plazas por el orden de CAMPAIGN_MIX
+## (del mas pesado al mas ligero), sin turnos.
+func _strongest_party(domain: String, home: Dictionary, room: int) -> Dictionary:
+	var party: Dictionary = {}
+	for unit_id in CAMPAIGN_MIX.get(domain, []):
+		if room <= 0:
+			break
+		var n: int = mini(int(home.get(unit_id, 0)), room)
+		if n > 0:
+			party[unit_id] = n
+			room -= n
+	return party
 
 ## Reparte `room` plazas por turnos entre los tipos de CAMPAIGN_MIX que hay en casa
 ## (del mas pesado al mas ligero); en aire, si no hay cazas, lo que haya.

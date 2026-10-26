@@ -292,6 +292,11 @@ static func audit_enemy_mult() -> float:
 static func hq_material_mult() -> float:
 	return maxf(0.0, _tier_num("hq_material_mult"))
 
+## Lo de la bolsa (oro, acero, petroleo, madera) de los niveles 2 y 3 del CG, por
+## esto (feat/ritmo-colono: Colono 0,75, Gobernador 1).
+static func hq_resource_mult() -> float:
+	return maxf(0.0, _tier_num("hq_resource_mult"))
+
 # ── Textos ───────────────────────────────────────────────────────────
 
 static func name_key(mode: int = -1) -> String:

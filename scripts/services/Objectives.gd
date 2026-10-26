@@ -67,16 +67,25 @@ const LINE := [
 	{"kind": "build", "id": "refinery", "count": 1, "why": "OBJ_WHY_REFINERY"},
 	{"kind": "build", "id": "tower", "count": 2, "needs": "storm", "why": "OBJ_WHY_TOWERS"},
 	{"kind": "build", "id": "headquarters", "count": 1, "why": "OBJ_WHY_HQ"},
+	# Los edificios de las campanas de Mar y Aire, en cuanto el CG esta en pie
+	# (feat/ritmo-colono): asi sus barcos y aviones se entrenan mientras se juega
+	# Tierra, y no despues (medido: el Astillero llegaba al acabar Tierra).
+	{"kind": "build", "id": "shipyard", "count": 1, "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_BUILDING"},
+	{"kind": "build", "id": "aerodrome", "count": 1, "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_BUILDING"},
+	# Los seis tanques del final, antes de las campanas (feat/ritmo-colono): son la
+	# columna que gana Tierra de corrido (2 canones + 4 tanques, 100 %, docs/15
+	# §13) y despues aguantan el asedio.
+	{"kind": "train", "id": "vehicle", "count": 6, "needs": "audit", "why": "OBJ_WHY_ARMOUR"},
 	# Una sola llave y los capitulos (feat/ritmo-colono): las piezas del CG nivel 3
-	# van en la linea, con el CG ya en pie: se juegan mientras junta lo de sus
-	# niveles 2 y 3, no despues. Tierra cierra el capitulo II. Hecha = la pieza en
-	# casa. Medido: con la de Tierra antes del CG (tras las torres) el jefe de Tierra
-	# llegaba sin tanques ni economia y se perdia una y otra vez (docs/22 §17).
+	# van en la linea, con el CG ya en pie y los tanques en casa: se juegan
+	# mientras el CG junta lo de sus niveles 2 y 3, no despues. Tierra cierra el
+	# capitulo II. Hecha = la pieza en casa. Medido (docs/22 §17): con la de Tierra
+	# antes del CG, o antes de los tanques, el jefe de Tierra se perdia una y otra
+	# vez y la partida se iba de 6 h.
 	{"kind": "campaign", "id": "land", "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_FOR_AUDIT"},
 	{"kind": "campaign", "id": "sea", "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_FOR_AUDIT"},
 	{"kind": "campaign", "id": "air", "needs": "pieces", "why": "OBJ_WHY_CAMPAIGN_FOR_AUDIT"},
 	{"kind": "upgrade", "id": "headquarters", "level": 2, "why": "OBJ_WHY_HQ_2"},
-	{"kind": "train", "id": "vehicle", "count": 6, "needs": "audit", "why": "OBJ_WHY_ARMOUR"},
 	# Las torres que el asedio aprovecha: cada una manda una dotacion de
 	# artilleria, y con la guarnicion mermada caben mas en el tablero
 	# (GameConfig.storm_tower_garrison_max). Es la preparacion del final

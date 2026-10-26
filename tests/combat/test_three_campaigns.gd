@@ -42,14 +42,14 @@ func test_each_campaign_has_its_missions_and_a_boss_at_the_end() -> void:
 		assert_bool(Generator.campaign_is_boss_mission(domain, 0)).is_false()
 		assert_int((GameConfig.campaign_defs[domain]["fights"] as Array).size()).is_equal(total)
 
-## feat/ritmo-colono: Colono juega Tierra 4, Mar 3 y Aire 3 (el jefe siempre);
+## feat/ritmo-colono: Colono juega Tierra 4, Mar 2 y Aire 2 (el jefe siempre);
 ## Gobernador, la tabla entera.
 func test_colonist_plays_fewer_missions_and_always_the_boss() -> void:
 	var saved_tier: int = GameMode.tier
 	GameMode.tier = GameMode.Tier.COLONIST
 	assert_array(GameConfig.campaign_mission_list("land")).is_equal([0, 2, 4, 5])
-	assert_array(GameConfig.campaign_mission_list("sea")).is_equal([0, 2, 4])
-	assert_array(GameConfig.campaign_mission_list("air")).is_equal([0, 2, 4])
+	assert_array(GameConfig.campaign_mission_list("sea")).is_equal([0, 4])
+	assert_array(GameConfig.campaign_mission_list("air")).is_equal([0, 4])
 	assert_int(BookScript.total("land")).is_equal(4)
 	assert_int(BookScript.number_of("land", 4)).is_equal(3)
 	assert_int(BookScript.number_of("land", 1)).is_equal(-1)
@@ -93,8 +93,8 @@ func test_an_old_save_derives_its_pieces_from_the_bosses_it_beat() -> void:
 	assert_bool(book.has_piece("land")).is_true()
 	assert_bool(book.has_piece("sea")).is_false()
 	assert_int(book.next_mission("sea")).is_equal(4)
-	assert_int(book.won("sea")).is_equal(2)
-	assert_int(book.next_mission("air")).is_equal(2)
+	assert_int(book.won("sea")).is_equal(1)
+	assert_int(book.next_mission("air")).is_equal(4)
 	GameMode.tier = saved_tier
 
 func test_a_new_book_has_nothing_won() -> void:

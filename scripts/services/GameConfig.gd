@@ -1882,16 +1882,19 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 		var hq_cost_raw: Dictionary = hq_upgrade_costs[to_level]
 		# Colono pide menos material del taller (regla `hq_material_mult` de
 		# game_tier_rules, feat/ritmo-colono): la era 3 se alargaba esperando
-		# vigas, lingotes y combustible. La bolsa (oro, acero, petroleo, madera)
-		# no cambia: el nivel 3 sigue pidiendo la bolsa entera.
+		# vigas, lingotes y combustible; y `hq_resource_mult` la bolsa (oro, acero,
+		# petroleo, madera): Colono 0,75, asi que su nivel 3 ya no pide la bolsa
+		# entera (Gobernador si: 3.500 = la bolsa maxima sin tecnologias).
 		var mat_mult: float = GameMode.hq_material_mult()
+		var res_mult: float = GameMode.hq_resource_mult()
 		var cost := {}
 		for res_name in hq_cost_raw:
 			var type := ResourceManager.name_to_type(res_name)
 			if type != -1:
 				var amount: int = int(hq_cost_raw[res_name])
-				if ResourceManager.is_material(type) and not is_equal_approx(mat_mult, 1.0):
-					amount = maxi(1, roundi(float(amount) * mat_mult))
+				var mult: float = mat_mult if ResourceManager.is_material(type) else res_mult
+				if not is_equal_approx(mult, 1.0):
+					amount = maxi(1, roundi(float(amount) * mult))
 				cost[type] = amount
 		return cost
 	var mult: float = upgrade_cost_multiplier[to_level - 1]
@@ -2684,13 +2687,16 @@ var campaign_level_step := 2
 ## 1,15 -> 1,13 (57 % -> 75 %). Retocar de 0,02 en 0,02.
 var campaign_enemy_mult := {
 	"land": [1.5, 1.7, 1.36, 1.31, 1.13, 0.93],
-	"sea": [1.6, 1.30, 1.25, 1.17, 0.90],
-	"air": [1.4, 1.03, 1.02, 0.97, 0.78],
+	"sea": [1.6, 1.30, 1.25, 1.17, 0.88],
+	"air": [1.4, 1.03, 1.02, 0.97, 0.76],
 }
 ## El jefe de campana: la escala de jefe de siempre (combat_boss_multiplier) por
 ## esto, por medio. Antes 1,10 para todos (0 % de victorias); ahora la columna
 ## bien formada gana el 45-75 % (tierra 2+2+2, mar con acorazados, aire 6 cazas).
-var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.90, "air": 0.78}
+## Con el azar del dano (feat/ritmo-colono) el Leviatan bajo al 48 % y el
+## Zepelin al 46 %: mar 0,90 -> 0,88 (x0,86 82 %, x0,90 51 %) y aire 0,78 -> 0,76
+## (x0,74 97 %, x0,78 42 %), docs/16 "Azar del dano".
+var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.88, "air": 0.76}
 ## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su
 ## escolta, por medio (antes 2: el jefe era casi solo pesados y no se ganaba).
 var campaign_boss_heavies := {"land": 1, "sea": 1, "air": 1}
@@ -2750,8 +2756,8 @@ func campaign_base_count(domain: String) -> int:
 ## Las misiones que se juegan en este nivel, como indices de la tabla, en orden
 ## (regla `campaign_missions` de game_tier_rules; sin regla, todas). El jefe (la
 ## ultima de la tabla) va siempre: es quien entrega la pieza del Cuartel General.
-## Colono (feat/ritmo-colono, decision de Bryan 2026-10-25): Tierra 4, Mar 3,
-## Aire 3, sin tocar las cifras de cada mision (su escala y su era son las de la
+## Colono (feat/ritmo-colono, decision de Bryan 2026-10-25): Tierra 4, Mar 2,
+## Aire 2, sin tocar las cifras de cada mision (su escala y su era son las de la
 ## tabla, calibradas en docs/15 §13).
 func campaign_mission_list(domain: String) -> Array:
 	var base: int = campaign_base_count(domain)
@@ -3468,7 +3474,11 @@ var final_audit_scale_per_era := 0.05
 ## 1.14 desde la ronda final de la 1.1 (2026-10-18, IA nueva + dirigible): con
 ## 1.10 la referencia (6 blindados, 4 torres) ganaba el 90 %; 1.12-1.13 lo mismo
 ## (88-90 %), 1.14 el 82,5 % y 1.15 se desploma al 57,5 % (docs/17 "Ronda final").
-var final_audit_last_wave_multiplier := 1.14
+## 1.06 desde feat/ritmo-colono (2026-10-25): con el azar del dano (±12 %) el
+## asedio de 4-5 oleadas acumula la mala suerte y la referencia caia al 58,5 %
+## con 1.14. Ya no es un escalon: 1.02 86,5 %, 1.06 79,5 %, 1.10 69,5 %, 1.14
+## 58,5 % (docs/17 "Azar del dano").
+var final_audit_last_wave_multiplier := 1.06
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -3621,6 +3631,8 @@ var game_mode_rules := {
 ##                           todas. El jefe va siempre.
 ##   hq_material_mult        (feat/ritmo-colono) los materiales del taller que
 ##                           piden los niveles 2 y 3 del Cuartel General
+##   hq_resource_mult        (feat/ritmo-colono) lo de la bolsa que piden esos
+##                           niveles (oro, acero, petroleo, madera)
 var game_tier_rules := {
 	"colonist": {
 		"spoilage": false,
@@ -3630,10 +3642,12 @@ var game_tier_rules := {
 		"tithe_force_mult": 1.0,
 		"audit_enemy_mult": 1.0,
 		# Colono en 3-4 h, tres capitulos (decision de Bryan 2026-10-25, docs/22
-		# §17): Tierra 4 (m1, m3, m5 y el jefe), Mar 3 (m1, m3 y el jefe), Aire 3
-		# (m1, m3 y el jefe). Gobernador juega las 16.
-		"campaign_missions": {"land": [0, 2, 4, 5], "sea": [0, 2, 4], "air": [0, 2, 4]},
+		# §17): Tierra 4 (m1, m3, m5 y el jefe), Mar 2 y Aire 2 (la de entrada y el
+		# jefe). Medido: con Mar 3 y Aire 3 la linea ganaba en 5 h. Gobernador
+		# juega las 16.
+		"campaign_missions": {"land": [0, 2, 4, 5], "sea": [0, 4], "air": [0, 4]},
 		"hq_material_mult": 0.5,
+		"hq_resource_mult": 0.75,
 	},
 	"governor": {
 		"spoilage": true,
@@ -3651,6 +3665,7 @@ var game_tier_rules := {
 		# Gobernador lo juega todo: las 16 misiones y el taller entero del CG.
 		"campaign_missions": {},
 		"hq_material_mult": 1.0,
+		"hq_resource_mult": 1.0,
 	},
 }
 
