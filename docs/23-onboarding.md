@@ -1017,7 +1017,7 @@ qué.
 | Rango | Capitana de Ingenieros | Sargento Mayor |
 | En inglés | Capt. Ada Rivet | Sgt. Casimir Bombard |
 | Explica | La colonia: tutorial guiado de construcción, consejos de lo básico y de economía/edificios | El combate: combate guiado, consejos de Tormenta, Impuesto, ejército y misiones, y los partes de guerra |
-| Aspecto | Trenza pelirroja con lazo rojo, gorra de faena con gafas de aviador encima, pecas, mancha de grasa en la mejilla, lápiz detrás de la oreja, guerrera oliva con botones de latón y una llave inglesa en el bolsillo | Casco remachado con estrella de latón y barboquejo, bigote de manillar con las puntas enroscadas, cejas de cepillo, nariz de patata colorada, mandíbula cuadrada, guerrera gris acero con insignias rojas y dos medallas |
+| Aspecto (caricatura a color, 2026-10-26) | Gorra de plato de acero azul, ladeada, con las gafas de aviador sobre la copa y la rueda dentada de la colonia en la cinta; flequillo y trenza pelirrojos con pasador de latón; ojos verdes grandes, pecas; guerrera de acero azul cruzada y cerrada hasta el cuello alto, charreteras de latón con flecos de ámbar, la insignia de la rueda en el pecho, cinturón de cuero; la otra mano en la cadera | Veterano corpulento: casco de acero con cresta, banda remachada y estrella de latón; cejas de cepillo, nariz de patata colorada, bigote de manillar, barba de tres días, una cicatriz pequeña, mandíbula cuadrada y una cerilla apagada mordida en la comisura; capote oliva con solapas e insignias rojas, galones de ámbar en las mangas, dos medallas y cinturón sobre la barriga |
 | En una línea | Lo arregla todo con una llave inglesa y una lista, y cree que una carretera bien puesta vale más que un cañón. | Grita como un cañón y se emociona como un niño; a los Cobradores de la Regencia les tiene una manía que no se le quita ni con té. |
 
 Humor ligero, nunca cruel: se ríen de los Cobradores y de sí mismos, no del jugador.
@@ -1055,25 +1055,63 @@ Textos en `Tr.gd`, bloque "# Instructores (feat/instructores)", ES y EN:
 
 Arte propio, dibujado por código como las láminas del prólogo (`PrologueEngraving`):
 sin imágenes, escala sin pixelarse y no pesa en el APK. Nada de Empires & Allies ni
-de otros juegos.
+de otros juegos: Bryan mandó una referencia de **actitud** (oficial segura, con mando
+y humor) y la Capitana es un diseño nuevo con piezas del mundo de la Tormenta.
 
-- Un **busto de medio cuerpo** dentro de un marco: fondo de superficie con un sol de
-  latón detrás de la cabeza, la figura y una placa con el nombre corto ("Cap.
-  Remache", "Sgto. Bombarda").
-- **Seis expresiones** (`EXPRESSIONS`): `happy` (ojos de arco y pulgar arriba),
-  `point` (señala la tarjeta con el índice), `worried` (cejas hacia arriba y gota de
-  sudor), `angry` (cejas hacia abajo, párpado bajado y el puño en alto), `salute`
-  (la mano en la visera) y `surprised` (ojos redondos, boca en O y rayas de sorpresa).
+**Caricatura a color** (rediseño del 2026-10-26, rama `feat/instructores-caricatura`;
+sustituye al primer busto y al grabado a dos tintas que se descartó):
+
+- **Trazo grueso de tinta** (`_ow`: el 2 % del alto, nunca menos de 1,2 px), **colores
+  planos con una sola sombra** abajo a la derecha (`_shape(..., shade)`: el polígono
+  menos él mismo desplazado arriba a la izquierda, con `Geometry2D.clip_polygons`) y
+  **ojos grandes** con iris, pupila, brillo y párpado (`_eye`, `_eye_pose`).
+- Los colores de la figura son los de la paleta base de la interfaz, fijos: guerrera de
+  **acero azul** (`#2E4A5E` es su sombra), **latón** `#C99A45` en charreteras, botones,
+  gafas e insignias, **ámbar** `#E5AE3E` en flecos, galones y la bandera. El fondo del
+  marco es la **pizarra** con un sol de rayos: latón oscuro detrás de la Capitana (su
+  azul resalta) y acero detrás del Sargento (su oliva resalta).
+- Público de 10 a 15 años: proporciones de caricatura normales (cabeza grande,
+  cuerpo corto), **uniforme cerrado** hasta el cuello, nada sexualizado. El Sargento no
+  fuma: lleva una cerilla apagada mordida (un puro, aunque apagado, cuenta como tabaco
+  en las clasificaciones por edad).
+- Un **busto de medio cuerpo** dentro de un marco: la figura hasta el cinturón y una
+  placa con el nombre corto ("Cap. Remache", "Sgto. Bombarda") con un remache a cada
+  lado. El marco se pinta encima, así recoge lo que asome.
+- **Seis expresiones** (`EXPRESSIONS`), cada una con su cara y su gesto de brazo; la
+  otra mano siempre en la cadera:
+
+| Cara | Capitana | Sargento |
+|---|---|---|
+| `happy` | Guiño y media sonrisa, sujeta la bandera de la colonia | Ojos de risa, pulgar arriba |
+| `point` | Mira y señala la tarjeta con el índice | Igual |
+| `worried` | Cejas arriba, se rasca la nuca, gotas de sudor | Igual |
+| `angry` | Cejas abajo, párpado bajado, la llave inglesa en alto (de broma) y la vena | El puño que tiembla y la vena |
+| `salute` | Mirada orgullosa, la mano en la visera | La mano en el ala del casco |
+| `surprised` | Ojos redondos, boca en O, la palma abierta y rayas | Igual |
+
 - **Boca que se mueve** mientras se escribe el texto: `speak(label)` escribe la
   etiqueta poco a poco (`visible_ratio` con un Tween, 60 letras/s, entre 0,5 y 2,4 s)
   con `VC_CHARS_AFTER_SHAPING`, para que la tarjeta no cambie de tamaño mientras se
-  escribe. Mientras tanto un `Timer` de 0,11 s abre y cierra la boca.
+  escribe. Mientras tanto un `Timer` de 0,11 s abre y cierra la boca (`_mouth_shape`:
+  cerrada y abierta para cada cara; la cerilla del Sargento va con la boca).
 - **Mira hacia la tarjeta**: a su izquierda mira a la derecha; a su derecha, se dibuja
   en espejo (`facing`).
 - **Marco con UITheme**: borde de latón (Capitana) o de peligro aclarado (Sargento),
-  más grueso en alto contraste, fondo y placa con los tokens. La figura usa su propia
-  tinta, como las láminas del prólogo: es ilustración, no da información por color, así
-  que no cambia con las paletas de daltonismo.
+  más grueso en alto contraste, fondo, rayos y placa con los tokens. La figura usa su
+  propia tinta: es ilustración, no da información por color, así que no cambia con
+  las paletas de daltonismo.
+- **Un solo retrato para todo**: las caras en círculo (`CartoonTheme.CaptainFace`, la
+  `InstructorFace` de la 1.2, la maqueta) llaman a `_draw_ada` / `_draw_bombarda`, que
+  pintan la misma figura con su boca y sin brazos (`draw_figure(ci, rect, quien, cara,
+  con_boca, con_brazos)`). La cabeza sigue en el mismo sitio (centro en v ≈ 0,39), así
+  que el recorte de esas caras no cambia.
+- **Hoja de contacto**: `godot --path . -s tools/instructores_sheet.gd` (con ventana y
+  un `override.cfg` propio) pinta en un `SubViewport` las seis caras de los dos a 2x,
+  de serie, con la boca abierta, en espejo, a tamaño de teléfono y en círculo, en
+  `docs/media/dev/instructores/hoja_contacto.png`. Copia del rediseño en
+  `docs/media/instructores_caricatura.png`. La tarjeta del tutorial con cada cara:
+  `tools/instructores_probe.gd -- --only=tutorial --shot-size=1280x720 --profile=pc`
+  (o `640x360 --profile=phone`).
 
 ### Coste
 
