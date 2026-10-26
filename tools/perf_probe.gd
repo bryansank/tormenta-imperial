@@ -32,7 +32,10 @@ extends SceneTree
 ##   --seed=N      semilla del mapa y de los yacimientos sueltos (1)
 ##   --vsync=1     mide con vsync (por defecto sin vsync ni tope de FPS)
 ##   --profile=N   segundos de perfil por script tras la medida (4; 0 lo apaga)
-##   --tag=texto   prefijo de los ficheros de salida (por defecto renderer_calidad)
+##   --device=     pc | tablet | phone: fuerza el perfil del dispositivo (escala de la
+##                 interfaz, tope de caminantes). Por defecto, el detectado
+##   --quality=minimal  la Minima de verdad del juego (GraphicsQuality), sin emular
+##   --tag=texto  prefijo de los ficheros de salida (por defecto renderer_calidad)
 ##   --shot=0      no guarda la captura de control
 
 const SCENARIOS := ["inicio", "media", "grande", "tormenta", "combate", "grande_2d"]
@@ -112,7 +115,7 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 	var out := {
 		"scenario": "grande", "seconds": 15.0, "warmup": 6.0, "quality": "auto",
 		"view": "3d", "size": Vector2i(1280, 720), "seed": 1, "vsync": false,
-		"profile": 4.0, "tag": "", "shot": true,
+		"profile": 4.0, "tag": "", "shot": true, "device": "",
 	}
 	for arg in user_args:
 		if not arg.begins_with("--") or not arg.contains("="):
@@ -125,7 +128,9 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 			"seconds", "warmup", "profile":
 				out[key] = maxf(0.0, float(value))
 			"quality":
-				out["quality"] = value if value in ["auto", "high", "low", "minimal", "minima"] else "auto"
+				out["quality"] = value if value in ["auto", "high", "low", "minima", "minimal"] else "auto"
+			"device":
+				out["device"] = value if value in ["pc", "tablet", "phone"] else ""
 			"view":
 				out["view"] = "2d" if value == "2d" else "3d"
 			"size":
