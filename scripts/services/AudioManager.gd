@@ -27,10 +27,15 @@ const MUSIC_MANIFEST := {
 	"victory": "victory",
 	# Tema de combate propio: "Battle Theme A" de cynicmusic (CC0, OpenGameArt).
 	"combat": "combat",
+	# Pista del asedio (Auditoria Final): "Basilisk Boss Battle Loop" de beardalaxy
+	# (CC0, OpenGameArt). Suena en vez de `combat` mientras dura el asedio.
+	"audit": "audit",
 }
 
 ## Music key the combat theme is stored under; encounters cross-fade to it.
 const MUSIC_COMBAT_KEY := "combat"
+## Tema de las oleadas de la Auditoria Final (desde `final_audit_started`).
+const MUSIC_AUDIT_KEY := "audit"
 
 ## Cuatro bucles cortos (40 s, OGG en streaming); suena uno, y dos solo mientras
 ## se funden. `day` = olas + pajaros; `night` = grillos + olas suaves, sin
@@ -230,6 +235,7 @@ var _board_open: bool = false          # hay un tablero de combate abierto (ambi
 var _hooked_buttons: Dictionary = {}   # instance_id → true: botones ya enganchados
 var _current_music_key: String = ""
 var _music_before_combat: String = ""  # what was playing when the first encounter opened
+var _audit_siege: bool = false         # hay un asedio en curso: el tablero suena a `audit`
 var _combat_session: int = 0           # bumps per encounter_started; guards the deferred restore
 
 func _ready() -> void:
@@ -591,7 +597,10 @@ func _connect_events() -> void:
 	EventBus.governor_rank_up.connect(_on_rank_up)
 	# Final Audit.
 	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
+	EventBus.final_audit_started.connect(_on_final_audit_started)
+	EventBus.final_audit_lost.connect(_on_final_audit_ended)
 	EventBus.storm_halted_forever.connect(_on_storm_halted_forever)
+	EventBus.storm_halted_forever.connect(_on_final_audit_ended)
 	# Volverse el Imperio: una isla tomada suena como un ascenso (sin sonido nuevo).
 	EventBus.island_conquered.connect(func(_i): play_sfx("rank_up"))
 	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
@@ -658,6 +667,7 @@ func _on_game_started() -> void:
 	_storm_phase = _current_storm_phase()
 	_night = _current_is_night()
 	_board_open = CombatManager.is_board_open()
+	_audit_siege = false
 	start_ambient()
 	# Default to Era 1 music; era_advanced switches tracks as the player progresses.
 	if _current_music_key.is_empty():
@@ -668,9 +678,9 @@ func _on_game_started() -> void:
 func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 	_combat_session += 1
 	play_sfx("combat_start")
-	if _current_music_key != MUSIC_COMBAT_KEY:
+	if not _is_combat_music(_current_music_key):
 		_music_before_combat = _current_music_key
-	play_music(MUSIC_COMBAT_KEY)
+	play_music(MUSIC_AUDIT_KEY if _audit_siege else MUSIC_COMBAT_KEY)
 	_board_open = true
 	_refresh_ambient()
 
@@ -749,6 +759,17 @@ func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictio
 
 func _on_rank_up(_rank: int, _rewards: Dictionary) -> void:
 	play_sfx("rank_up")
+
+func _is_combat_music(key: String) -> bool:
+	return key == MUSIC_COMBAT_KEY or key == MUSIC_AUDIT_KEY
+
+## El asedio empieza: las oleadas suenan a `audit` hasta que se pierde o se gana.
+func _on_final_audit_started(_waves: int = 0) -> void:
+	_audit_siege = true
+
+func _on_final_audit_ended(_wave: int = 0) -> void:
+	_audit_siege = false
+	_restore_music_after_combat()
 
 func _on_final_audit_summoned(_a = null, _b = null, _c = null) -> void:
 	play_sfx("audit_summoned")
@@ -871,7 +892,7 @@ func _on_ui_tab_clicked(_tab: int, bar: TabBar) -> void:
 ## the combat theme is actually on: if victory (or a future storm theme) took
 ## over the bus during the fight, that track stays.
 func _restore_music_after_combat() -> void:
-	if _current_music_key != MUSIC_COMBAT_KEY:
+	if not _is_combat_music(_current_music_key):
 		return
 	play_music(_music_key_after_combat())
 
@@ -879,6 +900,6 @@ func _restore_music_after_combat() -> void:
 ## mid-expedition); any other theme that was playing before is resumed as-is.
 func _music_key_after_combat() -> String:
 	var previous := _music_before_combat
-	if previous.is_empty() or previous.begins_with("era_") or previous == MUSIC_COMBAT_KEY:
+	if previous.is_empty() or previous.begins_with("era_") or _is_combat_music(previous):
 		return "era_%d" % clampi(ProgressionManager.current_era, 1, 3)
 	return previous

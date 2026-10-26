@@ -18,17 +18,20 @@ const OPTIONAL_SIGNALS := ["final_audit_summoned", "storm_halted_forever"]
 var _saved_last_msec: Dictionary = {}
 var _saved_before_combat: String = ""
 var _saved_era: int = 1
+var _saved_siege: bool = false
 
 func before_test() -> void:
 	_saved_last_msec = AudioManager._sfx_last_msec.duplicate()
 	_saved_before_combat = AudioManager._music_before_combat
 	_saved_era = ProgressionManager.current_era
+	_saved_siege = AudioManager._audit_siege
 	AudioManager._sfx_last_msec.clear()
 
 func after_test() -> void:
 	AudioManager._sfx_last_msec = _saved_last_msec
 	AudioManager._music_before_combat = _saved_before_combat
 	ProgressionManager.current_era = _saved_era
+	AudioManager._audit_siege = _saved_siege
 
 func _clip_exists(dir: String, base: String) -> bool:
 	for ext in [".ogg", ".wav", ".mp3"]:
@@ -123,3 +126,29 @@ func test_the_era_key_is_clamped_to_the_three_eras() -> void:
 	ProgressionManager.current_era = 9
 	AudioManager._music_before_combat = ""
 	assert_str(AudioManager._music_key_after_combat()).is_equal("era_3")
+
+# ── Musica del asedio ────────────────────────────────────────────────
+
+func test_the_siege_theme_ships_and_is_in_the_manifest() -> void:
+	assert_bool(AudioManager.MUSIC_MANIFEST.has(AudioManager.MUSIC_AUDIT_KEY)).is_true()
+	assert_bool(_clip_exists(AudioManager.MUSIC_DIR, String(AudioManager.MUSIC_MANIFEST["audit"]))).is_true()
+	assert_str(String(AudioManager.MUSIC_MANIFEST["audit"])).is_not_equal(String(AudioManager.MUSIC_MANIFEST["combat"]))
+
+func test_audio_listens_to_the_siege_signals() -> void:
+	for sig in ["final_audit_started", "final_audit_lost", "storm_halted_forever"]:
+		assert_bool(_audio_listens_to(sig)).override_failure_message(sig).is_true()
+
+func test_siege_start_and_end_toggle_the_flag() -> void:
+	AudioManager._audit_siege = false
+	AudioManager._on_final_audit_started(3)
+	assert_bool(AudioManager._audit_siege).is_true()
+	AudioManager._on_final_audit_ended(2)
+	assert_bool(AudioManager._audit_siege).is_false()
+
+func test_the_siege_theme_counts_as_combat_music_and_returns_to_the_era() -> void:
+	assert_bool(AudioManager._is_combat_music("audit")).is_true()
+	assert_bool(AudioManager._is_combat_music("combat")).is_true()
+	assert_bool(AudioManager._is_combat_music("era_1")).is_false()
+	ProgressionManager.current_era = 2
+	AudioManager._music_before_combat = "audit"
+	assert_str(AudioManager._music_key_after_combat()).is_equal("era_2")
