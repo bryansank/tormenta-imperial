@@ -47,7 +47,7 @@ func _instance(path: String) -> Node:
 func test_the_cartoon_style_is_the_default() -> void:
 	assert_str(UITheme.STYLE_DEFAULT).is_equal("cartoon")
 	assert_bool(UITheme.is_cartoon()).is_true()
-	assert_str(CartoonTheme.combo).is_equal("baloo_nunitosans")
+	assert_str(CartoonTheme.combo).is_equal("bigshoulders_plex")
 	assert_str(CartoonTheme.surface).is_equal("mixed")
 
 func test_floating_help_tips_are_off_by_default() -> void:

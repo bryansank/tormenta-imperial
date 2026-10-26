@@ -13,7 +13,7 @@ func before_test() -> void:
 	_parked = SettingsParking.park()
 
 func after_test() -> void:
-	CartoonTheme.window_theme = "light"
+	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
 	SettingsParking.restore(_parked)
 	DeviceProfile.apply_theme()
 
@@ -22,9 +22,10 @@ func after_test() -> void:
 func test_the_dark_theme_paints_the_windows_and_keeps_the_hud() -> void:
 	var hud_bg := CartoonTheme.c("hud", "BG")
 	CartoonTheme.window_theme = "dark"
-	assert_object(CartoonTheme.c("window", "BG")).is_equal(Color("243241"))
-	assert_object(CartoonTheme.c("window", "CARD")).is_equal(Color("2e3f51"))
-	assert_object(CartoonTheme.c("window", "BORDER")).is_equal(Color("4fa3e0"))
+	# Piel dieselpunk (2026-10-25): Pizarra, Placa y filo de laton.
+	assert_object(CartoonTheme.c("window", "BG")).is_equal(Color("1c2026"))
+	assert_object(CartoonTheme.c("window", "CARD")).is_equal(Color("252b32"))
+	assert_object(CartoonTheme.c("window", "TRIM")).is_equal(Color("c99a45"))
 	assert_object(CartoonTheme.c("hud", "BG")).is_equal(hud_bg)
 	assert_bool(CartoonTheme.dark_windows()).is_true()
 	for key in ["TEXT", "TEXT_DIM"]:
@@ -32,7 +33,8 @@ func test_the_dark_theme_paints_the_windows_and_keeps_the_hud() -> void:
 			assert_float(UITheme.contrast_ratio(CartoonTheme.c("window", key), CartoonTheme.c("window", bg))) \
 				.override_failure_message("%s sobre %s" % [key, bg]).is_greater_equal(4.5)
 	CartoonTheme.window_theme = "light"
-	assert_object(CartoonTheme.c("window", "BG")).is_equal(Color("fff6e3"))
+	# Papel: el texto claro de la paleta, apenas oscurecido.
+	assert_object(CartoonTheme.c("window", "BG")).is_equal((UITheme._BASE["TEXT"] as Color).darkened(0.04))
 
 func test_high_contrast_still_wins_in_the_dark_theme() -> void:
 	CartoonTheme.window_theme = "dark"
@@ -41,13 +43,13 @@ func test_high_contrast_still_wins_in_the_dark_theme() -> void:
 	UITheme.configure()
 
 func test_the_theme_is_saved_in_the_interface_section() -> void:
-	GameConfig.ui_theme = "dark"
-	GameConfig.save_user_settings()
 	GameConfig.ui_theme = "light"
+	GameConfig.save_user_settings()
+	GameConfig.ui_theme = "dark"
 	GameConfig.load_user_settings()
-	assert_str(GameConfig.ui_theme).is_equal("dark")
+	assert_str(GameConfig.ui_theme).is_equal("light")
 	DeviceProfile.apply_theme()
-	assert_str(CartoonTheme.window_theme).is_equal("dark")
+	assert_str(CartoonTheme.window_theme).is_equal("light")
 
 # ── ENTRENAR en el Cuartel ───────────────────────────────────────────
 

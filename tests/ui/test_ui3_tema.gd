@@ -1,10 +1,11 @@
 extends GdUnitTestSuite
-## Tema de las ventanas Claro / Oscuro (feat/ui3-tema-oscuro, docs/28 §2):
+## Tema de las ventanas Oscuro (bunker, de serie) / Claro (papel) de la piel
+## dieselpunk (2026-10-25; antes feat/ui3-tema-oscuro, docs/28 §2):
 ## contraste minimo de todo texto sobre las superficies de ventana en los dos
 ## temas, con las tres paletas y con alto contraste; el contorno del bocadillo
 ## sigue al tema; el interruptor dibujado no se queda con el color del otro
-## tema; el ajuste vive en settings.cfg [interfaz] ui_theme y Restablecer
-## vuelve a Claro.
+## tema; el ajuste vive en settings.cfg [interfaz] window_theme y Restablecer
+## vuelve a Oscuro.
 
 const SettingsParking := preload("res://tests/save/settings_parking.gd")
 const SettingsScene := preload("res://scenes/ui/SettingsPanel.tscn")
@@ -21,7 +22,7 @@ func after_test() -> void:
 			_panel._needs_rebuild = false
 			_panel.toggle()
 		_panel.free()
-	CartoonTheme.window_theme = "light"
+	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
 	UITheme.configure()
 	SettingsParking.restore(_parked)
 	DeviceProfile.apply_theme()
@@ -78,14 +79,17 @@ func test_readable_keeps_a_colour_that_already_reads() -> void:
 	assert_object(CartoonTheme.readable(white)).is_equal(white)
 
 func test_the_bubble_edge_follows_the_theme() -> void:
+	# El filo del bocadillo es el laton de cada tema (oscurecido sobre papel).
 	CartoonTheme.window_theme = "light"
 	UITheme.configure()
-	assert_object(CartoonTheme.edge()).is_equal(CartoonTheme.INK)
-	assert_object(CartoonTheme.bubble_style().border_color).is_equal(CartoonTheme.INK)
+	var paper_trim := CartoonTheme.c("window", "TRIM")
+	assert_object(CartoonTheme.edge()).is_equal(paper_trim)
+	assert_object(CartoonTheme.bubble_style().border_color).is_equal(paper_trim)
 	CartoonTheme.window_theme = "dark"
-	assert_object(CartoonTheme.edge()).is_equal(Color("4fa3e0"))
-	assert_object(CartoonTheme.bubble_style().bg_color).is_equal(Color("243241"))
-	assert_object(CartoonTheme.bubble_style().border_color).is_equal(Color("4fa3e0"))
+	assert_object(CartoonTheme.edge()).is_equal(Color("c99a45"))
+	assert_object(CartoonTheme.bubble_style().bg_color).is_equal(Color("1c2026"))
+	assert_object(CartoonTheme.bubble_style().border_color).is_equal(Color("c99a45"))
+	assert_bool(paper_trim == Color("c99a45")).is_false()
 
 func test_the_drawn_switch_is_redrawn_for_each_theme() -> void:
 	CartoonTheme.window_theme = "light"
@@ -106,32 +110,48 @@ func test_the_hud_is_dark_in_both_themes() -> void:
 	assert_object(CartoonTheme.c("hud", "BG")).is_equal(hud)
 	assert_str(CartoonTheme.kind("hud")).is_equal("dark")
 
-func test_an_unknown_theme_in_settings_loads_as_light() -> void:
-	GameConfig.ui_theme = "dark"
+func test_an_unknown_theme_in_settings_loads_as_dark() -> void:
+	GameConfig.ui_theme = "light"
 	GameConfig.save_user_settings()
 	var cf := ConfigFile.new()
 	cf.load(GameConfig.USER_SETTINGS_PATH)
-	assert_str(str(cf.get_value("interfaz", "ui_theme", ""))).is_equal("dark")
-	cf.set_value("interfaz", "ui_theme", "violeta")
+	assert_str(str(cf.get_value("interfaz", "window_theme", ""))).is_equal("light")
+	cf.set_value("interfaz", "window_theme", "violeta")
 	cf.save(GameConfig.USER_SETTINGS_PATH)
 	GameConfig.load_user_settings()
-	assert_str(GameConfig.ui_theme).is_equal("light")
+	assert_str(GameConfig.ui_theme).is_equal("dark")
 
-func test_the_settings_row_saves_and_reset_goes_back_to_light() -> void:
+## La clave vieja (ui_theme, de la piel caricatura, con "light" de serie) no
+## cuenta: la piel dieselpunk arranca en bunker, y al guardar se borra.
+func test_the_old_cartoon_theme_key_is_ignored_and_dropped() -> void:
+	var cf := ConfigFile.new()
+	cf.load(GameConfig.USER_SETTINGS_PATH)
+	if cf.has_section_key("interfaz", "window_theme"):
+		cf.erase_section_key("interfaz", "window_theme")
+	cf.set_value("interfaz", "ui_theme", "light")
+	cf.save(GameConfig.USER_SETTINGS_PATH)
+	GameConfig.load_user_settings()
+	assert_str(GameConfig.ui_theme).is_equal("dark")
+	GameConfig.save_user_settings()
+	cf = ConfigFile.new()
+	cf.load(GameConfig.USER_SETTINGS_PATH)
+	assert_bool(cf.has_section_key("interfaz", "ui_theme")).is_false()
+
+func test_the_settings_row_saves_and_reset_goes_back_to_dark() -> void:
 	_panel = SettingsScene.instantiate()
 	add_child(_panel)
 	_panel.toggle()
 	assert_object(_panel.find_child("ThemeRow", true, false)).is_not_null()
-	_panel.set_ui_theme("dark")
-	assert_str(GameConfig.ui_theme).is_equal("dark")
-	assert_str(CartoonTheme.window_theme).is_equal("dark")
+	_panel.set_ui_theme("light")
+	assert_str(GameConfig.ui_theme).is_equal("light")
+	assert_str(CartoonTheme.window_theme).is_equal("light")
 	var cf := ConfigFile.new()
 	cf.load(GameConfig.USER_SETTINGS_PATH)
-	assert_str(str(cf.get_value("interfaz", "ui_theme", ""))).is_equal("dark")
+	assert_str(str(cf.get_value("interfaz", "window_theme", ""))).is_equal("light")
 	_panel.reset_interface()
-	assert_str(GameConfig.ui_theme).is_equal("light")
+	assert_str(GameConfig.ui_theme).is_equal("dark")
 	cf.load(GameConfig.USER_SETTINGS_PATH)
-	assert_str(str(cf.get_value("interfaz", "ui_theme", ""))).is_equal("light")
+	assert_str(str(cf.get_value("interfaz", "window_theme", ""))).is_equal("dark")
 
 func test_locked_pieces_and_thumbnails_are_not_lost_in_the_dark() -> void:
 	# Claro como siempre: la pieza cerrada en el hueco. Oscuro: CARD_ALT y la
