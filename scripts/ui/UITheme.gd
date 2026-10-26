@@ -680,6 +680,7 @@ static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUT
 		btn.add_theme_color_override("font_pressed_color", tc["color"])
 		btn.add_theme_constant_override("outline_size", outline_for(font_size) if tc["outline"] else 0)
 		btn.add_theme_color_override("font_outline_color", CartoonTheme.INK)
+		CartoonTheme.caps_button(btn)
 		return
 
 	# Baked metal button, tinted toward `bg`'s hue; falls back to flat if art missing.
@@ -806,11 +807,24 @@ static func make_progress_bar(fill_color: Color = ACCENT, height: int = 18) -> P
 
 	return bar
 
+## Cerrar: la X oscura de la piel (cerrar no es destruir: nunca en rojo). La X
+## es el icono de linea (CartoonIcon "close"), no una letra.
 static func make_close_button(callback: Callable) -> Button:
 	var btn := Button.new()
-	btn.text = "X"
+	btn.name = "CloseButton"
+	btn.tooltip_text = Tr.t("BTN_CLOSE")
 	btn.custom_minimum_size = Vector2(MIN_BTN_H, MIN_BTN_H)
-	style_button(btn, DANGER, FONT_BODY)
+	if is_cartoon():
+		CartoonTheme._btn_states(btn, CartoonTheme.kind_fill("secondary", "window"), int(MIN_BTN_H * 0.5), 0, "window")
+		var holder := CenterContainer.new()
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+		holder.add_child(CartoonTheme.make_glyph("close", roundi(MIN_BTN_H * 0.5),
+			CartoonTheme.pill_text("secondary", CartoonTheme.kind_fill("secondary", "window"))["color"]))
+		btn.add_child(holder)
+	else:
+		btn.text = "X"
+		style_button(btn, BTN, FONT_BODY)
 	btn.pressed.connect(callback)
 	return btn
 

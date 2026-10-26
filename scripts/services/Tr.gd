@@ -268,6 +268,10 @@ const _STRINGS := {
 
 		# Victory
 		"LBL_VICTORY_TITLE": "VICTORIA IMPERIAL",
+		# Sellos de los momentos grandes (piel dieselpunk, CartoonTheme.stamp)
+		"STAMP_VICTORY_AUDIT": "AUDITORÍA SUPERADA",
+		"STAMP_VICTORY_BUILDER": "CAPITAL EN PIE",
+		"STAMP_RANK_UP": "ASCENDIDO",
 		"LBL_VICTORY_SUBTITLE": "Tu imperio dieselpunk ha alcanzado la cima del poder. La tormenta es tuya.",
 		"LBL_STAT_TIME": "Tiempo jugado:",
 		"LBL_STAT_BUILDINGS": "Edificios construidos:",
@@ -2723,6 +2727,9 @@ Abre ☰ MENÚ → ARCHIPIÉLAGO para ver el mapa, o MISIONES → IMPERIO para s
 
 		# Victory
 		"LBL_VICTORY_TITLE": "IMPERIAL VICTORY",
+		"STAMP_VICTORY_AUDIT": "AUDIT PASSED",
+		"STAMP_VICTORY_BUILDER": "CAPITAL STANDING",
+		"STAMP_RANK_UP": "PROMOTED",
 		"LBL_VICTORY_SUBTITLE": "Your dieselpunk empire has reached the pinnacle of power. The storm is yours.",
 		"LBL_STAT_TIME": "Time played:",
 		"LBL_STAT_BUILDINGS": "Buildings built:",

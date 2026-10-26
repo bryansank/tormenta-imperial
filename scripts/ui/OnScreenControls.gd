@@ -436,7 +436,7 @@ func _styled_button(label: String) -> Button:
 
 	var n := StyleBoxFlat.new()
 	n.bg_color = bg_color
-	n.set_corner_radius_all(6)
+	n.set_corner_radius_all(CartoonTheme.RADIUS_BTN)
 	n.set_content_margin_all(6)
 	n.border_color = UITheme.ACCENT_DIM
 	n.set_border_width_all(2)
@@ -444,7 +444,7 @@ func _styled_button(label: String) -> Button:
 
 	var h := StyleBoxFlat.new()
 	h.bg_color = bg_color.lightened(0.15)
-	h.set_corner_radius_all(6)
+	h.set_corner_radius_all(CartoonTheme.RADIUS_BTN)
 	h.set_content_margin_all(6)
 	h.border_color = UITheme.ACCENT
 	h.set_border_width_all(2)
@@ -454,7 +454,7 @@ func _styled_button(label: String) -> Button:
 
 	var p := StyleBoxFlat.new()
 	p.bg_color = bg_color.lightened(0.3)
-	p.set_corner_radius_all(6)
+	p.set_corner_radius_all(CartoonTheme.RADIUS_BTN)
 	p.set_content_margin_all(6)
 	p.border_color = UITheme.ACCENT
 	p.set_border_width_all(3)

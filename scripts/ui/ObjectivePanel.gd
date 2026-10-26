@@ -92,7 +92,7 @@ func _setup_line() -> void:
 	var st := CartoonTheme.hud_style(CartoonTheme.sem("ACCENT"))
 	st.set_content_margin_all(3)
 	st.content_margin_right = 12
-	st.set_corner_radius_all(30)
+	st.set_corner_radius_all(CartoonTheme.RADIUS_WINDOW)
 	_line.add_theme_stylebox_override("panel", st)
 	_line.mouse_filter = Control.MOUSE_FILTER_STOP
 	_line.gui_input.connect(_on_line_input)
