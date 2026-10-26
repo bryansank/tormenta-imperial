@@ -15,6 +15,13 @@ esta sonda como árbitro antes y después.
 > las calzadas en lote, la interfaz que actualiza, la calidad Mínima...). El resumen y
 > las cifras de §1 y §4 son de **antes** y no se han vuelto a medir: "la 2D es la más
 > cara" ya no vale (ver §6).
+>
+> **Vuelto a medir (2026-10-26, rama `qa-escritorio`, sobre `main` 4c02f6d):** §4.7.
+> Resumen: la colonia grande pasa de 44-48 a **~206 fps** en Forward+ Alta (de ~5600
+> a ~830 draw calls), la 2D de 14-17 a **~143 fps**, y en una **Intel UHD real** la
+> calidad Mínima (Mobile) da **110-157 fps** en todos los escenarios. Lo que queda
+> lejos del presupuesto: la RAM del proceso en Vulkan (~900-1000 MB) y Forward+ Alta
+> en una integrada (20-24 fps).
 
 ---
 
@@ -368,6 +375,100 @@ Solo la interfaz pone unos 350 `Label` y 150 `Button` en todas las escenas.
    edificios dañados (§5.2) puede crecer tras varias tormentas.
 6. **El combate pesa lo mismo que su colonia** (la de `media`): el tablero 8×8 es
    interfaz y no añade coste apreciable.
+
+### 4.7 Medida del 2026-10-26 (QA de escritorio, `main` 4c02f6d)
+
+**Máquina**: la misma de §4 (RTX 3060 Laptop + **Intel UHD Graphics** integrada del
+i5-10500H, una UHD 630), binario del editor, 15 s de medida y 6 de calentamiento,
+semilla 1, sin vsync ni tope. Esta vez con la máquina casi en reposo: 6 procesos de
+Godot en total (antes 6-34) y el cerrojo `perf.lockdir` compartido con los agentes de
+tablet y teléfono. Cada JSON trae ahora `frames_capped` y `frames_unfocused` (abajo).
+
+**Dos cambios en la sonda** (rama `qa-escritorio`), que hacen que `grande` no sea
+idéntico al de §4:
+
+- **Las casas van primero** al repartir las esquinas. Con los topes de hoy (11
+  aeródromos, 10 astilleros...) hay más edificios que esquinas libres y el corte
+  dejaba 4 casas de 10: 41 habitantes, casi todo "sin trabajadores" y la mitad de
+  caminantes. Ahora `grande` son **81 edificios** (antes 67), 276 carreteras, **95
+  habitantes** y 48 caminantes.
+- **El tope de FPS se quita en cada fotograma** de la medida. `DeviceProfile` vuelve a
+  poner el suyo (60 en PC, 30 en pausa, **10 sin foco**) cuando cambia la pausa o el
+  foco: con otro agente abriendo ventanas, una tanda salió clavada a 10 fps y otra a
+  60. `frames_capped` cuenta los fotogramas en que estaba puesto y `frames_unfocused`
+  los que la ventana no tenía el foco.
+
+Columnas como en §4.1: fps · 1 % bajo · p99 (ms) · render CPU (ms) · resto CPU (ms) ·
+GPU (ms) · draw calls · primitivas (k) · VRAM (MB) · proceso (MB).
+
+**Forward+ Alta, RTX 3060, 1280×720** (antes → ahora; el "antes" es §4.1):
+
+| Escenario | fps | 1 % | p99 | render CPU | resto CPU | GPU | draw calls | prim. k | VRAM | proceso |
+|---|---|---|---|---|---|---|---|---|---|---|
+| inicio | 160 → **362** | 97 → 246 | 3,8 | 1,46 | 1,31 | 1,65 | 1378 → **376** | 74 | 238 | 895 |
+| media | 86 → **289** | 52 → 133 | 4,5 | 1,67 | 1,79 | 1,82 | 3339 → **488** | 201 | 244 | 903 |
+| grande | 48 → **206** | 28 → 107 | 7,4 | 2,27 | 2,57 | 2,19 | 5628 → **833** | 548 | 254 | 977 |
+| tormenta | 47 → **220** | 25 → 124 | 7,1 | 2,09 | 2,46 | 2,16 | 5652 → 683 | 541 | 254 | 979 |
+| combate | 81 → **312** | 46 → 192 | 4,3 | 1,16 | 2,04 | 0,22 | 3476 → 402 | 48 | 301 | 915 |
+| grande_2d | 17 → **143** | 9 → 107 | 8,8 | 2,73 | 4,24 | 1,04 | 9342 → 1306 | 28 | 93 | 905 |
+
+**Forward+ Alta, RTX 3060, 1920×1080** (el "PC medio" del presupuesto pide 60):
+inicio 239 · media 219 · **grande 188** (1 % 115) · tormenta 189 · combate 296 ·
+grande_2d 141 fps. GPU 3,4-4,4 ms; VRAM 400-466 MB (sube 160 MB con la resolución).
+
+**Compatibility, Mínima emulada, RTX 3060, 1280×720** (antes → ahora):
+
+| Escenario | fps | 1 % | p99 | render CPU | GPU | draw calls | VRAM | proceso |
+|---|---|---|---|---|---|---|---|---|
+| inicio | 111 → **147** | 49 → 110 | 8,5 | 5,38 | 4,84 | 438 → 326 | 123 | 554 |
+| media | 68 → **136** | 33 → 86 | 10,2 | 5,58 | 4,73 | 1285 → 367 | 108 | 547 |
+| grande | 53 → **123** | 32 → 81 | 11,0 | 5,97 | 4,50 | 2501 → 548 | 106 | 554 |
+| tormenta | 52 → **135** | 28 → 84 | 10,2 | 5,12 | 3,77 | 2534 → 403 | 106 | 566 |
+| combate | 75 → **134** | 46 → 90 | 10,0 | 5,00 | 4,89 | 1423 → 405 | 114 | 552 |
+| grande_2d | 10 → **66** | 7 → 53 | 18,4 | 11,49 | 5,47 | 9273 → 1263 | 117 | 549 |
+
+**Intel UHD Graphics (integrada, `--gpu-index 1`), 1280×720** — la primera medida en
+una GPU de la clase "papa" (una UHD 630 rinde algo más que la HD 520 del presupuesto):
+
+| Escenario | Mobile · Mínima: fps | 1 % | GPU ms | VRAM | Forward+ · Alta: fps | 1 % | GPU ms |
+|---|---|---|---|---|---|---|---|
+| inicio | **130** | 73 | 5,0 | 126 | 24 | 15 | 39,6 |
+| media | **113** | 37 | 5,6 | 132 | 23 | 20 | 40,3 |
+| grande | **113** | 58 | 6,1 | 142 | 20 | 17 | 46,8 |
+| tormenta | **110** | 69 | 6,2 | 154 | 21 | 17 | 45,7 |
+| combate | **157** | 107 | 1,1 | 146 | 43 | 31 | 1,4 |
+| grande_2d | **114** | 69 | 4,2 | 90 | 97 | 58 | 4,2 |
+
+(Con `--scenario=all` el proceso hijo no hereda `--gpu-index` y mide la NVIDIA: en la
+integrada hay que lanzar los escenarios de uno en uno. En OpenGL el driver de Optimus
+elige siempre la NVIDIA.)
+
+Lo que dicen:
+
+1. **Las optimizaciones de §6 funcionan.** Draw calls de la colonia grande de ~5600 a
+   ~830 (−85 %), render en CPU de 13,5 a 2,3 ms, y la 2D de 37 ms de scripts a ~1,2 ms
+   (Building2D 0,77 + StatusBadge2D 0,48 ms con 81 nodos cada uno).
+2. **El presupuesto de "papa" se cumple con margen en GPU**: en la UHD real, Mínima
+   (Mobile, que es lo que pone Mínima en PC, §7.5) va a 110-157 fps con el 1 % bajo
+   ≥ 37 y VRAM ≤ 154 MB. El 1 % de `media` (37) es un tirón suelto, no la media.
+3. **Forward+ Alta en una integrada no es jugable** (20-24 fps, GPU 40-47 ms incluso en
+   `inicio`: es el coste por píxel, no la escena). Por eso importa que la detección del
+   primer arranque la reconozca. El driver de Intel de este equipo nombra la GPU
+   **"Intel(R) UHD Graphics" sin número**, y la lista de §7.6 solo tenía `UHD Graphics
+   6xx`: se añadió el patrón `^Intel\(R\) UHD Graphics$` (`GameConfig.
+   quality_weak_gpu_patterns`, test `tests/ui/test_gpu_weak_names.gd`). Sin él decidía
+   el paso 2 (la medida), que también la habría mandado a Mínima.
+4. **Lo que no baja: la RAM del proceso.** 900-1000 MB en Vulkan (Forward+ y Mobile,
+   también en la integrada) y ~550 MB en Compatibility, con el binario del editor. El
+   presupuesto del PC de 4 GB (≤ 600 MB) solo lo cumple Compatibility. Hay que medir el
+   `.exe` exportado antes de decidir.
+5. **Scripts por fotograma en `grande`**: `ProductionManager` **0,40 ms** (antes 0,13:
+   ×3, por la comida, los encargos y los procesos nuevos), `WorkerWalkers` 0,28,
+   `ContractManager` 0,09 (nuevo; 0,09 ms ya en `inicio`), `BuildingPlacer` 0,06. En
+   total < 1 ms: no es el cuello, pero ProductionManager es el que más crece.
+6. **La interfaz duplicó sus nodos**: 765 `Label`, 407 `PanelContainer` y 255 `Button`
+   ya en `inicio` (antes 353 `Label`), 3386 nodos frente a 2177. No se ve en los fps,
+   sí en memoria y en el tiempo de reconstruir la interfaz (cambio de tema o idioma).
 
 ---
 
@@ -797,7 +898,9 @@ con `UnitModels3D.tri_count`:
 
 ## 8. Límites de esta medida
 
-- **Una sola máquina, y fuerte.** No hay datos de una integrada ni de un Android real.
+- **Una sola máquina, y fuerte.** No hay datos de un Android real. De una integrada,
+  desde el 2026-10-26, sí: la UHD 630 del mismo portátil (§4.7), en Vulkan; en OpenGL
+  Optimus elige siempre la NVIDIA.
   Mobile y Compatibility en esta RTX **aproximan** la carga de CPU de esos caminos,
   pero no el fill-rate ni el ancho de banda de una GPU de móvil. Lo siguiente es
   correr la sonda en el APK de QA (`--rendering-method gl_compatibility`) en el

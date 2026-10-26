@@ -798,6 +798,9 @@ var fps_minimal_pc := 30
 var quality_weak_gpu_patterns: Array = [
 	r"Intel\(R\) HD Graphics( [2-6]\d\d\b|$| Family)",
 	r"\bUHD Graphics 6\d\d\b",
+	# Los drivers nuevos de Intel ya no dan el numero: una UHD 630 sale como
+	# "Intel(R) UHD Graphics" a secas (medido 2026-10-26: 20-24 fps en Alta a 720p).
+	r"^Intel\(R\) UHD Graphics$",
 	r"\bHD Graphics [45]\d\d\b",
 	r"\bRadeon R[2-7]\b",
 	r"\bRadeon\(TM\) Vega [368] ",
