@@ -1216,3 +1216,40 @@ carpeta: se cambia el `override.cfg` entre los dos arranques):
 
     godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5
     godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --hours=9 --tier=governor
+
+## 18. La 1.3 integrada: tutorial corto (10 colonos) con el ritmo de Colono (2026-10-26, `integracion/v1.3`)
+
+El aviso de §17 se cumple: `fix/tutorial-flujo` sube los colonos iniciales de 5 a 10
+(y el Núcleo da sitio a 10), así que se repite la línea sobre la integración (1.2 +
+desbordes + tutorial corto + piel + ritmo + tablet y rendimiento). `line_probe`,
+`--no-dev --seeds=1,2,3`, jugador de la línea, carpeta de usuario propia. Minutos de
+juego.
+
+**Colono** (objetivo 3-4 h):
+
+| Semilla | era 2 | era 3 | cap I | cap II (Tierra) | Mar | Aire | CG nv3 | victoria | tableros | impuestos tablero/auto |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 12 | 32 | 12 | 113 | 141 | 158 | 203 | **217** (3 h 37) | 29 | 4/6 |
+| 2 | 13 | 32 | 13 | 121 | 144 | 179 | 219 | **241** (4 h 01) | 31 | 4/8 |
+| 3 | 14 | 38 | 14 | 130 | 148 | 167 | 209 | **232** (3 h 52) | 30 | 4/7 |
+
+**Gobernador** (objetivo 6-8 h, `--tier=governor --hours=9`):
+
+| Semilla | era 2 | era 3 | cap I | cap II (Tierra) | Mar | Aire | CG nv3 | victoria | tableros | impuestos tablero/auto |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 12 | 43 | 12 | 150 | 192 | 268 | 371 | **396** (6 h 36) | 54 | 7/12 |
+| 2 | 12 | 34 | 12 | 139 | 200 | 271 | 365 | **384** (6 h 24) | 51 | 7/10 |
+| 3 | 13 | 36 | 13 | 137 | 175 | 271 | 385 | **405** (6 h 45) | 53 | 6/14 |
+
+Lectura:
+
+- **Colono: 3 de 3 ganan en 3 h 37 - 4 h 01**, dentro del objetivo (la semilla 2, un
+  minuto por encima). Frente a §17 v6 (3 h 24 - 4 h 28), igual o algo más rápido.
+- **El capítulo I se cierra antes**: minuto 12-14 (antes 15-19). Con 10 colonos y el
+  tutorial corto la Fundición llega en el 12-14; el II se cierra en el 113-130 (antes
+  116-139) y el III, con la victoria, ~100 min después.
+- **Gobernador: 3 de 3 en 6 h 24 - 6 h 45**, dentro de 6-8 h.
+- Los huecos sin decidir de más de 3 min siguen en 3-4 por partida en Colono (el mayor
+  4-9 min) y 6-10 en Gobernador (el mayor 5-12 min); la bolsa llena se dispara en
+  Gobernador (20-83 min, hasta ~10 000 recursos tirados): a vigilar, no bloquea.
+- Ruido: como siempre (§14), la misma semilla no repite partida entre corridas.
