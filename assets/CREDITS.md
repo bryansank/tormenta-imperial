@@ -42,6 +42,7 @@ in `licenses/CC0-KENNEY-*.txt`.
 |---------|-----|---------|--------|
 | `music/era_1_frontier`, `era_2_industrial`, `era_3_petroleum`, `victory` | Era background tracks + victory theme | CC0 | Dark Sci-Fi Audio Pack by **SRG774** (OpenGameArt) |
 | `music/combat` | Combat theme (orchestral, war drums) | CC0 | Battle Theme A by **cynicmusic** (OpenGameArt) |
+| `music/audit` | Final Audit siege theme (boss loop, 33 s) | CC0 | Basilisk Boss Battle Loop by **beardalaxy** (OpenGameArt) |
 | `sfx/build_place`, `demolish`, `process_done`, `mining_done` | Placement / demolish / process / mining impacts | CC0 | Kenney — Impact Sounds |
 | `sfx/combat_hit`, `audit_summoned`, `tithe_demanded` | Metal hit, low bell, short bell | CC0 | Kenney — Impact Sounds (`impactMetal_heavy_000`, `impactBell_heavy_001`, `impactBell_heavy_002`) |
 | `sfx/build_complete`, `unlock`, `event_positive`, `event_danger`, `insufficient`, `ui_click` | UI feedback / alerts | CC0 | Kenney — Interface Sounds |
@@ -61,7 +62,8 @@ https://kenney.nl/assets/interface-sounds, https://kenney.nl/assets/music-jingle
 https://kenney.nl/assets/rpg-audio, https://kenney.nl/assets/sci-fi-sounds,
 https://kenney.nl/assets/ui-audio. Dark Sci-Fi Audio Pack —
 https://opengameart.org/content/dark-sci-fi-audio-pack. Battle Theme A —
-https://opengameart.org/content/battle-theme-a
+https://opengameart.org/content/battle-theme-a. Basilisk Boss Battle Loop —
+https://opengameart.org/content/basilisk-boss-battle-loop
 
 > When adding more audio, prefer **CC0** (no attribution) or **CC-BY** (credit the
 > author in this table). Do **not** use CC-BY-NC (non-commercial) clips.

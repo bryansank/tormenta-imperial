@@ -55,6 +55,8 @@ ese interruptor.
 | `victory`          | Imperial Victory        | `victory_achieved` | idem |
 | `combat`           | During a board          | `encounter_started` → back to the era on the last `encounter_ended` / `expedition_ended` | **Battle Theme A**, cynicmusic (https://opengameart.org/content/battle-theme-a, CC0), re-encoded to OGG at -4.5 dB to sit level with the era tracks. 96 s, 1.1 MB |
 
+| `audit`            | Final Audit siege waves | `final_audit_started` → plays instead of `combat` on every wave board; back to the era on `final_audit_lost` / `storm_halted_forever` | **Basilisk Boss Battle Loop**, beardalaxy (https://opengameart.org/content/basilisk-boss-battle-loop, CC0), original OGG, 33 s, 642 KB |
+
 The combat theme is no longer a loan of `era_3_petroleum`. A chained encounter keeps
 the theme; if victory music took the bus during the fight, it is left alone.
 

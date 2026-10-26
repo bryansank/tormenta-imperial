@@ -198,6 +198,7 @@ licence text ships in `licenses/CC0-KENNEY-*.txt`.
 |---|---|---|
 | `music/era_1_frontier`, `era_2_industrial`, `era_3_petroleum`, `victory` | [Dark Sci-Fi Audio Pack](https://opengameart.org/content/dark-sci-fi-audio-pack) by SRG774 (OpenGameArt) | CC0 1.0 |
 | `music/combat` | [Battle Theme A](https://opengameart.org/content/battle-theme-a) by cynicmusic (OpenGameArt), re-encoded to OGG at -4.5 dB | CC0 1.0 |
+| `music/audit` | [Basilisk Boss Battle Loop](https://opengameart.org/content/basilisk-boss-battle-loop) by beardalaxy (OpenGameArt), sin recodificar | CC0 1.0 |
 | `sfx/build_place`, `demolish`, `process_done`, `mining_done`, `combat_hit`, `audit_summoned`, `tithe_demanded` | [Kenney — Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-IMPACT-SOUNDS.txt`) |
 | `sfx/build_complete`, `unlock`, `event_positive`, `event_danger`, `insufficient`, `ui_click` | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-INTERFACE-SOUNDS.txt`) |
 | `sfx/upgrade_complete`, `era_up`, `milestone`, `combat_start`, `combat_victory`, `combat_defeat`, `expedition_start`, `expedition_return`, `storm_halted`, `tithe_repelled`, `rank_up` | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | CC0 1.0 (`licenses/CC0-KENNEY-MUSIC-JINGLES.txt`) |
