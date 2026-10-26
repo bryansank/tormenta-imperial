@@ -94,6 +94,18 @@ var _expedition_label: Label
 ## mueve de minuto en minuto.
 const BARO_REFRESH := 1.0
 
+## La tarjeta del tutorial manda (docs/21 §17, pulido): mientras se ve y
+## caeria encima de la Orden (siempre en telefono), la Orden se pliega al
+## icono y espera, como un aviso en la cola de AlertQueue; vuelve sola al
+## irse la tarjeta. Tocar el icono la abre igual (lo pide el jugador).
+var _held := false
+var _forced_open := false
+var _hold_left := 0.0
+## Ultimo sitio de la Orden abierta, para saber si la tarjeta del tutorial
+## caeria encima mientras esta plegada.
+var _open_rect := Rect2()
+const HOLD_CHECK := 0.25
+
 const LAYER_OVER_MODALS := 16
 const LAYER_UNDER_MODALS := 11
 
@@ -138,6 +150,13 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not _panel.visible:
 		return
+	if _card_open and not _forced_open and StormManager.order_visible() \
+			and StormManager.get_phase() != StormCycle.Phase.TITHE:
+		_hold_left -= delta
+		if _hold_left <= 0.0:
+			_hold_left = HOLD_CHECK
+			if _tutorial_blocks() != _held:
+				_refresh()
 	if _baro_row.visible or (_cartoon() and StormManager.get_phase() == StormCycle.Phase.CALM):
 		_baro_left -= delta
 		if _baro_left <= 0.0:
@@ -198,7 +217,7 @@ func _setup_ui() -> void:
 		# Rediseno 2026-10 (docs/28 §12): un icono redondo solo, sol en calma y
 		# nube con rayo en las fases; la fase y el margen, al mantener pulsado.
 		var d := CartoonTheme.storm_round()
-		_glyph = CartoonTheme.make_glyph("sun", roundi(d * 0.62))
+		_glyph = CartoonTheme.make_glyph("sun", roundi(d * 0.62), Color(0, 0, 0, 0), "hud")
 		_glyph.name = "StormGlyph"
 		hbox.add_child(_glyph)
 		hbox.move_child(_glyph, 0)
@@ -393,7 +412,14 @@ func _on_panel_input(event: InputEvent) -> void:
 	var at: Vector2 = _panel.get_global_transform() * (event as InputEventMouseButton).position
 	if _card.visible and _card_scroll.get_global_rect().has_point(at):
 		return
-	_card_open = not _card_open
+	if _held:
+		# Plegada esperando al tutorial: tocar la abre ya, y ya no se pliega.
+		_card_open = true
+		_forced_open = true
+	else:
+		_card_open = not _card_open
+		# Abierta a mano: no se pliega por la tarjeta del tutorial.
+		_forced_open = _card_open and _tutorial_blocks()
 	_refresh()
 	_panel.accept_event()
 
@@ -426,7 +452,34 @@ func open_card() -> void:
 
 func close_card() -> void:
 	_card_open = false
+	_forced_open = false
 	_refresh()
+
+## Esta plegada esperando a que se vaya la tarjeta del tutorial (pruebas).
+func is_card_held() -> bool:
+	return _held
+
+## La tarjeta del tutorial (grupo "tutorial_card") esta en pantalla y caeria
+## sobre la Orden: en telefono o columna estrecha, siempre; si no, cuando
+## pisa el sitio de la Orden abierta.
+func _tutorial_blocks() -> bool:
+	if not is_inside_tree():
+		return false
+	var narrow: bool = CartoonTheme.phone or UILayoutManager.is_column_narrow()
+	var area := _open_rect
+	if area.size.x < 1.0:
+		area = Rect2(_panel.global_position - Vector2(320, 0), _panel.size + Vector2(320, 340))
+	for n in get_tree().get_nodes_in_group("tutorial_card"):
+		var c := n as Control
+		if c == null or not c.is_visible_in_tree():
+			continue
+		if narrow or c.get_global_rect().intersects(area):
+			return true
+	return false
+
+func _remember_open_rect() -> void:
+	if _card != null and _card.visible and _panel.is_visible_in_tree():
+		_open_rect = _panel.get_global_rect()
 
 func is_card_open() -> bool:
 	return _card != null and _card.visible
@@ -441,12 +494,16 @@ func _refresh_card() -> void:
 		return
 	var visible_now: bool = _card_open and StormManager.order_visible() \
 		and StormManager.get_phase() != StormCycle.Phase.TITHE
+	_held = visible_now and not _forced_open and _tutorial_blocks()
+	if _held:
+		visible_now = false
 	_card.visible = visible_now
 	_card_scroll.visible = visible_now
 	_sync_layer()
 	if not visible_now:
 		return
 	_fit_card_height.call_deferred()
+	_remember_open_rect.call_deferred()
 	var preview: Dictionary = StormManager.tithe_preview()
 	var ratio: int = roundi(float(preview.get("ratio", 0.0)) * 100.0)
 	var after: int = roundi(float(preview.get("ratio_after", 0.0)) * 100.0)

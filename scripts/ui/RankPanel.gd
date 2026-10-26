@@ -123,7 +123,7 @@ func _setup_ui() -> void:
 	row.add_child(_badge_flag)
 	if _cartoon():
 		# La estrella del rango delante de la cifra (docs/28 §12).
-		var star := CartoonTheme.make_glyph("star", 20 if CartoonTheme.phone else 24)
+		var star := CartoonTheme.make_glyph("star", 20 if CartoonTheme.phone else 24, Color(0, 0, 0, 0), "hud")
 		star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(star)
 	_badge_rank = UITheme.make_label("1", "section", UITheme.ACCENT)
@@ -361,6 +361,31 @@ func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 
 func show_rank_toast(rank: int, rewards: Dictionary) -> void:
 	EventBus.notification_posted.emit(rank_up_text(rank, rewards), "achievement", UITheme.ACCENT)
+	show_rank_stamp()
+
+## Cuanto se queda el sello ASCENDIDO sobre la insignia.
+const RANK_STAMP_SECONDS := 4.0
+
+## El sello oficial (CartoonTheme.stamp) sobre la insignia, unos segundos: el
+## momento del ascenso. Un PanelContainer y un temporizador; nada mas.
+func show_rank_stamp() -> void:
+	if not _cartoon() or _dock == null:
+		return
+	var old := _dock.get_node_or_null("RankStamp")
+	if old != null:
+		old.free()
+	var st := CartoonTheme.stamp(Tr.t("STAMP_RANK_UP"), CartoonTheme.sem("ACCENT"), true)
+	st.name = "RankStamp"
+	st.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dock.add_child(st)
+	if is_inside_tree():
+		get_tree().create_timer(RANK_STAMP_SECONDS).timeout.connect(func():
+			if is_instance_valid(st):
+				st.queue_free())
+
+## El sello del ascenso, si se ve (pruebas).
+func rank_stamp() -> Control:
+	return _dock.get_node_or_null("RankStamp") if _dock != null else null
 
 static func rank_up_text(rank: int, rewards: Dictionary) -> String:
 	var text := Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))]

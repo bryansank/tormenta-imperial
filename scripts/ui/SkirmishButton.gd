@@ -73,7 +73,7 @@ func _setup_ui() -> void:
 	_dot = Panel.new()
 	_dot.name = "ReasonDot"
 	_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_dot.add_theme_stylebox_override("panel", CT.box(CT.sem("DANGER"), CT.INK, 2, int(DOT), 0))
+	_dot.add_theme_stylebox_override("panel", CT.box(CT.sem("DANGER"), CT.INK, 2, CT.RADIUS_BTN, 0))
 	_dot.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_dot.offset_left = -DOT * 0.75
 	_dot.offset_right = DOT * 0.25

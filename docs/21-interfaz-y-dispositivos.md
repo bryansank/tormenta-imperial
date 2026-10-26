@@ -1272,8 +1272,9 @@ cuatro fuentes.
   cuadrados; la X es oscura (cerrar no es destruir). El foco es un marco del
   color del texto, separado 3 px.
 - Huecos, barras, deslizadores, interruptores, insignias y globos de ayuda,
-  casi rectos (2-3 px). Los círculos que quedan son luces: la piloto, el punto
-  rojo de "hay algo nuevo", los nodos de campaña y los discos de unidad.
+  casi rectos (2-3 px). Los círculos que quedan son luces: la piloto, los
+  nodos de campaña y los discos de unidad (el punto rojo de "hay algo nuevo"
+  pasó a cuadrito de 3 px en el pulido).
 
 ### Las cinco intenciones de botón (`kind_fill`, `pill_text`, `btn_edge`)
 
@@ -1309,8 +1310,8 @@ las cantidades en Plex Condensed Bold al tamaño de título.
 - **Luz piloto** (de la dirección A): ver arriba.
 - **Sello oficial** (de la dirección C): `stamp()` (COBRADO / REPELIDO de los
   partes de guerra) es un marco del color del sello sobre un velo del mismo
-  color, letras del sello, girado 6°. Barato (un `StyleBoxFlat`). Victoria,
-  rango y fin de campaña podrían usarlo; no se ha cableado.
+  color, letras del sello, girado 6°. Barato (un `StyleBoxFlat`). Desde el
+  pulido también sale en la victoria y en el ascenso (abajo).
 
 ### Tema de las ventanas
 
@@ -1330,11 +1331,61 @@ Nada de shaders ni texturas nuevas: todo es `StyleBoxFlat`. La segunda línea
 del filo es un `draw_line` en el `draw` del panel. Tres ficheros de fuente
 (220 + 111 + 112 KB), cargados una vez.
 
+### Pulido (2026-10-26, rama `feat/piel-dieselpunk-pulido`)
+
+- **Iconos de línea** (`CartoonIcon`): rehechos con el lenguaje de la maqueta
+  (caja de 24 × 24, trazo de 2,2 con puntas y codos redondos), mismos ids y
+  misma API (`make`, `draw_glyph`, `GLYPHS`, los cuatro `mat_*`). Uno o dos
+  tonos: el trazo en el claro del texto del sitio (`role` "window" u "hud";
+  en el tema claro, la tinta) y un detalle de latón; si quien lo pide da un
+  `tint`, todo va de ese color. Las pastillas, los botones de icono, las
+  pestañas y las insignias se lo dan: la letra del botón (tinta sobre latón).
+  El color de un recurso solo es acento pequeño (la veta de los tablones, el
+  brillo del lingote, la X del bidón). Coste: `draw_polyline` / `draw_arc`,
+  sin texturas ni shaders.
+- **Iconos de recurso** (PNG de `tools/gen_resource_icons.gd`, las cinco
+  medidas): el mismo lenguaje, trazo de hueso con el color del recurso dentro
+  (la cara de la moneda, el corte del tronco, el petróleo en la gota, los
+  granos de la espiga, el casco de latón del trabajador, el corazón pequeño de
+  la moral). Como salen también sobre el mapa (ficha de "listo para recoger",
+  números flotantes), llevan un halo de tinta y el cuerpo de las formas
+  cerradas relleno de Pizarra: se leen sobre la hierba y sobre el disco claro.
+- **La Capitana Remache** (`InstructorBust`, `_draw_ada`): grabado a dos tintas
+  estilo cartel, la figura en latón y las tallas y el fondo en Pizarra, rayos
+  Art Déco detrás de la cabeza y rayado en la sombra; sin piel, mejillas ni
+  rojos. Mismo tamaño (112 × 140, 88 × 110 en teléfono), mismas seis caras y
+  la boca que habla (tallada). El marco va a 4 px. El Sargento Bombarda no se
+  ha tocado (lo lleva otro frente).
+- **Cerrar no es destruir**: `UITheme.make_close_button` (la X de la Orden de
+  la Regencia) era roja; ahora es la X oscura de la piel con el icono de línea.
+- **La tarjeta del tutorial manda**: si se ve y cae sobre la Orden de la
+  Regencia (en teléfono o columna estrecha, siempre), la Orden se pliega al
+  icono de la Tormenta y espera, como un aviso en la cola de `AlertQueue`;
+  vuelve sola al irse la tarjeta (`StormHUD._tutorial_blocks`, mirado cada
+  0,25 s solo mientras hay Orden que enseñar). Tocar el icono la abre igual.
+  La tarjeta está en el grupo `tutorial_card`.
+- **Esquinas a la piel**: el foco del nombre (ficha y Regimiento), la placa
+  "Paso N" y el marco del tutorial, el señalador de la ayuda, la línea del
+  siguiente paso, los botones en pantalla y los puntos rojos (`red_dot` y el
+  de Misiones) usan `RADIUS_*` (2-4 px). El aro que señala un punto del mapa
+  sigue redondo.
+- **Botones en mayúsculas**: `Button` no tiene `uppercase`, así que
+  `CartoonTheme.caps_button()` le pone un dominio de traducción propio
+  (`scripts/ui/CapsTranslation.gd`) que solo sube el caso de lo que se pinta.
+  `Button.text` y las claves de Tr no cambian; la ayuda emergente tampoco; lo
+  que no tiene dos letras seguidas ("x2", "✕") se queda igual. Lo usan
+  `style_pill`, `style_text_pill` y `UITheme.style_button`; las pastillas con
+  etiqueta (`pill_button`) ponen `Label.uppercase` en cualquier tamaño.
+- **El sello en los momentos grandes**: la victoria lleva AUDITORÍA SUPERADA
+  (CAPITAL EN PIE en Constructor) bajo la bandera, y el ascenso estampa
+  ASCENDIDO sobre la insignia del rango 4 s (`stamp(..., compact = true)`,
+  velo casi opaco), además del aviso de siempre.
+
+Tests: `tests/ui/test_piel_pulido.gd`.
+
 ### Lo que no cambió (y desentona algo)
 
-- Los iconos dibujados (`CartoonIcon`) siguen siendo de juguete y de colores
-  (solo su contorno pasó a la tinta de la piel).
-- La cara de la Capitana y los bustos del tutorial (`InstructorBust`).
+- El Sargento Bombarda sigue en caricatura.
 - Los colores de recurso y el prólogo (docs/24 §6).
 
 ### Tests

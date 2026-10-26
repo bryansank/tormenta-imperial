@@ -561,11 +561,17 @@ static func pill_button(text_s: String, glyph: String = "", kind_s: String = "pr
 	var g := glyph
 	if g == "" and kind_s == "disabled" and text_s != "":
 		g = "lock"
+	# El icono de linea va del color de la letra (tinta sobre laton, claro
+	# sobre acero o Placa).
+	var tc := pill_text(kind_s, fill, role)
 	if g != "":
-		row.add_child(make_glyph(g, roundi(height * 0.56)))
+		row.add_child(make_glyph(g, roundi(height * 0.56), tc["color"]))
 	if text_s != "":
-		var tc := pill_text(kind_s, fill, role)
-		row.add_child(label(text_s, level, tc["color"], tc["outline"]))
+		var word := label(text_s, level, tc["color"], tc["outline"])
+		# Todas las palabras de boton en el mismo caso (docs/21 §17), sea cual
+		# sea el tamano de letra que pida quien lo crea.
+		word.uppercase = caps_titles()
+		row.add_child(word)
 	_fill_button(btn, row, height, 22 if text_s != "" else 8)
 	_watch_disabled(btn, row)
 	return btn
@@ -603,7 +609,7 @@ static func round_button(glyph: String, kind_s: String = "secondary", d: int = R
 	btn.focus_mode = Control.FOCUS_ALL
 	var fill := kind_fill(kind_s, role)
 	_btn_states(btn, fill, int(d * 0.5), 0, role)
-	var icon := make_glyph(glyph, roundi(d * 0.58), glyph_tint)
+	var icon := make_glyph(glyph, roundi(d * 0.58), glyph_tint if glyph_tint.a > 0.0 else pill_text(kind_s, fill, role)["color"], role)
 	var holder := CenterContainer.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(icon)
@@ -634,7 +640,7 @@ static func close_button(d: int = 0) -> Button:
 
 ## Un icono: id de CartoonIcon, "res:<id>" (recurso, PNG) o "unit:<id>"
 ## (silueta de unidad, PNG en blanco).
-static func make_glyph(glyph: String, px: int, tint: Color = Color(0, 0, 0, 0)) -> Control:
+static func make_glyph(glyph: String, px: int, tint: Color = Color(0, 0, 0, 0), role: String = "window") -> Control:
 	if glyph.begins_with("res:"):
 		return UITheme.make_icon(glyph.substr(4), px)
 	if glyph.begins_with("unit:"):
@@ -646,7 +652,7 @@ static func make_glyph(glyph: String, px: int, tint: Color = Color(0, 0, 0, 0)) 
 		r.modulate = tint if tint.a > 0.0 else WHITE
 		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		return r
-	return Icon.make(glyph, px, tint)
+	return Icon.make(glyph, px, tint, role)
 
 # ══════════════════════════════════════
 # PIEZAS
@@ -663,7 +669,7 @@ static func stat_chip(glyph: String, value: String, caption: String, role: Strin
 	row.add_theme_constant_override("separation", 6)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	row.tooltip_text = caption
-	var ic := make_glyph(glyph, 26 if phone else 34)
+	var ic := make_glyph(glyph, 26 if phone else 34, Color(0, 0, 0, 0), role)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(ic)
 	var col := VBoxContainer.new()
@@ -711,9 +717,9 @@ static func badge(text_s: String, fill: Color, glyph: String = "") -> PanelConta
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 5)
-	if glyph != "":
-		row.add_child(make_glyph(glyph, 20))
 	var tc := on_fill(fill)
+	if glyph != "":
+		row.add_child(make_glyph(glyph, 20, tc["color"]))
 	row.add_child(label(text_s, "small", tc["color"], tc["outline"]))
 	p.add_child(row)
 	return p
@@ -813,9 +819,9 @@ static func tab(text_s: String, glyph: String, selected: bool, role: String = "w
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if glyph != "":
-			row.add_child(make_glyph(glyph, roundi(height * 0.58)))
 		var tc := on_fill(f)
+		if glyph != "":
+			row.add_child(make_glyph(glyph, roundi(height * 0.58), tc["color"]))
 		row.add_child(label(text_s, "button", tc["color"], tc["outline"]))
 		_fill_button(b, row, height, pad_h)
 		return b
@@ -835,7 +841,7 @@ static func tab(text_s: String, glyph: String, selected: bool, role: String = "w
 	row2.add_theme_constant_override("separation", 8)
 	row2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if glyph != "":
-		row2.add_child(make_glyph(glyph, roundi(height * 0.5)))
+		row2.add_child(make_glyph(glyph, roundi(height * 0.5), text(role, true)))
 	row2.add_child(label(text_s, "button", text(role, true)))
 	_fill_button(btn, row2, height, pad_h)
 	return btn
@@ -959,7 +965,7 @@ static func notice(text_s: String, glyph: String, tone: String = "info", count: 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ic := make_glyph(glyph, 20 if phone else 28)
+	var ic := make_glyph(glyph, 20 if phone else 28, readable(col, "hud"), "hud")
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(ic)
 	var l := label(text_s, "small" if phone else "body", text("hud"))
@@ -1079,7 +1085,7 @@ static func red_dot(host: Control, side: int = 0) -> Panel:
 	var dot := Panel.new()
 	dot.name = "RedDot"
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	dot.add_theme_stylebox_override("panel", box(sem("DANGER"), INK, 2, int(px * 0.5), 0))
+	dot.add_theme_stylebox_override("panel", box(sem("DANGER"), INK, 2, RADIUS_BTN, 0))
 	host.add_child(dot)
 	dot.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	dot.offset_left = -px + 4
@@ -1411,6 +1417,7 @@ static func style_text_pill(b: Button, kind_s: String, height: int, role: String
 	b.add_theme_color_override("font_outline_color", INK)
 	b.add_theme_constant_override("h_separation", 8)
 	b.set_meta("pill_kind", kind_s)
+	caps_button(b)
 	# Los botones de texto ponen su texto luego (el verbo de las recetas): la
 	# luz piloto va con la clase, no con el texto.
 	_sync_pilot(b, kind_s == "primary", fill, 10)
@@ -1586,6 +1593,30 @@ static func icon_line(glyph: String, text_s: String, tone: String = "", role: St
 	row.add_child(l)
 	return row
 
+## El dominio de traduccion de las mayusculas de boton (CapsTranslation).
+const CAPS_DOMAIN := &"ti_button_caps"
+static var _caps_domain_ready := false
+
+## Pinta en mayusculas el texto de un Button sin cambiar `text` (Button no
+## tiene `uppercase`): un dominio de traduccion propio que solo sube el caso.
+## Solo con la piel que lo pide (caps_titles()); la ayuda emergente no cambia.
+static func caps_button(b: Button) -> void:
+	if b == null or not caps_titles():
+		return
+	if not _caps_domain_ready:
+		_caps_domain_ready = true
+		var t: Translation = load("res://scripts/ui/CapsTranslation.gd").new()
+		t.locale = TranslationServer.get_locale()
+		TranslationServer.get_or_add_domain(CAPS_DOMAIN).add_translation(t)
+	b.tooltip_auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	if b.get_translation_domain() != CAPS_DOMAIN:
+		b.set_translation_domain(CAPS_DOMAIN)
+		b.notification(Node.NOTIFICATION_TRANSLATION_CHANGED)
+
+## Si el boton pinta su texto en mayusculas (pruebas).
+static func is_caps_button(b: Button) -> bool:
+	return b != null and b.get_translation_domain() == CAPS_DOMAIN
+
 ## Un Button de siempre (su `text` sigue siendo su texto: las pantallas lo
 ## cambian y las pruebas lo leen) con la piel de pastilla de pill_button y, si
 ## se pide, un icono a la izquierda. Se puede volver a llamar para cambiarla.
@@ -1604,6 +1635,7 @@ static func style_pill(btn: Button, kind_s: String = "secondary", height: int = 
 	btn.add_theme_constant_override("outline_size", maxi(3, roundi(size * 0.25)) if tc["outline"] else 0)
 	btn.add_theme_color_override("font_outline_color", INK)
 	btn.custom_minimum_size.y = height
+	caps_button(btn)
 	var lead := _sync_pilot(btn, kind_s == "primary" and btn.text != "", fill, pad)
 	var old := btn.get_node_or_null("PillGlyph")
 	if old != null:
@@ -1611,7 +1643,7 @@ static func style_pill(btn: Button, kind_s: String = "secondary", height: int = 
 		old.queue_free()
 	if glyph != "":
 		var px := roundi(height * 0.52)
-		var ic := make_glyph(glyph, px)
+		var ic := make_glyph(glyph, px, tc["color"])
 		ic.name = "PillGlyph"
 		btn.add_child(ic)
 		if btn.text == "":
@@ -1694,7 +1726,7 @@ static func unit_disc(unit_id: String, fill: Color, d: int, count: int = -1) -> 
 	p.size = Vector2(d, d)
 	var n := PanelContainer.new()
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ns := box(WHITE, INK, 2, 10, 0)
+	var ns := box(WHITE, INK, 2, RADIUS_CARD, 0)
 	ns.content_margin_left = 4
 	ns.content_margin_right = 4
 	n.add_theme_stylebox_override("panel", ns)
@@ -1857,24 +1889,33 @@ static func odds_badge(odds: String, text_s: String) -> PanelContainer:
 	b.mouse_filter = Control.MOUSE_FILTER_PASS
 	return b
 
-## El sello de los partes (COBRADO / REPELIDO): pastilla de color algo girada,
-## sin animacion. Guarda su texto en meta "stamp_text".
-static func stamp(text_s: String, fill: Color) -> Control:
+## El sello de los partes (COBRADO / REPELIDO), de la victoria (AUDITORIA
+## SUPERADA) y del ascenso (ASCENDIDO, `compact`: cabe sobre la insignia del
+## HUD y tapa lo de debajo): pastilla de color algo girada, sin animacion.
+## Guarda su texto en meta "stamp_text".
+static func stamp(text_s: String, fill: Color, compact: bool = false) -> Control:
 	var holder := Control.new()
+	holder.name = "Stamp"
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	holder.custom_minimum_size = Vector2(0, 50 if phone else 60)
+	holder.custom_minimum_size = Vector2(0, 0 if compact else (50 if phone else 60))
 	# Sello oficial (prestado de la direccion C): marco de tinta del color del
 	# sello sobre un velo del mismo color, letras del sello. Sin textura.
 	var p := PanelContainer.new()
-	var ink := readable(fill.lightened(0.15) if kind("window") == "dark" else fill.darkened(0.2))
-	var s := box(Color(fill, 0.14), ink, 3, 2, 0, 0, 0)
-	s.content_margin_left = 22
-	s.content_margin_right = 22
-	s.content_margin_top = 2
-	s.content_margin_bottom = 3
+	var role := "hud" if compact else "window"
+	var ink := readable(fill.lightened(0.15) if kind(role) == "dark" else fill.darkened(0.2), role)
+	var veil := Color(fill, 0.14)
+	if compact:
+		# Encima de la insignia: el velo casi opaco, que no se lea lo de debajo.
+		veil = Color(c("hud", "BG").lerp(fill, 0.14), 0.96)
+	var s := box(veil, ink, 2 if compact else 3, 2, 0, 0, 0)
+	s.content_margin_left = 10 if compact else 22
+	s.content_margin_right = 10 if compact else 22
+	s.content_margin_top = 0 if compact else 2
+	s.content_margin_bottom = 1 if compact else 3
 	p.add_theme_stylebox_override("panel", s)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := label(text_s, "title", ink)
+	var l := label(text_s, "button" if compact else "title", ink)
+	l.uppercase = true
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p.add_child(l)
 	holder.add_child(p)

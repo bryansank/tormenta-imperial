@@ -284,7 +284,7 @@ func _setup_ui() -> void:
 	ps.bg_color = Color(0, 0, 0, 0)
 	ps.border_color = CT.sem("ACCENT")
 	ps.set_border_width_all(4)
-	ps.set_corner_radius_all(12)
+	ps.set_corner_radius_all(CartoonTheme.RADIUS_WINDOW)
 	ps.shadow_color = Color(CT.INK, 0.45)
 	ps.shadow_size = 2
 	_pointer.add_theme_stylebox_override("panel", ps)

@@ -238,7 +238,7 @@ func _build_coach() -> void:
 	fs.bg_color = Color(0, 0, 0, 0)
 	fs.border_color = CT.sem("ACCENT")
 	fs.set_border_width_all(4)
-	fs.set_corner_radius_all(12)
+	fs.set_corner_radius_all(CT.RADIUS_WINDOW)
 	fs.shadow_color = Color(CT.INK, 0.5)
 	fs.shadow_size = 2
 	_frame.add_theme_stylebox_override("panel", fs)
@@ -268,6 +268,8 @@ func _build_coach() -> void:
 	_card.name = "CoachCard"
 	# Los avisos (NotificationPanel) esperan si la tarjeta cae sobre su columna.
 	_card.add_to_group("alert_blocker")
+	# La Orden de la Regencia (StormHUD) se pliega y espera si la tarjeta cae encima.
+	_card.add_to_group("tutorial_card")
 	_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	_card.add_theme_stylebox_override("panel", CT.bubble_style())
 	_coach.add_child(_card)
@@ -278,7 +280,7 @@ func _build_coach() -> void:
 	# "Paso 3 de 9": una pastilla de laton pequena.
 	var pill := PanelContainer.new()
 	pill.name = "BadgePill"
-	var ps := CT.box(CT.sem("ACCENT"), CT.INK, 2, 12, 0)
+	var ps := CT.box(CT.sem("ACCENT"), CT.INK, 2, CT.RADIUS_CARD, 0)
 	ps.content_margin_left = 10
 	ps.content_margin_right = 10
 	ps.content_margin_top = 0

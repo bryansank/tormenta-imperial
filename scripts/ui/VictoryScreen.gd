@@ -61,6 +61,11 @@ func _show_victory(stats: Dictionary) -> void:
 	byline.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(byline)
 
+	# El sello oficial: la Auditoria superada (o la capital en pie, Constructor).
+	var seal := CT.stamp(Tr.t("STAMP_VICTORY_BUILDER" if builder else "STAMP_VICTORY_AUDIT"), CT.sem("POSITIVE"))
+	seal.name = "VictoryStamp"
+	vbox.add_child(seal)
+
 	# Una frase.
 	var subtitle := CT.para(Tr.t("LBL_VICTORY_SUBTITLE_BUILDER" if builder else "LBL_VICTORY_SUBTITLE_AUDIT"), "window")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
