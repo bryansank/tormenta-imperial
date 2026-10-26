@@ -454,7 +454,7 @@ func _run() -> void:
 		_screens_hit.size(), _screens_hit])
 	_finish()
 
-## Las pantallas de la 1.2 (como tools/v12_probe_runner.gd): amenaza de costa,
+## El cierre de capitulo y las pantallas de la 1.2 (como tools/v12_probe_runner.gd): amenaza de costa,
 ## ATAQUES RAPIDOS con amenazas, el barco del contrabandista y el final con
 ## eleccion (victoria, EL LIBRO, QUEMAR, FIRMAR, el archipielago, IMPERIO).
 func _v12_shots(main: Node) -> void:
@@ -462,6 +462,15 @@ func _v12_shots(main: Node) -> void:
 	if victory and victory.has_method("dismiss"):
 		victory.dismiss()
 	await _frames(5)
+	# El cierre de capitulo (feat/ritmo-colono): la tarjeta del capitulo II.
+	var chapter: Node = get_tree().get_first_node_in_group("chapter_screen")
+	if chapter:
+		chapter._on_chapter_completed(2)
+		chapter.try_show_next()
+		await _frames(15)
+		await _shot("v13_capitulo")
+		chapter.close_current()
+		await _frames(5)
 	var spots: Dictionary = ThreatManager.free_spots()
 	var land: Array = spots.get("land", [])
 	if land.size() > 2:
