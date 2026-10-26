@@ -18,6 +18,9 @@ var _tutorial_saved: Dictionary = {}
 
 func before_test() -> void:
 	GameConfig.set_game_speed(1.0)
+	# ProductionManager avanza por tic de 0,1 s (2026-10-26): lo que llevaba
+	# acumulado de los fotogramas de antes no se cuela en la cuenta.
+	ProductionManager._tick_acc = 0.0
 	# Con el tutorial en marcha el reloj de la Tormenta espera (2026-10-19,
 	# TutorialManager.blocks_interruptions): aqui se prueba el reloj solo.
 	_tutorial_saved = TutorialManager.get_save_data()

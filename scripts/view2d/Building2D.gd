@@ -35,6 +35,9 @@ const ArtCache := preload("res://scripts/view2d/ArtCache2D.gd")
 ## cada uno en su hueco). Los primeros `BOOT_FRAMES` mira siempre.
 const CHECK_FRAMES := 10
 const BOOT_FRAMES := 4
+## El badge se relee una de cada BADGE_EVERY revisiones (~0,5 s a 60 fps).
+const BADGE_EVERY := 3
+const Clock := preload("res://scripts/view2d/Building2DClock.gd")
 
 var data: BuildingData = null
 ## Fantasma de colocacion: no esta en la rejilla, se pinta translucido.
@@ -124,15 +127,30 @@ func setup(building_data: BuildingData, is_ghost: bool = false) -> void:
 		add_child(_flag)
 		_flag.setup(base_size_px(), self)
 
-## Godot enciende _process al entrar en el arbol: las calzadas lo apagan aqui,
-## y tambien el de su badge (una calzada nunca tiene obreros ni se para; con
-## doscientas calzadas, sus badges eran lo que mas costaba por fotograma).
+## Godot enciende _process al entrar en el arbol. Desde 2026-10-26 el estado lo
+## revisa un reloj unico (Building2DClock, una cubeta de edificios por
+## fotograma); el _process propio solo sigue encendido mientras haga falta cada
+## fotograma (los primeros, seleccionado, en obras: `_wants_frames()`). Las
+## calzadas y el fantasma no entran en el reloj: no cambian solos.
 func _ready() -> void:
-	if data != null and data.id == "road" and not ghost:
+	if data != null and (data.id == "road" or ghost):
 		set_process(_selected)
-		var badge := get_node_or_null("StatusBadge")
-		if badge:
-			badge.set_process(false)
+
+func _enter_tree() -> void:
+	if _clocked():
+		Clock.register(self)
+
+func _exit_tree() -> void:
+	if _clocked():
+		Clock.unregister(self)
+
+func _clocked() -> bool:
+	return data != null and not ghost and data.id != "road"
+
+## Lo que pide el _process de cada fotograma: el pulso de la seleccion, el
+## rotulo de la obra contraescalado al zoom y los primeros fotogramas de vida.
+func _wants_frames() -> bool:
+	return _selected or _boot > 0 or has_meta("under_construction")
 
 func _on_map_changed(_a = null, _b = null) -> void:
 	_lot_dirty = true
@@ -172,8 +190,10 @@ func set_selected(value: bool) -> void:
 	if _name_label:
 		_name_label.visible = value
 		_name_label.text = _label_text()
-	if data != null and data.id == "road":
+	if data != null and (data.id == "road" or ghost):
 		set_process(value)
+	elif value:
+		set_process(true)
 	# El badge compacto ensena su texto entero solo con el edificio seleccionado.
 	var badge := get_node_or_null("StatusBadge")
 	if badge != null and badge.has_method("set_expanded"):
@@ -216,8 +236,9 @@ func apply_construction_visual() -> void:
 		add_child(label)
 	queue_redraw()
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if data == null:
+		set_process(false)
 		return
 	if _selected:
 		_pulse = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.006)
@@ -227,8 +248,27 @@ func _process(delta: float) -> void:
 		return
 	if _boot > 0:
 		_boot -= 1
-	elif (Engine.get_process_frames() + _slot) % CHECK_FRAMES != 0:
+		check_state()
+	if not _wants_frames():
+		set_process(false)
+
+## La revision periodica (la llama Building2DClock, una vez cada CHECK_FRAMES
+## fotogramas por edificio, y el _process en los primeros): firma, parcela y, de
+## vez en cuando, el badge. Solo repinta si algo cambio.
+var _checks := 0
+func check_state() -> void:
+	if data == null or ghost or data.id == "road":
 		return
+	# Una obra que empieza (o un rotulo nuevo) necesita el _process para seguir
+	# al zoom; lo apaga el propio _process cuando ya no hace falta.
+	if not is_processing() and _wants_frames():
+		set_process(true)
+	_checks += 1
+	if _checks >= BADGE_EVERY:
+		_checks = 0
+		var badge := get_node_or_null("StatusBadge")
+		if badge != null and badge.has_method("refresh"):
+			badge.refresh()
 	var sig := _current_signature()
 	_update_lot()
 	if sig != _signature:
@@ -238,6 +278,15 @@ func _process(delta: float) -> void:
 		_apply_fx()
 		_sync_flag()
 		queue_redraw()
+	# Giro o movimiento cambian la huella: el badge se recoloca (solo si cambio).
+	place_badge()
+
+## Recoloca el badge si cambio el zoom, la huella o la seleccion. Lo llaman la
+## revision periodica y el reloj al cambiar el zoom.
+func place_badge() -> void:
+	var badge := get_node_or_null("StatusBadge")
+	if badge != null and badge.has_method("place"):
+		badge.place()
 
 ## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo,
 ## mastil corto del tejado del Cuartel, lo alto del mastil o del letrero): se

@@ -106,6 +106,7 @@ func reset() -> void:
 	_crops.clear()
 	last_offline_spoiled = {}
 	_full_bag_notice_cooldown = 0.0
+	_tick_acc = 0.0
 	UtilityEffects.clear()
 
 func _register_producer(node: Node, data: BuildingData) -> void:
@@ -309,7 +310,11 @@ func _make_progress_bar() -> MeshInstance3D:
 func _refresh_construction_visual(node: Node) -> void:
 	var label: Node = node.get_node_or_null("ConstructionLabel")
 	if label:
-		label.text = construction_text(node)
+		# Solo si cambia (el porcentaje o los segundos): reasignar el mismo
+		# texto rehace la forma del Label3D igual.
+		var text := construction_text(node)
+		if label.text != text:
+			label.text = text
 	var bar := node.get_node_or_null("ConstructionBar") as MeshInstance3D
 	if bar and bar.material_override is ShaderMaterial:
 		(bar.material_override as ShaderMaterial).set_shader_parameter("progress", get_construction_progress(node))
@@ -361,15 +366,31 @@ func _complete_construction(stale_or_node) -> void:
 
 # ── Production ──
 
+## Rendimiento ("en una papa", 2026-10-26): obras, produccion y caducidad
+## avanzan por TIC de `TICK_SECONDS` de simulacion, no por fotograma. Con la
+## reserva por edificio, las granjas y el tope (1.0/1.1) recorrer los ~80
+## productores cada fotograma costaba ~780 us en la colonia grande. Los ciclos
+## duran 4-60 s y las obras segundos: una decima de segundo no se nota, y el
+## tiempo no se pierde (se suma lo acumulado entero). Un delta grande (pruebas,
+## sondas, line_probe) pasa de golpe, como antes.
+const TICK_SECONDS := 0.1
+var _tick_acc := 0.0
+
 func _process(delta: float) -> void:
 	# x2: construccion, produccion y caducidad al doble (GameConfig.sim_delta).
 	# El enfriamiento del aviso de saco lleno es de la interfaz: segundos reales.
-	var sim := GameConfig.sim_delta(delta)
-	_tick_construction(sim)
-	_tick_production(sim)
-	_tick_spoilage(sim)
 	if _full_bag_notice_cooldown > 0.0:
 		_full_bag_notice_cooldown -= delta
+	_tick_acc += GameConfig.sim_delta(delta)
+	if _tick_acc < TICK_SECONDS:
+		return
+	var sim := _tick_acc
+	_tick_acc = 0.0
+	if not _constructing.is_empty():
+		_tick_construction(sim)
+	if not _producing.is_empty():
+		_tick_production(sim)
+	_tick_spoilage(sim)
 
 func _tick_construction(delta: float) -> void:
 	var completed: Array = []
