@@ -19,8 +19,13 @@ const DragScroll := preload("res://scripts/ui/DragScroll.gd")
 const ICON_PX := 24
 ## Ancho de la ficha (PC / telefono) y margen con el borde.
 const CARD_W := 360.0
-const CARD_W_PHONE := 290.0
+const CARD_W_PHONE := 330.0
 const EDGE := 14.0
+## Hueco arriba (el ☰ y la Tormenta) y abajo (la barra), telefono / PC.
+const TOP_PHONE := 54.0
+const TOP_PC := 84.0
+const BOTTOM_PHONE := 8.0
+const BOTTOM_PC := 96.0
 
 var _root: Control
 var _panel: Control
@@ -89,7 +94,9 @@ func _refresh() -> void:
 	var domain: String = "sea" if water else "land"
 	var name_key: String = Generator.threat_name_key(threat_type, domain)
 	var fight: bool = Generator.threat_is_fight(threat_type)
-	_win = CT.window(Tr.t(name_key), CT.sem("DANGER") if fight else CT.sem("INFO"), true)
+	# La cinta, una palabra (el nombre entero no cabe en 290); el nombre, dentro.
+	_win = CT.window(Tr.t("THREAT_RIBBON_FIGHT" if fight else "THREAT_RIBBON_WRECK"),
+		CT.sem("DANGER") if fight else CT.sem("INFO"), true)
 	_panel = _win["root"]
 	_panel.name = "ThreatCardPanel"
 	_root.add_child(_panel)
@@ -109,6 +116,10 @@ func _refresh() -> void:
 	_box.add_theme_constant_override("separation", 4 if phone else 8)
 	_scroll.add_child(_box)
 
+	var title := CT.label(Tr.t(name_key), "button" if phone else "title", CT.text("window"))
+	title.name = "ThreatName"
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_box.add_child(title)
 	# Una frase; el resto al mantener pulsado.
 	var desc := CT.para(Tr.t(name_key.replace("THREAT_NAME_", "THREAT_DESC_")), "window", true, "small")
 	desc.name = "ThreatDesc"
@@ -194,9 +205,11 @@ func _place() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var phone := CT.is_phone()
 	var w: float = minf(CARD_W_PHONE if phone else CARD_W, vp.x - EDGE * 2.0)
-	var h: float = minf(vp.y - EDGE * 2.0 - (0.0 if phone else 80.0), 420.0)
+	# Debajo del ☰ (que no tape la ✕) y encima de la barra de abajo.
+	var top: float = TOP_PHONE if phone else TOP_PC
+	var h: float = minf(vp.y - top - (BOTTOM_PHONE if phone else BOTTOM_PC), 540.0)
 	_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_panel.position = Vector2(vp.x - w - EDGE, (vp.y - h) * 0.5)
+	_panel.position = Vector2(vp.x - w - EDGE, top)
 	_panel.size = Vector2(w, h)
 
 ## ¡AL ATAQUE!: MISIONES se abre en ATAQUES RAPIDOS con esta amenaza elegida,

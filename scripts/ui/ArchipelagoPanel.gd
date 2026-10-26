@@ -50,12 +50,18 @@ var _selected: String = ""
 func _ready() -> void:
 	layer = 17
 	visible = false
+	# Mientras esta abierto, los avisos esperan (NotificationPanel.is_busy).
+	add_to_group("modal_screen")
 	EventBus.empire_changed.connect(_on_changed)
 	EventBus.colony_identity_changed.connect(func(_n, _s): _on_changed())
 	EventBus.locale_changed.connect(func(_l): _rebuild_if_open())
 
 ## Esta abierto.
 func is_open() -> bool:
+	return visible
+
+## Para NotificationPanel.is_busy (grupo "modal_screen").
+func is_showing() -> bool:
 	return visible
 
 func open() -> void:
@@ -418,6 +424,11 @@ class ArchipelagoMap extends Control:
 		var r: float = island_radius()
 		var font: Font = get_theme_default_font()
 		var font_size: int = UITheme.FONT_SMALL
+		# Mapa bajo (telefono): los nombres se pisarian. Solo el de la elegida;
+		# en las demas, "n/m" (el nombre esta en la ficha de la derecha).
+		var compact: bool = size.y < 300.0 or size.x < 480.0
+		if compact:
+			font_size = maxi(11, roundi(float(font_size) * 0.85))
 		# Rutas.
 		for island in GameConfig.empire_islands:
 			var p: Vector2 = to_px(island.get("pos", HOME))
@@ -443,7 +454,9 @@ class ArchipelagoMap extends Control:
 			var label: String = Tr.t(Gen.island_name_key(id))
 			var won: int = EmpireManager.won(id)
 			var total: int = EmpireManager.total(id)
-			if not conquered:
+			if compact and id != selected:
+				label = "✓" if conquered else "%d/%d" % [won, total]
+			elif not conquered:
 				label += "  %d/%d" % [won, total]
 			_draw_name(font, font_size, p + Vector2(0, r + 16.0), label,
 				UITheme.POSITIVE if conquered else (UITheme.TEXT_BRIGHT if open else UITheme.TEXT_DIM))

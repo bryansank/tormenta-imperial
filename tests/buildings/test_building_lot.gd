@@ -86,6 +86,10 @@ func test_props_are_deterministic_per_instance() -> void:
 
 func test_two_instances_get_different_props() -> void:
 	for id in _lot_ids():
+		# El Bastion (1.2) no lleva atrezo a proposito: el muro ya es todo.
+		var style: Dictionary = GameConfig.building_lot_style.get(id, {})
+		if int((style.get("count", [1, 1]) as Array)[1]) <= 0:
+			continue
 		var fp := _data(id).grid_size
 		var a := Plan.plan(id, fp, Plan.seed_for(Vector2i(3, 4), id))
 		var b := Plan.plan(id, fp, Plan.seed_for(Vector2i(12, 9), id))

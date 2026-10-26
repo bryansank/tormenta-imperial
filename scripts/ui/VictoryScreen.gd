@@ -31,8 +31,10 @@ const Bust := preload("res://scripts/ui/InstructorBust.gd")
 
 ## Tope de la ventana en PC/tablet.
 const WINDOW_MAX := Vector2(720, 560)
-## La mesa del libro: dos tarjetas lado a lado.
-const CHOICE_MAX := Vector2(860, 560)
+## La mesa del libro: dos tarjetas lado a lado (poco alto: no queda hueco).
+const CHOICE_MAX := Vector2(860, 400)
+## Los dos finales: una frase, el instructor y los botones.
+const ENDING_MAX := Vector2(720, 470)
 
 ## Que se ve: "victory" (las cifras), "choice" (la mesa del libro) o el final
 ## elegido ("sign" / "burn"). "" = nada.
@@ -235,7 +237,7 @@ func show_ending(choice: String) -> void:
 	var small := CT.is_phone()
 	var sign: bool = choice == EmpireManager.ENDING_SIGN
 	var vbox := _open_window(Tr.t("END_SIGN_RIBBON" if sign else "END_BURN_RIBBON"),
-		CT.sem("ACCENT") if sign else CT.sem("POSITIVE"), "EndingWindow", WINDOW_MAX)
+		CT.sem("ACCENT") if sign else CT.sem("POSITIVE"), "EndingWindow", ENDING_MAX)
 	var byline := ColonyByline.new("section", CT.text("window"), Vector2(60, 40) if small else Vector2(72, 48))
 	byline.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(byline)
