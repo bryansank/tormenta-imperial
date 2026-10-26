@@ -171,8 +171,13 @@ conflicts).
 All styling comes from the static `UITheme` class (the redesigned screens build from `CartoonTheme`; the army/missions/combat/report pieces live in its `# --- EJÉRCITO` section: `modal_window`/`fit_window`/`fit_card`, `style_pill`, `unit_disc`, `cost_row`, `campaign_track`). Since the phase-2 redesign
 (`feat/ui2-hud`, 2026-10-18) the **default style is the "maqueta" one**
 (`UITheme.STYLE_DEFAULT = "cartoon"`: `CartoonTheme`, `scripts/ui/CartoonIcon.gd`,
-Baloo 2 + Nunito Sans, dark thin HUD + light cream windows; guide in
-`docs/28-guia-ui.md`); `"classic"` stays as an internal fallback
+guide in `docs/28-guia-ui.md`). **Since 2026-10-25 `CartoonTheme` (historical name)
+paints the dieselpunk skin "D · Mezcla sobria"**: slate bunker panels with brass
+edges, Big Shoulders Display headings + IBM Plex Sans Condensed text and figures,
+near-square corners, five button intents (brass primary with a pilot light, steel
+open, amber warn, red destroy, dimmed + padlock unavailable), dark windows by
+default (`window_theme` "light" = sober paper) — `docs/21-interfaz-y-dispositivos.md`
+§17 and `docs/24-paleta.md`; `"classic"` stays as an internal fallback
 (`-- --ui-style=classic`), and the mockups come from `tools/ui_mockup_probe.gd`.
 On a phone canvas (< 450 short side, `CartoonTheme.phone`, set by DeviceProfile)
 `UILayoutConfig.PHONE_SLOTS` is merged in `UILayoutManager.get_slot()` before

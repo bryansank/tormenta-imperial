@@ -288,11 +288,12 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 		_picker([Tr.t("UI2M_OPT_LANDSCAPE"), Tr.t("UI2M_OPT_PORTRAIT")], maxi(0, orients.find(GameConfig.ui_orientation)),
 			func(idx: int): GameConfig.set_orientation(orients[idx])), null, Tr.t("LBL_ORIENTATION")))
 
-	# Tema de las ventanas (2026-10-19): Claro (crema) u Oscuro. Se aplica al
-	# momento: la interfaz se rehace (como al cambiar el perfil de telefono).
+	# Tema de las ventanas (2026-10-19; piel dieselpunk 2026-10-25): Oscuro
+	# (bunker, de serie) o Claro (papel). Se aplica al momento: la interfaz se
+	# rehace (como al cambiar el perfil de telefono).
 	var themes: Array = CT.WINDOW_THEMES
 	body.add_child(_row("ThemeRow", "screen", "UI2M_SET_THEME",
-		_picker([Tr.t("UI2M_THEME_LIGHT"), Tr.t("UI2M_THEME_DARK")], maxi(0, themes.find(GameConfig.ui_theme)),
+		_picker([Tr.t("UI2M_THEME_DARK"), Tr.t("UI2M_THEME_LIGHT")], maxi(0, themes.find(GameConfig.ui_theme)),
 			func(idx: int): set_ui_theme(themes[idx])), null, Tr.t("UI2M_SET_THEME")))
 
 	body.add_child(_make_view_mode_row())
@@ -547,8 +548,8 @@ func reset_interface() -> void:
 	GameConfig.ui_combat_view = "front"
 	GameConfig.ui_fps_cap = "auto"
 	GameConfig.set_hud_words("auto")
-	# El tema vuelve a Claro (el de serie); se ve al APLICAR, con lo demas.
-	GameConfig.ui_theme = "light"
+	# El tema vuelve a Oscuro (el de serie); se ve al APLICAR, con lo demas.
+	GameConfig.ui_theme = CT.WINDOW_THEME_DEFAULT
 	for row_name in ["ProfileRow", "ScaleRow", "TextSizeRow", "QualityRow", "CombatViewRow", "FpsRow", "HudWordsRow", "ThemeRow"]:
 		var picker = _picker_of(row_name)
 		if picker != null:

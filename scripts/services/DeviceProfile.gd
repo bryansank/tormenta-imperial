@@ -330,7 +330,7 @@ func apply_all() -> void:
 ## Tokens de UITheme y tema global de la raiz. Los paneles ya construidos no
 ## cambian: para eso rebuild_ui().
 func apply_theme() -> void:
-	CartoonTheme.window_theme = GameConfig.ui_theme if GameConfig.ui_theme in CartoonTheme.WINDOW_THEMES else "light"
+	CartoonTheme.window_theme = GameConfig.ui_theme if GameConfig.ui_theme in CartoonTheme.WINDOW_THEMES else CartoonTheme.WINDOW_THEME_DEFAULT
 	UITheme.configure(GameConfig.ui_palette, GameConfig.ui_high_contrast,
 		GameConfig.ui_panel_opacity, effective_text_size(), int(defaults()["touch_target"]),
 		int(defaults().get("settings_row", 0)))

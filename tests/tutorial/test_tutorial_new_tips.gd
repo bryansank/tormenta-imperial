@@ -74,7 +74,10 @@ func test_the_first_trained_unit_explains_upkeep_before_it_bites() -> void:
 	TutorialManager.first_sortie_done = true
 	EventBus.unit_trained.emit("infantry")
 	EventBus.army_upkeep_unpaid.emit(10)
-	assert_array(_tips).contains_exactly(["upkeep"])
+	# Entrenar da XP de rango: si las suites de antes dejaron el rango a punto
+	# de subir, salen tambien los consejos de rango y bandera (no son de esto).
+	var own := _tips.filter(func(t): return not (String(t) in ["rank", "flag"]))
+	assert_array(own).contains_exactly(["upkeep"])
 
 func test_unpaid_upkeep_explains_it_if_nothing_did_first() -> void:
 	EventBus.army_upkeep_unpaid.emit(10)

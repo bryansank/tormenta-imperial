@@ -177,15 +177,20 @@ repository and inside every release zip (folder `licenses/fonts/`).
 | Nunito (variable) | © 2014 The Nunito Project Authors | SIL Open Font License 1.1 | `assets/fonts/nunito/OFL.txt` |
 | Fredoka (variable) | © 2016 The Fredoka Project Authors | SIL Open Font License 1.1 | `assets/fonts/fredoka/OFL.txt` |
 | Inter (variable) | © 2020 The Inter Project Authors | SIL Open Font License 1.1 | `assets/fonts/inter/OFL.txt` |
+| Big Shoulders Display (variable; `BigShouldersDisplay-Variable.ttf`) | © 2019 The Big Shoulders Project Authors | SIL Open Font License 1.1 | `assets/fonts/big_shoulders_display/OFL.txt` |
+| IBM Plex Sans Condensed (Medium, Bold; `IBMPlexSansCondensed-*.ttf`) | © 2017 IBM Corp., Reserved Font Name "Plex" | SIL Open Font License 1.1 | `assets/fonts/ibm_plex_sans_condensed/OFL.txt` |
 
 The OFL permits embedding these fonts in this game. The font files themselves
 remain under the OFL and may not be sold on their own. All fonts are
 distributed unmodified. Source: Google Fonts (`github.com/google/fonts`, `ofl/`).
 
-The six fonts in subfolders come from the interface redesign (2026-10,
-`docs/28-guia-ui.md`): Baloo 2 + Nunito Sans is the chosen pair; Lilita One,
-Nunito, Fredoka and Inter were the other two candidate pairs and are to be
-removed from `assets/fonts/` (and from this table) when the redesign lands.
+The fonts in subfolders come from the interface redesign (2026-10,
+`docs/28-guia-ui.md`). Big Shoulders Display + IBM Plex Sans Condensed are the
+fonts of the dieselpunk skin ("D · Mezcla sobria", 2026-10-25,
+`docs/21-interfaz-y-dispositivos.md` §17): Art Deco headings, condensed text and
+figures. Baloo 2 + Nunito Sans (the previous cartoon pair), Lilita One, Nunito,
+Fredoka and Inter stay selectable as `CartoonTheme.COMBOS` and are to be removed
+from `assets/fonts/` (and from this table) once nothing uses them.
 
 ## 4. Audio (`assets/audio/`)
 
@@ -504,7 +509,8 @@ Godot components marked Apache-2.0, whose notices are in `GODOT-COPYRIGHT.txt`).
 
 ## Appendix C — SIL Open Font License 1.1
 
-Applies to Caveat, Black Ops One and Rajdhani. Each font's copyright line is at
+Applies to Caveat, Black Ops One, Rajdhani, Big Shoulders Display, IBM Plex Sans
+Condensed and the fonts in the `assets/fonts/` subfolders. Each font's copyright line is at
 the top of its own licence file (§3).
 
 ```text

@@ -16,14 +16,34 @@ class_name CartoonTheme
 ##
 ## Sin animaciones (decision de Bryan): todo aparece al instante; los estados
 ## (encima, pulsado) cambian el estilo, nunca con un Tween.
+##
+## PIEL DIESELPUNK "D · Mezcla sobria" (Bryan, 2026-10-25; docs/21 §17 y
+## docs/24): el nombre de la clase es historico. Desde esa fecha esta clase
+## pinta la piel dieselpunk: base oscura de bunker (Pizarra / Placa), filos de
+## laton, titulares Art Deco altos (Big Shoulders Display) y texto y cifras en
+## IBM Plex Sans Condensed. Esquinas casi rectas (2-4 px), StyleBoxFlat puro,
+## sin labio de juguete ni contorno de tinta en el texto. Las mismas funciones
+## de siempre (pill_button, window, chip...): los paneles no cambian de codigo.
 
 # ══════════════════════════════════════
 # FUENTES
 # ══════════════════════════════════════
 
-## Tres parejas, todas OFL (assets/fonts/<familia>/OFL.txt). `wght` es el peso
-## del eje variable (0 = la fuente no es variable).
+## Parejas de fuentes, todas OFL (assets/fonts/<familia>/OFL.txt). `wght` es el
+## peso del eje variable (0 = la fuente no es variable). Opcionales: "bold" (otro
+## fichero para la negrita, cuando la familia viene en estaticos) y
+## "number_body" (las cifras van con la negrita del cuerpo, no con el titular).
 const COMBOS := {
+	# La de la piel dieselpunk (2026-10-25): titular Art Deco alto y estrecho
+	# (un solo fichero variable, peso 800) y Plex Condensed en dos estaticos
+	# (Medium para el texto, Bold para rotulos y cifras). Tres ficheros.
+	"bigshoulders_plex": {
+		"name": "Big Shoulders Display + IBM Plex Sans Condensed",
+		"title": "res://assets/fonts/big_shoulders_display/BigShouldersDisplay-Variable.ttf", "title_wght": 800,
+		"body": "res://assets/fonts/ibm_plex_sans_condensed/IBMPlexSansCondensed-Medium.ttf", "body_wght": 0,
+		"bold": "res://assets/fonts/ibm_plex_sans_condensed/IBMPlexSansCondensed-Bold.ttf", "bold_wght": 0,
+		"number_body": true,
+	},
 	"lilita_nunito": {
 		"name": "Lilita One + Nunito",
 		"title": "res://assets/fonts/lilita_one/LilitaOne-Regular.ttf", "title_wght": 0,
@@ -41,9 +61,10 @@ const COMBOS := {
 	},
 }
 const Icon := preload("res://scripts/ui/CartoonIcon.gd")
-const COMBO_ORDER := ["lilita_nunito", "baloo_nunitosans", "fredoka_inter"]
-## La elegida por Bryan (2026-10-18, docs/28 §3).
-const DEFAULT_COMBO := "baloo_nunitosans"
+const COMBO_ORDER := ["bigshoulders_plex", "lilita_nunito", "baloo_nunitosans", "fredoka_inter"]
+## La elegida por Bryan para la piel dieselpunk (2026-10-25, docs/21 §17).
+## Antes (2026-10-18) era "baloo_nunitosans".
+const DEFAULT_COMBO := "bigshoulders_plex"
 
 ## Fondos de panel en estudio: claro (crema), oscuro (pizarra con borde de
 ## color) y mixto (HUD oscuro fino, ventanas claras).
@@ -55,17 +76,26 @@ static var surface := "mixed"
 
 static var _font_cache := {}
 
-static func _variation(path: String, wght: int) -> Font:
-	var key := "%s|%d" % [path, wght]
+## `spacing`: px de mas entre letras (el titular Art Deco va algo abierto).
+## `fallback`: fuente para los signos que la de titular no trae (✓, ×, ☰...).
+static func _variation(path: String, wght: int, spacing: int = 0, fallback: String = "") -> Font:
+	var key := "%s|%d|%d|%s" % [path, wght, spacing, fallback]
 	if _font_cache.has(key):
 		return _font_cache[key]
 	var base: FontFile = UITheme._load_font(path)
 	var out: Font = base
-	if base != null and wght > 0:
+	if base != null and (wght > 0 or spacing != 0 or fallback != ""):
 		var fv := FontVariation.new()
 		fv.base_font = base
-		var ts := TextServerManager.get_primary_interface()
-		fv.variation_opentype = {ts.name_to_tag("wght"): wght}
+		if wght > 0:
+			var ts := TextServerManager.get_primary_interface()
+			fv.variation_opentype = {ts.name_to_tag("wght"): wght}
+		if spacing != 0:
+			fv.spacing_glyph = spacing
+		if fallback != "":
+			var fb: FontFile = UITheme._load_font(fallback)
+			if fb != null:
+				fv.fallbacks = [fb]
 		out = fv
 	if out == null:
 		out = UITheme.bold_font()
@@ -75,9 +105,11 @@ static func _variation(path: String, wght: int) -> Font:
 static func _combo() -> Dictionary:
 	return COMBOS.get(combo, COMBOS[DEFAULT_COMBO])
 
-## Titulos, botones y cifras.
+## Titulos y botones (y las cifras, salvo con "number_body").
 static func title_font() -> Font:
 	var c := _combo()
+	if c.has("bold"):
+		return _variation(c["title"], int(c["title_wght"]), 1, c["bold"])
 	return _variation(c["title"], int(c["title_wght"]))
 
 ## Texto de cuerpo.
@@ -88,7 +120,16 @@ static func body_font() -> Font:
 ## Cuerpo en negrita: rotulos pequenos bajo los iconos, etiquetas de fila.
 static func bold_font() -> Font:
 	var c := _combo()
-	return _variation(c["body"], int(c["bold_wght"]))
+	return _variation(c.get("bold", c["body"]), int(c["bold_wght"]))
+
+## Cifras (HUD, costes): la negrita del cuerpo en la piel dieselpunk (Plex
+## Condensed Bold, cifras de ancho fijo); el titular en las parejas viejas.
+static func number_font() -> Font:
+	return bold_font() if bool(_combo().get("number_body", false)) else title_font()
+
+## Si los titulares van en mayusculas (la piel dieselpunk: rotulos Art Deco).
+static func caps_titles() -> bool:
+	return bool(_combo().get("number_body", false))
 
 # ══════════════════════════════════════
 # TAMANOS (docs/28 §4)
@@ -100,12 +141,18 @@ const SIZES := {"display": 34, "title": 26, "button": 22, "number": 22, "body": 
 ## Nunca por debajo de esto, ni con el texto "pequeno" de Ajustes.
 const SIZE_FLOOR := {"display": 26, "title": 20, "button": 18, "number": 18, "body": 16, "small": 14}
 
-const RADIUS_WINDOW := 22
-const RADIUS_CARD := 18
-const BORDER_WINDOW := 4
-const BORDER := 3
-## El "labio" de los botones de juguete: el borde inferior mas grueso.
-const LIP := 5
+## Piel dieselpunk: esquinas casi rectas (2-4 px), bordes finos, sin labio.
+const RADIUS_WINDOW := 4
+const RADIUS_CARD := 3
+## Esquina de todos los botones (tambien los "redondos" de la barra y la X).
+const RADIUS_BTN := 3
+## Borde de la ventana; el de arriba es el filo de laton (TRIM_TOP).
+const BORDER_WINDOW := 1
+const TRIM_TOP := 4
+const BORDER := 2
+## El "labio" de los botones de juguete: ya no hay (piel dieselpunk). Se
+## conserva la constante porque las piezas centran el contenido con ella.
+const LIP := 0
 const PAD := 18
 const GAP := 12
 ## Alto de boton: pastilla grande, normal y pequena.
@@ -146,65 +193,78 @@ static func fs(level: String) -> int:
 # COLORES (docs/28 §2)
 # ══════════════════════════════════════
 
-## Tinta de contornos y del texto blanco sobre color (la de los instructores).
-const INK := Color(0.12, 0.09, 0.06)
-const WHITE := Color(1.0, 0.99, 0.96)
+## Tinta de la piel dieselpunk: la Pizarra muy oscurecida (texto sobre laton,
+## ambar y verde; contornos finos de insignias y puntos). Antes, marron de los
+## instructores.
+const INK := Color("13171b")
+## "Blanco" de la piel: el texto claro de la paleta (UITheme._BASE TEXT).
+const WHITE := Color("eeeae1")
 
-## Los semanticos: los cinco de docs/24 (laton, positivo, peligro, advertencia,
-## informacion) subidos de luz y de saturacion. Mismo significado.
-const _SEMANTIC := {
-	"ACCENT": Color("f5b31c"),
-	"POSITIVE": Color("37a847"),
-	"DANGER": Color("e0453a"),
-	"WARNING": Color("ff8c1a"),
-	"INFO": Color("2a88d8"),
-}
-## Daltonismo: los mismos cambios que UITheme._PALETTE_TOKENS, con su luz.
-const _SEMANTIC_PALETTES := {
-	"red_green": {"POSITIVE": Color("0072b2"), "DANGER": Color("d55e00"), "WARNING": Color("f0e442"), "INFO": Color("cc79a7")},
-	"tritan": {"POSITIVE": Color("009e99"), "DANGER": Color("dc264d"), "WARNING": Color("f78c9e"), "INFO": Color("8c8c99")},
-}
+## Las claves semanticas (los cinco de docs/24: laton, positivo, peligro,
+## advertencia, informacion). Sus valores salen de la paleta de UITheme
+## (_BASE y, con daltonismo, _PALETTE_TOKENS): una sola fuente de color.
+const _SEMANTIC := {"ACCENT": true, "POSITIVE": true, "DANGER": true, "WARNING": true, "INFO": true}
 
-## Las dos superficies. Las ventanas y el HUD eligen una segun `surface`.
-const _SURF := {
-	"light": {
-		"BG": Color("fff6e3"), "CARD": Color("fffcf4"), "CARD_ALT": Color("f7e7c4"),
-		"WELL": Color("ecd9b2"), "BORDER": Color("7a5634"), "CARD_BORDER": Color("a07a52"),
-		"TEXT": Color("2e2218"), "TEXT_DIM": Color("6a543c"), "NEUTRAL": Color("fffaef"),
-		"SHADOW": Color(0.22, 0.13, 0.05, 0.34),
-	},
-	"dark": {
-		"BG": Color("1a2531"), "CARD": Color("26364a"), "CARD_ALT": Color("34495f"),
-		"WELL": Color("152130"), "BORDER": Color("f5b31c"), "CARD_BORDER": Color("5b7898"),
-		"TEXT": Color("fff5e1"), "TEXT_DIM": Color("bdd0e2"), "NEUTRAL": Color("44607f"),
-		"SHADOW": Color(0, 0, 0, 0.45),
-	},
-}
-## Alto contraste: blanco y negro puros, bordes mas gruesos (ver border_k()).
-const _SURF_HC := {
-	"light": {"BG": Color("ffffff"), "CARD": Color("ffffff"), "CARD_ALT": Color("f1f1f1"),
-		"WELL": Color("dcdcdc"), "BORDER": Color("000000"), "CARD_BORDER": Color("000000"),
-		"TEXT": Color("000000"), "TEXT_DIM": Color("1c1c1c")},
-	"dark": {"BG": Color("070b10"), "CARD": Color("101820"), "CARD_ALT": Color("1c2a38"),
-		"WELL": Color("000000"), "BORDER": Color("ffd34d"), "CARD_BORDER": Color("ffffff"),
-		"TEXT": Color("ffffff"), "TEXT_DIM": Color("f2f2f2")},
-}
+## Las superficies se derivan de la paleta (docs/24 §2): "dark" es el bunker
+## (Pizarra y Placa con filos de laton), "light" la variante papel sobria (el
+## papel es el texto claro de la paleta; la tinta, la Pizarra). Claves: BG,
+## CARD, CARD_ALT, WELL (hueco), BORDER (filo), CARD_BORDER, TRIM (laton del
+## borde de arriba), TEXT, TEXT_DIM, NEUTRAL (boton secundario), OFF y OFF_INK
+## (boton no disponible), SHADOW.
+static var _surf_cache := {}
+
+static func _surface(k: String, hc: bool) -> Dictionary:
+	var key := "%s|%s" % [k, hc]
+	if _surf_cache.has(key):
+		return _surf_cache[key]
+	var b: Dictionary = UITheme._BASE
+	var slate: Color = b["SURFACE"]
+	var plate: Color = b["NEUTRAL"]
+	var brass: Color = b["ACCENT"]
+	var paper: Color = b["TEXT"]
+	var d := {}
+	if k == "dark":
+		d = {"BG": slate, "CARD": plate, "CARD_ALT": plate.lightened(0.06),
+			"WELL": slate.darkened(0.32), "BORDER": plate.lightened(0.14), "CARD_BORDER": plate.lightened(0.14),
+			"TRIM": brass, "TEXT": paper, "TEXT_DIM": b["TEXT_DIM"], "NEUTRAL": plate,
+			"OFF": plate.lightened(0.03), "OFF_INK": b["TEXT_DIM"],
+			"SHADOW": Color(0, 0, 0, 0.5)}
+		if hc:
+			# Alto contraste (maqueta data-hc): fondo casi negro, texto blanco,
+			# todo filo de laton claro y un punto mas grueso (border_k()).
+			var hot := brass.lightened(0.18)
+			d.merge({"BG": slate.darkened(0.55), "CARD": slate.darkened(0.25), "CARD_ALT": slate,
+				"WELL": Color(0, 0, 0), "BORDER": hot, "CARD_BORDER": hot, "TRIM": hot,
+				"TEXT": Color(1, 1, 1), "TEXT_DIM": Color("e4e4e4"), "NEUTRAL": slate.darkened(0.25),
+				"OFF": slate, "OFF_INK": Color("e0e0e0")}, true)
+	else:
+		d = {"BG": paper.darkened(0.04), "CARD": paper.lightened(0.35), "CARD_ALT": paper.darkened(0.09),
+			"WELL": paper.darkened(0.14), "BORDER": brass.darkened(0.32), "CARD_BORDER": paper.darkened(0.3),
+			"TRIM": brass.darkened(0.32), "TEXT": slate, "TEXT_DIM": slate.lightened(0.22), "NEUTRAL": paper.lightened(0.2),
+			"OFF": paper.darkened(0.12), "OFF_INK": slate.lightened(0.3),
+			"SHADOW": Color(slate, 0.3)}
+		if hc:
+			d.merge({"BG": Color("fffbef"), "CARD": Color(1, 1, 1), "CARD_ALT": Color("f2e6c8"),
+				"WELL": Color("e3d6b8"), "BORDER": Color(0, 0, 0), "CARD_BORDER": Color(0, 0, 0),
+				"TRIM": Color(0, 0, 0), "TEXT": Color(0, 0, 0), "TEXT_DIM": Color("1c1712"),
+				"NEUTRAL": Color(1, 1, 1), "OFF": Color("e3d6b8"), "OFF_INK": Color(0, 0, 0)}, true)
+	_surf_cache[key] = d
+	return d
+
+## Las superficies con las preferencias de ahora (para quien las lea en bloque).
+const SURFACE_KEYS := ["BG", "CARD", "CARD_ALT", "WELL", "BORDER", "CARD_BORDER", "TRIM", "TEXT",
+	"TEXT_DIM", "NEUTRAL", "OFF", "OFF_INK", "SHADOW"]
 
 ## Tema de las ventanas, a eleccion del jugador (Ajustes > Pantalla > Tema;
-## settings.cfg [interfaz] ui_theme): "light" = ventanas crema (de serie),
-## "dark" = ventanas gris azulado con borde de color. El HUD es oscuro en los
-## dos. Lo pone DeviceProfile.apply_theme() antes de UITheme.configure().
-const WINDOW_THEMES := ["light", "dark"]
-static var window_theme := "light"
-
-## Las ventanas del tema oscuro (Bryan, 2026-10-19): fondo #243241, tarjetas
-## #2e3f51, borde #4fa3e0, texto #f3f7fb y tenue #a9bccd.
-const _SURF_NIGHT := {
-	"BG": Color("243241"), "CARD": Color("2e3f51"), "CARD_ALT": Color("37495d"),
-	"WELL": Color("1b2733"), "BORDER": Color("4fa3e0"), "CARD_BORDER": Color("4b6b89"),
-	"TEXT": Color("f3f7fb"), "TEXT_DIM": Color("a9bccd"), "NEUTRAL": Color("3d546c"),
-	"SHADOW": Color(0, 0, 0, 0.45),
-}
+## settings.cfg [interfaz] window_theme): "dark" = bunker (de serie desde la
+## piel dieselpunk, 2026-10-25) y "light" = papel crema sobrio. El HUD es
+## oscuro en los dos. Lo pone DeviceProfile.apply_theme() antes de
+## UITheme.configure().
+## El de serie va primero: el selector de Ajustes los pinta en este orden y
+## Restablecer elige el primero.
+const WINDOW_THEMES := ["dark", "light"]
+const WINDOW_THEME_DEFAULT := "dark"
+static var window_theme := WINDOW_THEME_DEFAULT
 
 ## "hud" (fichas sobre el mapa, barra de abajo) o "window" (ventanas grandes).
 static func kind(role: String) -> String:
@@ -216,30 +276,28 @@ static func kind(role: String) -> String:
 static func c(role: String, key: String) -> Color:
 	if _SEMANTIC.has(key):
 		return sem(key)
-	var k := kind(role)
-	if UITheme.high_contrast and _SURF_HC[k].has(key):
-		return _SURF_HC[k][key]
-	if k == "dark" and role != "hud" and window_theme == "dark" and _SURF_NIGHT.has(key):
-		return _SURF_NIGHT[key]
-	return _SURF[k][key]
+	var t := _surface(kind(role), UITheme.high_contrast)
+	return t.get(key, t["BG"])
 
 ## Si las ventanas son oscuras (tema oscuro o superficie oscura).
 static func dark_windows() -> bool:
 	return kind("window") == "dark"
 
 static func sem(key: String) -> Color:
-	var pal: Dictionary = _SEMANTIC_PALETTES.get(UITheme.palette, {})
-	return pal.get(key, _SEMANTIC[key])
+	var pal: Dictionary = UITheme._PALETTE_TOKENS.get(UITheme.palette, {})
+	return pal.get(key, UITheme._BASE[key])
 
 static func border_k() -> int:
 	return 1 if UITheme.high_contrast else 0
 
-## Color de texto que se lee sobre `fill`: tinta sobre lo claro, blanco con
-## contorno de tinta sobre lo saturado. `outline` dice si lleva contorno.
+## Color de texto que se lee sobre `fill`: tinta sobre lo claro (laton, ambar,
+## verde), el texto claro sobre lo oscuro (acero, rojo). Sin contorno: la piel
+## dieselpunk pone el texto siempre sobre liso.
 static func on_fill(fill: Color) -> Dictionary:
-	if UITheme._relative_luminance(fill) > 0.42:
+	var light := Color(1.0, 0.98, 0.96)
+	if UITheme.contrast_ratio(INK, fill) >= UITheme.contrast_ratio(light, fill):
 		return {"color": INK, "outline": false}
-	return {"color": WHITE, "outline": true}
+	return {"color": light, "outline": false}
 
 # ══════════════════════════════════════
 # CAJAS
@@ -263,47 +321,61 @@ static func box(bg: Color, border: Color, bw: int, radius: int, pad: int = PAD, 
 		s.shadow_offset = Vector2(0, roundf(shadow * 0.45))
 	return s
 
-## La ventana grande (CONSTRUIR, MISIONES, AJUSTES...).
+## La ventana grande (CONSTRUIR, MISIONES, AJUSTES...): Pizarra con un filo
+## fino de laton y el borde de arriba de laton grueso (TRIM_TOP). window()
+## le anade debajo una segunda linea fina: el filo doble de la piel D.
 static func window_style(role: String = "window") -> StyleBoxFlat:
-	var s := box(c(role, "BG"), c(role, "BORDER"), BORDER_WINDOW, RADIUS_WINDOW, PAD, 0, 0, role)
+	var s := box(c(role, "BG"), c(role, "TRIM"), BORDER_WINDOW, RADIUS_WINDOW, PAD, 0, 0, role)
 	s.bg_color.a = UITheme.panel_opacity if kind(role) == "dark" else 1.0
-	# Sombra dura (0 4px 0, sin desenfoque): la ventana es una pieza de juguete.
-	s.shadow_color = Color(c(role, "BORDER").darkened(0.45), 0.75)
-	s.shadow_size = 1
-	s.shadow_offset = Vector2(0, 5)
+	s.border_width_top = TRIM_TOP + border_k()
+	s.content_margin_top = PAD + TRIM_TOP
+	# Sombra suave y corta: separa la ventana del mapa sin ser un juguete.
+	s.shadow_color = c(role, "SHADOW")
+	s.shadow_size = 6
+	s.shadow_offset = Vector2(0, 3)
 	return s
 
-## Tarjeta dentro de una ventana. `selected`: borde de laton grueso.
+## Tarjeta dentro de una ventana: Placa con filo gris. `selected`: filo de
+## laton mas grueso (sin brillo alrededor).
 static func card_style(role: String = "window", selected: bool = false, fill: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
 	var bg := fill if fill.a > 0.0 else c(role, "CARD")
-	var s := box(bg, sem("ACCENT") if selected else c(role, "CARD_BORDER"),
-		BORDER + (1 if selected else 0), RADIUS_CARD, 12, 0, 2, role)
-	if selected:
-		s.shadow_color = Color(sem("ACCENT"), 0.55)
-		s.shadow_size = 6
+	var s := box(bg, c(role, "TRIM") if selected else c(role, "CARD_BORDER"),
+		1 + (1 if selected else 0), RADIUS_CARD, 12, 0, 0, role)
 	return s
 
-## Hueco hundido (barras, fondo de cifras, carril del deslizador).
-static func well_style(role: String, radius: int = 12, pad: int = 6) -> StyleBoxFlat:
-	return box(c(role, "WELL"), Color(0, 0, 0, 0), 0, radius, pad, 0, 0, role)
+## Hueco hundido (barras, fondo de cifras, carril del deslizador). El radio
+## pedido se queda en casi recto (las llamadas viejas pedian 12-14).
+static func well_style(role: String, radius: int = 2, pad: int = 6) -> StyleBoxFlat:
+	return box(c(role, "WELL"), Color(0, 0, 0, 0), 0, mini(radius, RADIUS_CARD), pad, 0, 0, role)
 
-## Ficha del HUD sobre el mapa. Clara: crema con tinta gruesa. Oscura: pizarra
-## translucida con un borde fino de color (el "HUD oscuro fino").
+## Ficha del HUD sobre el mapa: Pizarra translucida con un filo fino (o del
+## color de `accent`: los avisos). En papel, la crema con su filo. Con alto
+## contraste, opaca y con filo de 3 px (maqueta data-hc).
 static func hud_style(accent: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
+	var bw := 2 if UITheme.high_contrast else 1
 	if kind("hud") == "light":
-		return box(c("hud", "CARD"), c("hud", "BORDER"), BORDER, 18, 8, 6, 2, "hud")
+		return box(c("hud", "CARD"), accent if accent.a > 0.0 else c("hud", "BORDER"), bw, RADIUS_WINDOW, 8, 0, 0, "hud")
 	var s := box(Color(c("hud", "BG"), (0.92 if not UITheme.high_contrast else 1.0) * UITheme.panel_opacity),
-		accent if accent.a > 0.0 else c("hud", "CARD_BORDER"), 2, 16, 8, 6, 0, "hud")
+		accent if accent.a > 0.0 else c("hud", "CARD_BORDER"), bw, RADIUS_WINDOW, 8, 0, 0, "hud")
 	return s
 
-## Cinta del titulo de una ventana: color vivo, tinta gruesa y labio.
+## Placa del titulo de una ventana: hueco oscuro con filo del color `fill`
+## (laton de serie; rojo en los partes de guerra), mas grueso arriba y abajo,
+## como la placa de un aparato. El texto va en el claro de la superficie
+## (ribbon_text()), nunca sobre el color.
 static func ribbon_style(fill: Color) -> StyleBoxFlat:
-	var s := box(fill, INK, BORDER + 1, 16, 0, 0, 4)
-	s.content_margin_left = 30
-	s.content_margin_right = 30
-	s.content_margin_top = 4
-	s.content_margin_bottom = 6
+	var s := box(c("window", "WELL"), fill, 1, RADIUS_CARD, 0, 0, 0)
+	s.border_width_top = 2 + border_k()
+	s.border_width_bottom = 2 + border_k()
+	s.content_margin_left = 26
+	s.content_margin_right = 26
+	s.content_margin_top = 3
+	s.content_margin_bottom = 3
 	return s
+
+## Color del titulo de la placa (ribbon_style).
+static func ribbon_text(_fill: Color = Color(0, 0, 0, 0)) -> Dictionary:
+	return {"color": c("window", "TEXT"), "outline": false}
 
 # ══════════════════════════════════════
 # TEXTO
@@ -322,8 +394,10 @@ static func style_label(l: Label, level: String, color: Color, outline: bool = f
 	var size := fs(level)
 	var f: Font
 	match level:
-		"display", "title", "button", "number":
+		"display", "title", "button":
 			f = title_font()
+		"number":
+			f = number_font()
 		"small":
 			f = bold_font()
 		_:
@@ -333,10 +407,14 @@ static func style_label(l: Label, level: String, color: Color, outline: bool = f
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	if outline:
-		l.add_theme_constant_override("outline_size", maxi(4, roundi(size * 0.3)))
+		# Solo el texto que va directamente sobre el mapa (rotulos de la barra).
+		l.add_theme_constant_override("outline_size", maxi(3, roundi(size * 0.22)))
 		l.add_theme_color_override("font_outline_color", INK)
 	else:
 		l.add_theme_constant_override("outline_size", 0)
+	# Rotulos Art Deco: placas de titulo y botones en mayusculas (no cambia
+	# `text`). El nivel "title" no: a veces lleva una frase entera (tutorial).
+	l.uppercase = caps_titles() and level in ["display", "button"]
 	l.add_theme_constant_override("line_spacing", -2 if level in ["display", "title", "button", "number"] else 0)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
@@ -354,50 +432,117 @@ static func para(text_s: String, role: String, dim: bool = false, level: String 
 # BOTONES
 # ══════════════════════════════════════
 
-## Relleno de cada clase de boton.
+## Relleno de cada clase de boton. Las cinco intenciones de la piel
+## dieselpunk (docs/21 §17): principal (laton relleno con luz piloto),
+## abrir (acero azul), avisar (ambar), destruir (rojo; quien lo usa pide
+## confirmacion) y no disponible (apagado, con candado y el porque debajo).
+## "accent" (mejorar / comprar) es laton sin luz piloto; "secondary", Placa
+## con filo.
 static func kind_fill(kind_s: String, role: String = "window") -> Color:
-	# Por intencion (docs/28 §5): verde = la accion principal, azul = abrir /
-	# ver, ambar = avisar / reparar / mejorar, rojo = derribar / cerrar, gris =
-	# no se puede (con el porque escrito debajo).
 	match kind_s:
-		"primary":
-			return sem("POSITIVE")
-		"accent":
+		"primary", "accent":
 			return sem("ACCENT")
 		"danger":
-			return sem("DANGER")
+			# En alto contraste el rojo baja de luz para que su letra llegue a 4,5.
+			return sem("DANGER").darkened(0.3) if UITheme.high_contrast else sem("DANGER")
 		"info", "open":
 			return sem("INFO")
 		"warning", "warn":
 			return sem("WARNING")
 		"disabled":
-			return Color("9a958c") if kind(role) == "light" else Color("55606c")
+			return c(role, "OFF")
 	return c(role, "NEUTRAL")
 
-static func _btn_states(btn: Button, fill: Color, radius: int, pad_h: int, role: String) -> void:
-	var border := INK if kind(role) == "light" or fill != c(role, "NEUTRAL") else c(role, "CARD_BORDER")
-	var n := box(fill, border, BORDER, radius, 0, 0, LIP, role)
-	var h := box(fill.lightened(0.12), border, BORDER, radius, 0, 0, LIP, role)
-	var p := box(fill.darkened(0.08), border, BORDER, radius, 0, 0, 1, role)
-	var d := box(Color(fill.lerp(Color(0.6, 0.6, 0.6), 0.65), 0.75), Color(border, 0.5), BORDER, radius, 0, 0, 2, role)
+## Filo de un boton de relleno `fill`: algo mas oscuro sobre lo claro (laton,
+## ambar), algo mas claro sobre lo oscuro (acero, rojo, Placa). En alto
+## contraste, el texto de la superficie (blanco o negro), siempre visible.
+static func btn_edge(fill: Color, role: String = "window") -> Color:
+	if UITheme.high_contrast:
+		return c(role, "TEXT")
+	if fill == c(role, "NEUTRAL") or fill == c(role, "OFF"):
+		return c(role, "CARD_BORDER") if fill == c(role, "NEUTRAL") else Color(c(role, "OFF_INK"), 0.7)
+	if UITheme._relative_luminance(fill) > 0.2:
+		return fill.darkened(0.4)
+	return fill.lightened(0.3)
+
+static func _btn_states(btn: Button, fill: Color, _radius: int, pad_h: int, role: String) -> void:
+	var border := btn_edge(fill, role)
+	var r := RADIUS_BTN
+	var n := box(fill, border, BORDER, r, 0, 0, 0, role)
+	var h := box(fill.lightened(0.1), border, BORDER, r, 0, 0, 0, role)
+	var p := box(fill.darkened(0.14), border, BORDER, r, 0, 0, 0, role)
+	# No disponible: apagado (Placa) con filo tenue; el texto lo pone
+	# _off_text() (o font_disabled_color en los botones de texto).
+	var d := box(c(role, "OFF"), Color(c(role, "OFF_INK"), 0.6), maxi(1, BORDER - 1), r, 0, 0, 0, role)
 	for sb in [n, h, p, d]:
 		sb.content_margin_left = pad_h
 		sb.content_margin_right = pad_h
 		sb.content_margin_top = 2
 		sb.content_margin_bottom = 2
-	# Pulsado: el contenido baja lo que pierde el labio (sin animacion).
-	p.content_margin_top = 2 + LIP - 1
-	var f := box(Color(0, 0, 0, 0), Color(sem("ACCENT"), 0.9), 3, radius + 3, 0)
+	# Pulsado: el contenido baja un pixel (sin animacion).
+	p.content_margin_top = 3
+	p.content_margin_bottom = 1
+	var f := box(Color(0, 0, 0, 0), c(role, "TEXT"), 2, r + 1, 0)
+	f.expand_margin_left = 3
+	f.expand_margin_right = 3
+	f.expand_margin_top = 3
+	f.expand_margin_bottom = 3
 	btn.add_theme_stylebox_override("normal", n)
 	btn.add_theme_stylebox_override("hover", h)
 	btn.add_theme_stylebox_override("pressed", p)
 	btn.add_theme_stylebox_override("disabled", d)
 	btn.add_theme_stylebox_override("focus", f)
 
-## Boton pastilla: [icono] PALABRA. `kind_s`: primary (verde, la accion
-## principal), accent (laton, mejorar/comprar), danger (rojo, derribar),
-## info (azul, ayuda/ver), secondary (crema, lo demas). `glyph` es un id de
-## CartoonIcon o "res:<id>" para un icono de recurso.
+## La luz piloto del boton principal (prestada de la direccion A): un circulo
+## pequeno verde con aro oscuro, a la izquierda de la palabra. Apagada (gris)
+## si el boton esta desactivado.
+static func pilot_light(px: int = 0, fill: Color = Color(0, 0, 0, 0)) -> Panel:
+	var d := px if px > 0 else (9 if phone else 11)
+	var lamp := Panel.new()
+	lamp.name = "PilotLight"
+	lamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ring := (fill if fill.a > 0.0 else sem("ACCENT")).darkened(0.45)
+	var st := box(sem("POSITIVE"), ring, 2, int(d * 0.5) + 1, 0)
+	st.corner_detail = 6
+	lamp.add_theme_stylebox_override("panel", st)
+	lamp.custom_minimum_size = Vector2(d, d)
+	lamp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return lamp
+
+## Texto y piloto de un pill_button cuando cambia `disabled`: apagado (texto
+## tenue de la superficie, piloto gris) o su color de siempre. Se engancha a
+## `draw` del boton: Godot lo redibuja al cambiar de estado; solo toca algo si
+## el estado cambio.
+static func _watch_disabled(btn: Button, content: Control) -> void:
+	btn.draw.connect(func():
+		if not is_instance_valid(content):
+			return
+		var off := btn.disabled
+		if bool(btn.get_meta("off_drawn", false)) == off:
+			return
+		btn.set_meta("off_drawn", off)
+		var off_ink := c(String(btn.get_meta("pill_role", "window")), "OFF_INK")
+		for n in content.find_children("*", "Label", true, false):
+			var l := n as Label
+			if off:
+				if not l.has_meta("on_color"):
+					l.set_meta("on_color", l.get_theme_color("font_color"))
+				l.add_theme_color_override("font_color", off_ink)
+			elif l.has_meta("on_color"):
+				l.add_theme_color_override("font_color", l.get_meta("on_color"))
+				l.remove_meta("on_color")
+		for n in content.find_children("PilotLight", "Panel", true, false):
+			(n as Control).self_modulate = Color(0.5, 0.5, 0.5, 0.6) if off else Color(1, 1, 1, 1)
+		for n in content.get_children():
+			if n is Control and not (n is Label) and n.name != "PilotLight":
+				(n as Control).modulate.a = 0.55 if off else 1.0)
+
+## Boton "pastilla" (en la piel dieselpunk, casi recto): [icono] PALABRA.
+## `kind_s`: primary (laton con luz piloto, la accion principal), accent
+## (laton sin piloto, mejorar/comprar), open / info (acero azul, abrir / ver),
+## warning (ambar, avisar), danger (rojo, derribar: quien lo usa confirma),
+## disabled (apagado con candado), secondary (Placa con filo, lo demas).
+## `glyph` es un id de CartoonIcon o "res:<id>" para un icono de recurso.
 static func pill_button(text_s: String, glyph: String = "", kind_s: String = "primary",
 		height: int = BTN, role: String = "window", level: String = "button") -> Button:
 	var btn := Button.new()
@@ -405,19 +550,34 @@ static func pill_button(text_s: String, glyph: String = "", kind_s: String = "pr
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	var fill := kind_fill(kind_s, role)
 	_btn_states(btn, fill, int(height * 0.5), 22 if text_s != "" else 8, role)
+	btn.set_meta("pill_role", role)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if glyph != "":
-		row.add_child(make_glyph(glyph, roundi(height * 0.56)))
+	# La accion principal lleva su luz piloto; lo no disponible, su candado.
+	if kind_s == "primary" and text_s != "":
+		row.add_child(pilot_light(0, fill))
+	var g := glyph
+	if g == "" and kind_s == "disabled" and text_s != "":
+		g = "lock"
+	if g != "":
+		row.add_child(make_glyph(g, roundi(height * 0.56)))
 	if text_s != "":
-		var tc := on_fill(fill)
-		if kind_s == "secondary":
-			tc = {"color": text(role), "outline": false}
+		var tc := pill_text(kind_s, fill, role)
 		row.add_child(label(text_s, level, tc["color"], tc["outline"]))
 	_fill_button(btn, row, height, 22 if text_s != "" else 8)
+	_watch_disabled(btn, row)
 	return btn
+
+## Color del texto de una pastilla de clase `kind_s` y relleno `fill`.
+static func pill_text(kind_s: String, fill: Color, role: String = "window") -> Dictionary:
+	match kind_s:
+		"secondary":
+			return {"color": text(role), "outline": false}
+		"disabled":
+			return {"color": c(role, "OFF_INK"), "outline": false}
+	return on_fill(fill)
 
 ## Mete `content` centrado en el boton y le da el tamano minimo del contenido.
 static func _fill_button(btn: Button, content: Control, height: int, pad_h: int) -> void:
@@ -435,7 +595,8 @@ static func _fill_button(btn: Button, content: Control, height: int, pad_h: int)
 	content.minimum_size_changed.connect(fit)
 	fit.call()
 
-## Boton redondo con icono (barra de abajo, cerrar). `caption` va debajo.
+## Boton de icono (barra de abajo, cerrar): en la piel dieselpunk es un
+## cuadrado de esquinas casi rectas (el nombre se queda). `caption` va debajo.
 static func round_button(glyph: String, kind_s: String = "secondary", d: int = ROUND,
 		caption: String = "", role: String = "hud", glyph_tint: Color = Color(0, 0, 0, 0)) -> Control:
 	var btn := Button.new()
@@ -462,11 +623,12 @@ static func round_button(glyph: String, kind_s: String = "secondary", d: int = R
 	col.set_meta("button", btn)
 	return col
 
-## Cerrar: redondo rojo con la X, siempre arriba a la derecha de la ventana.
+## Cerrar: cuadrado oscuro con la X clara (piel dieselpunk: cerrar no es
+## destruir, asi que no va en rojo), siempre arriba a la derecha de la ventana.
 ## Las X de ventana van en el grupo "window_close": PauseMenu las aparta de
 ## debajo del ☰ (dodge_menu_button) cada vez que se abre o cierra una ventana.
 static func close_button(d: int = 0) -> Button:
-	var b := round_button("close", "danger", d if d > 0 else (48 if phone else 50)) as Button
+	var b := round_button("close", "secondary", d if d > 0 else (48 if phone else 50)) as Button
 	b.add_to_group("window_close")
 	return b
 
@@ -517,7 +679,7 @@ static func stat_chip(glyph: String, value: String, caption: String, role: Strin
 ## Coste en pequeno: [icono] 80, en rojo si no llega.
 static func cost_chip(res_id: String, amount: int, enough: bool = true, role: String = "window") -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := well_style(role, 14, 4)
+	var s := well_style(role, 2, 4)
 	s.content_margin_left = 6
 	s.content_margin_right = 10
 	if not enough:
@@ -540,11 +702,11 @@ static func cost_chip(res_id: String, amount: int, enough: bool = true, role: St
 ## Etiqueta de estado: pastilla de color con 1-2 palabras ("Trabajando").
 static func badge(text_s: String, fill: Color, glyph: String = "") -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := box(fill, INK, 2, 14, 0)
-	s.content_margin_left = 10
-	s.content_margin_right = 12
+	var s := box(fill, btn_edge(fill), 1, RADIUS_CARD, 0)
+	s.content_margin_left = 8
+	s.content_margin_right = 10
 	s.content_margin_top = 1
-	s.content_margin_bottom = 3
+	s.content_margin_bottom = 2
 	p.add_theme_stylebox_override("panel", s)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var row := HBoxContainer.new()
@@ -556,16 +718,16 @@ static func badge(text_s: String, fill: Color, glyph: String = "") -> PanelConta
 	p.add_child(row)
 	return p
 
-## Barra de progreso redonda.
+## Barra de progreso (casi recta, filo fino).
 static func progress(value: float, fill: Color, role: String = "window", h: int = 16) -> ProgressBar:
 	var bar := ProgressBar.new()
 	bar.show_percentage = false
 	bar.max_value = 1.0
 	bar.value = value
 	bar.custom_minimum_size = Vector2(0, h)
-	var border := INK if kind(role) == "light" else c(role, "CARD_BORDER")
-	var bg := box(c(role, "WELL"), border, 2, int(h * 0.5), 0, 0, 0, role)
-	var fg := box(fill, border, 2, int(h * 0.5), 0, 0, 0, role)
+	var border := c(role, "CARD_BORDER")
+	var bg := box(c(role, "WELL"), border, 1, 2, 0, 0, 0, role)
+	var fg := box(fill, border, 1, 2, 0, 0, 0, role)
 	bar.add_theme_stylebox_override("background", bg)
 	bar.add_theme_stylebox_override("fill", fg)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -574,8 +736,8 @@ static func progress(value: float, fill: Color, role: String = "window", h: int 
 ## Interruptor grande: carril pastilla y bolita blanca (verde = encendido).
 static func switch(on: bool, role: String = "window") -> Control:
 	var track := PanelContainer.new()
-	var border := INK if kind(role) == "light" else c(role, "CARD_BORDER")
-	var s := box(sem("POSITIVE") if on else c(role, "WELL"), border, BORDER, 20, 4, 0, 0, role)
+	var border := c(role, "CARD_BORDER")
+	var s := box(sem("POSITIVE") if on else c(role, "WELL"), border, BORDER, RADIUS_BTN, 4, 0, 0, role)
 	track.add_theme_stylebox_override("panel", s)
 	track.custom_minimum_size = Vector2(76, 40)
 	track.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -583,7 +745,7 @@ static func switch(on: bool, role: String = "window") -> Control:
 	row.alignment = BoxContainer.ALIGNMENT_END if on else BoxContainer.ALIGNMENT_BEGIN
 	var knob := Panel.new()
 	knob.custom_minimum_size = Vector2(28, 28)
-	knob.add_theme_stylebox_override("panel", box(WHITE, INK, 2, 14, 0))
+	knob.add_theme_stylebox_override("panel", box(WHITE, INK, 2, RADIUS_BTN, 0))
 	row.add_child(knob)
 	track.add_child(row)
 	return track
@@ -597,11 +759,11 @@ static func slider(value: float, role: String = "window") -> HSlider:
 	sl.value = value
 	sl.custom_minimum_size = Vector2(0, 40)
 	sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var border := INK if kind(role) == "light" else c(role, "CARD_BORDER")
-	var rail := box(c(role, "WELL"), border, 2, 9, 0, 0, 0, role)
+	var border := c(role, "CARD_BORDER")
+	var rail := box(c(role, "WELL"), border, 1, 2, 0, 0, 0, role)
 	rail.content_margin_top = 7
 	rail.content_margin_bottom = 7
-	var area := box(sem("ACCENT"), border, 2, 9, 0, 0, 0, role)
+	var area := box(sem("ACCENT"), border, 1, 2, 0, 0, 0, role)
 	area.content_margin_top = 7
 	area.content_margin_bottom = 7
 	sl.add_theme_stylebox_override("slider", rail)
@@ -642,11 +804,11 @@ static func segmented(options: Array, selected: int, role: String = "window", he
 
 ## Pestana: [icono] Palabra. La elegida, en color y con labio; las demas, planas.
 static func tab(text_s: String, glyph: String, selected: bool, role: String = "window",
-		fill: Color = Color(0, 0, 0, 0), height: int = BTN) -> Button:
+		fill: Color = Color(0, 0, 0, 0), height: int = BTN, pad_h: int = 18) -> Button:
 	if selected:
 		var f := fill if fill.a > 0.0 else sem("ACCENT")
 		var b := Button.new()
-		_btn_states(b, f, 18, 18, role)
+		_btn_states(b, f, RADIUS_BTN, pad_h, role)
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
@@ -655,19 +817,19 @@ static func tab(text_s: String, glyph: String, selected: bool, role: String = "w
 			row.add_child(make_glyph(glyph, roundi(height * 0.58)))
 		var tc := on_fill(f)
 		row.add_child(label(text_s, "button", tc["color"], tc["outline"]))
-		_fill_button(b, row, height, 18)
+		_fill_button(b, row, height, pad_h)
 		return b
 	var btn := Button.new()
 	var border := c(role, "CARD_BORDER")
-	var n := box(c(role, "CARD_ALT"), Color(border, 0.55), 2, 18, 0, 0, 0, role)
-	var h := box(c(role, "CARD_ALT").lightened(0.08), border, 2, 18, 0, 0, 0, role)
+	var n := box(c(role, "CARD_ALT"), Color(border, 0.55), 1, RADIUS_BTN, 0, 0, 0, role)
+	var h := box(c(role, "CARD_ALT").lightened(0.08), border, 1, RADIUS_BTN, 0, 0, 0, role)
 	for sb in [n, h]:
-		sb.content_margin_left = 18
-		sb.content_margin_right = 18
+		sb.content_margin_left = pad_h
+		sb.content_margin_right = pad_h
 	btn.add_theme_stylebox_override("normal", n)
 	btn.add_theme_stylebox_override("hover", h)
 	btn.add_theme_stylebox_override("pressed", h)
-	btn.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), sem("ACCENT"), 3, 20, 0))
+	btn.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), c(role, "TEXT"), 2, RADIUS_BTN, 0))
 	var row2 := HBoxContainer.new()
 	row2.alignment = BoxContainer.ALIGNMENT_CENTER
 	row2.add_theme_constant_override("separation", 8)
@@ -675,25 +837,32 @@ static func tab(text_s: String, glyph: String, selected: bool, role: String = "w
 	if glyph != "":
 		row2.add_child(make_glyph(glyph, roundi(height * 0.5)))
 	row2.add_child(label(text_s, "button", text(role, true)))
-	_fill_button(btn, row2, height, 18)
+	_fill_button(btn, row2, height, pad_h)
 	return btn
 
-## Globo de ayuda (lo que sale al pasar el raton o mantener el dedo): tinta
-## oscura, texto claro, una o dos frases. Igual en las tres superficies.
+## Globo de ayuda (lo que sale al pasar el raton o mantener el dedo): hueco
+## de bunker con filo de laton, texto claro, una o dos frases. Igual en los
+## dos temas (el globo es del HUD, siempre oscuro).
 static func tooltip_bubble(text_s: String, max_w: float = 300.0) -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := box(Color("2e2218") if not UITheme.high_contrast else Color.BLACK, sem("ACCENT"), 2, 14, 12, 8, 0)
+	var s := tooltip_style()
+	s.set_content_margin_all(12)
 	p.add_theme_stylebox_override("panel", s)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var l := label(text_s, "body", Color("fff5e1"))
+	var l := label(text_s, "body", tooltip_text_color())
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(max_w, 0)
 	p.add_child(l)
 	return p
 
+## Texto del globo de ayuda (el claro del bunker).
+static func tooltip_text_color() -> Color:
+	return _surface("dark", UITheme.high_contrast)["TEXT"]
+
 ## Estilo para el TooltipPanel global (Theme): el mismo globo.
 static func tooltip_style() -> StyleBoxFlat:
-	return box(Color("2e2218"), sem("ACCENT"), 2, 14, 10, 8, 0)
+	var t := _surface("dark", UITheme.high_contrast)
+	return box(t["WELL"], t["TRIM"], 1, RADIUS_CARD, 10, 0, 0)
 
 ## Ventana con su cinta de titulo encima del borde y la X redonda. Devuelve
 ## {"root": Control, "body": VBoxContainer, "close": Button}. El llamador
@@ -706,12 +875,12 @@ static func window(title: String, ribbon_fill: Color = Color(0, 0, 0, 0), with_c
 	var ribbon := PanelContainer.new()
 	ribbon.add_theme_stylebox_override("panel", ribbon_style(fill))
 	ribbon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tc := on_fill(fill)
+	var tc := ribbon_text(fill)
 	var t := label(title, "display", tc["color"], tc["outline"])
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ribbon.add_child(t)
-	# Alto de la cinta calculado (fuera del arbol las etiquetas no se miden).
-	var rh := roundf(fs("display") * 1.3) + 4 + 6 + (BORDER + 1 + border_k()) * 2 + 4
+	# Alto de la placa calculado (fuera del arbol las etiquetas no se miden).
+	var rh := roundf(fs("display") * 1.3) + 3 + 3 + (2 + border_k()) * 2 + 4
 	var rs := Vector2(0, rh)
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", window_style(role))
@@ -719,6 +888,7 @@ static func window(title: String, ribbon_fill: Color = Color(0, 0, 0, 0), with_c
 	panel.offset_top = roundf(rs.y * 0.5)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(panel)
+	trim_line(panel)
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", GAP)
 	var top_pad := Control.new()
@@ -742,6 +912,22 @@ static func window(title: String, ribbon_fill: Color = Color(0, 0, 0, 0), with_c
 		close.offset_bottom = close.offset_top + close.custom_minimum_size.y
 		root.add_child(close)
 	return {"root": root, "body": body, "close": close, "panel": panel, "ribbon": ribbon, "top_pad": top_pad}
+
+## El filo doble de laton de la piel D: una linea fina de TRIM dos pixeles por
+## debajo del borde de arriba de la ventana. Se dibuja en `draw` del propio
+## panel (encima de su caja, debajo de sus hijos): sin nodos ni texturas, y
+## sigue al estilo que tenga el panel en cada momento (fit_window, etc.).
+static func trim_line(panel: Control) -> void:
+	if panel == null or panel.has_meta("trim_line"):
+		return
+	panel.set_meta("trim_line", true)
+	panel.draw.connect(func():
+		var sb := panel.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb == null or sb.border_width_top < 2:
+			return
+		var y := float(sb.border_width_top) + 2.5
+		var inset := float(sb.border_width_left) + 3.0
+		panel.draw_line(Vector2(inset, y), Vector2(panel.size.x - inset, y), sb.border_color, 1.0))
 
 ## La cinta mide lo que mida su titulo (una palabra larga, letra grande): el
 ## hueco de arriba del cuerpo la sigue, para que nada quede tapado bajo ella.
@@ -804,7 +990,7 @@ static func notice(text_s: String, glyph: String, tone: String = "info", count: 
 ## Velo detras de una ventana: oscurece el mapa sin taparlo del todo.
 static func veil() -> ColorRect:
 	var r := ColorRect.new()
-	r.color = Color(0.05, 0.04, 0.03, 0.6 if UITheme.high_contrast else 0.42)
+	r.color = Color(INK, 0.6 if UITheme.high_contrast else 0.42)
 	r.set_anchors_preset(Control.PRESET_FULL_RECT)
 	r.mouse_filter = Control.MOUSE_FILTER_STOP
 	return r
@@ -879,10 +1065,11 @@ static func storm_round() -> int:
 static func bar_build_h() -> int:
 	return 52 if phone else 70
 
-## Ficha redonda del HUD oscuro con un aro de color (la Tormenta).
-static func hud_round_style(d: int, ring: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
+## Ficha del HUD oscuro con un filo de color (la Tormenta). En la piel
+## dieselpunk es casi recta, como las demas fichas (el nombre se queda).
+static func hud_round_style(_d: int, ring: Color = Color(0, 0, 0, 0)) -> StyleBoxFlat:
 	var s := box(Color(c("hud", "BG"), 0.9 if not UITheme.high_contrast else 1.0),
-		ring if ring.a > 0.0 else c("hud", "CARD_BORDER"), 3 if ring.a > 0.0 else 2, int(d * 0.5), 0, 0, 0, "hud")
+		ring if ring.a > 0.0 else c("hud", "CARD_BORDER"), 2 if ring.a > 0.0 else 1, RADIUS_WINDOW, 0, 0, 0, "hud")
 	return s
 
 ## El punto rojo de "hay algo nuevo" (Misiones). Se pega a la esquina de arriba
@@ -960,7 +1147,7 @@ class CaptainFace extends Control:
 		if sz <= 1.0:
 			return
 		var center := size * 0.5
-		draw_circle(center, sz * 0.5, Color("f7e7c4"))
+		draw_circle(center, sz * 0.5, CartoonTheme.c("hud", "CARD_ALT"))
 		var h := sz * 2.15
 		var w := h * 0.8
 		var bust = load("res://scripts/ui/InstructorBust.gd")
@@ -984,6 +1171,12 @@ static func captain_face(px: int) -> Control:
 ## viejas); no se mira el tamano del lienzo aqui para que nadie discrepe.
 static func is_phone(_vp: Vector2 = Vector2.ZERO) -> bool:
 	return phone
+
+## El acero azul (Informacion) como tinta de iconos y filos sobre la
+## superficie de `role`: aclarado lo justo para leerse (el acero de serie es un
+## relleno de boton, oscuro, y sobre la Pizarra no se veria).
+static func info_ink(role: String = "window") -> Color:
+	return readable(sem("INFO").lightened(0.25) if kind(role) == "dark" else sem("INFO"), role)
 
 ## Rojo legible de "lo que falta" sobre la superficie de `role`.
 static func danger_text(role: String = "window") -> Color:
@@ -1121,13 +1314,28 @@ static func set_pill_text(btn: Control, text_s: String) -> void:
 static func set_pill_kind(btn: Button, kind_s: String, height: int, role: String = "window") -> void:
 	var fill := kind_fill(kind_s, role)
 	_btn_states(btn, fill, int(height * 0.5), 22, role)
-	var tc := on_fill(fill)
-	if kind_s == "secondary":
-		tc = {"color": text(role), "outline": false}
+	btn.set_meta("pill_role", role)
+	var tc := pill_text(kind_s, fill, role)
 	for n in btn.find_children("*", "Label", true, false):
 		var l := n as Label
+		l.remove_meta("on_color")
 		l.add_theme_color_override("font_color", tc["color"])
 		l.add_theme_constant_override("outline_size", maxi(4, roundi(fs("button") * 0.3)) if tc["outline"] else 0)
+	# La luz piloto va solo con la accion principal.
+	var lamps := btn.find_children("PilotLight", "Panel", true, false)
+	if kind_s == "primary" and lamps.is_empty():
+		var lbl := btn.find_children("*", "Label", true, false)
+		if not lbl.is_empty():
+			var row := (lbl[0] as Node).get_parent()
+			if row is HBoxContainer:
+				row.add_child(pilot_light(0, fill))
+				row.move_child(row.get_child(row.get_child_count() - 1), 0)
+	elif kind_s != "primary":
+		for lamp in lamps:
+			lamp.get_parent().remove_child(lamp)
+			lamp.queue_free()
+	btn.set_meta("off_drawn", false)
+	btn.queue_redraw()
 
 ## El porque de un boton gris, en 2-3 palabras debajo (docs/28 §5). Oculto si
 ## no hay porque.
@@ -1208,20 +1416,21 @@ static func text_pill(text_s: String, kind_s: String = "primary", height: int = 
 static func style_text_pill(b: Button, kind_s: String, height: int, role: String = "window", level: String = "button") -> void:
 	var fill := kind_fill(kind_s, role)
 	_btn_states(b, fill, int(height * 0.5), 14, role)
-	var tc := on_fill(fill)
-	if kind_s == "secondary":
-		tc = {"color": text(role), "outline": false}
-	var f: Font = title_font() if level in ["display", "title", "button", "number"] else bold_font()
+	var tc := pill_text(kind_s, fill, role)
+	var f: Font = title_font() if level in ["display", "title", "button"] else bold_font()
 	if f != null:
 		b.add_theme_font_override("font", f)
 	b.add_theme_font_size_override("font_size", fs(level))
 	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(st, tc["color"])
-	b.add_theme_color_override("font_disabled_color", Color(tc["color"], 0.65))
+	b.add_theme_color_override("font_disabled_color", c(role, "OFF_INK"))
 	b.add_theme_constant_override("outline_size", maxi(4, roundi(fs(level) * 0.3)) if tc["outline"] else 0)
 	b.add_theme_color_override("font_outline_color", INK)
 	b.add_theme_constant_override("h_separation", 8)
 	b.set_meta("pill_kind", kind_s)
+	# Los botones de texto ponen su texto luego (el verbo de las recetas): la
+	# luz piloto va con la clase, no con el texto.
+	_sync_pilot(b, kind_s == "primary", fill, 10)
 
 ## Tarjeta-boton (tecnologias): una tarjeta que se toca. `state`: "open",
 ## "done" (verde claro), "locked" (CARD_ALT). `selected`: borde de laton.
@@ -1263,7 +1472,7 @@ static func rotate_glyph(px: int, tint: Color = Color(0, 0, 0, 0)) -> Control:
 		var s := minf(ctl.size.x, ctl.size.y)
 		var cen := ctl.size * 0.5
 		var r := s * 0.32
-		var col := tint if tint.a > 0.0 else sem("INFO")
+		var col := tint if tint.a > 0.0 else info_ink()
 		var w := maxf(3.0, s * 0.14)
 		ctl.draw_arc(cen, r, deg_to_rad(-60), deg_to_rad(220), 24, INK, w + 3.0, true)
 		ctl.draw_arc(cen, r, deg_to_rad(-60), deg_to_rad(220), 24, col, w, true)
@@ -1396,7 +1605,7 @@ static func set_ribbon(w: Dictionary, title: String, fill: Color) -> void:
 	var l := ribbon.get_child(0) as Label
 	if l == null:
 		return
-	var tc := on_fill(fill)
+	var tc := ribbon_text(fill)
 	l.text = title
 	style_label(l, "display", tc["color"], tc["outline"])
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1435,18 +1644,17 @@ static func style_pill(btn: Button, kind_s: String = "secondary", height: int = 
 	var fill := kind_fill(kind_s, role)
 	var pad := 16 if btn.text != "" else 6
 	_btn_states(btn, fill, int(height * 0.5), pad, role)
-	var tc := on_fill(fill)
-	if kind_s == "secondary":
-		tc = {"color": text(role), "outline": false}
+	var tc := pill_text(kind_s, fill, role)
 	var size := fs(level)
 	btn.add_theme_font_override("font", title_font())
 	btn.add_theme_font_size_override("font_size", size)
 	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		btn.add_theme_color_override(st, tc["color"])
-	btn.add_theme_color_override("font_disabled_color", Color(tc["color"], 0.65))
+	btn.add_theme_color_override("font_disabled_color", c(role, "OFF_INK"))
 	btn.add_theme_constant_override("outline_size", maxi(3, roundi(size * 0.25)) if tc["outline"] else 0)
 	btn.add_theme_color_override("font_outline_color", INK)
 	btn.custom_minimum_size.y = height
+	var lead := _sync_pilot(btn, kind_s == "primary" and btn.text != "", fill, pad)
 	var old := btn.get_node_or_null("PillGlyph")
 	if old != null:
 		btn.remove_child(old)
@@ -1463,15 +1671,47 @@ static func style_pill(btn: Button, kind_s: String = "secondary", height: int = 
 			btn.custom_minimum_size.x = maxf(btn.custom_minimum_size.x, height)
 		else:
 			ic.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-			ic.offset_left = pad
-			ic.offset_right = pad + px
+			ic.offset_left = pad + lead
+			ic.offset_right = pad + lead + px
 			for st in ["normal", "hover", "pressed", "disabled"]:
 				var sb := btn.get_theme_stylebox(st)
 				if sb != null:
-					sb.content_margin_left = pad + px + 6
+					sb.content_margin_left = pad + lead + px + 6
 		ic.offset_top = -px * 0.5 - LIP * 0.5
 		ic.offset_bottom = px * 0.5 - LIP * 0.5
 	return btn
+
+## Pone (o quita) la luz piloto de un boton de texto (Button.text): un hijo
+## "PilotLight" a la izquierda, a `x` del borde, y el margen izquierdo de sus
+## cajas crece lo que mide. Devuelve ese crecimiento (0 sin piloto).
+static func _sync_pilot(btn: Button, on: bool, fill: Color, x: int) -> int:
+	var old := btn.get_node_or_null("PilotLight")
+	if old != null:
+		btn.remove_child(old)
+		old.queue_free()
+	if not on:
+		return 0
+	var lamp := pilot_light(0, fill)
+	var d := int(lamp.custom_minimum_size.x)
+	btn.add_child(lamp)
+	lamp.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	lamp.offset_left = x
+	lamp.offset_right = x + d
+	lamp.offset_top = -d * 0.5
+	lamp.offset_bottom = d * 0.5
+	var lead := d + 6
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		var sb := btn.get_theme_stylebox(st)
+		if sb != null:
+			sb.content_margin_left += lead
+	# Apagada (gris) mientras el boton este desactivado; se mira al redibujar.
+	if not btn.has_meta("pilot_watch"):
+		btn.set_meta("pilot_watch", true)
+		btn.draw.connect(func():
+			var l := btn.get_node_or_null("PilotLight") as Control
+			if l != null:
+				l.self_modulate = Color(0.5, 0.5, 0.5, 0.6) if btn.disabled else Color(1, 1, 1, 1))
+	return lead
 
 static func _army_first_label(n: Node) -> Label:
 	for child in n.get_children():
@@ -1673,16 +1913,18 @@ static func stamp(text_s: String, fill: Color) -> Control:
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.custom_minimum_size = Vector2(0, 50 if phone else 60)
+	# Sello oficial (prestado de la direccion C): marco de tinta del color del
+	# sello sobre un velo del mismo color, letras del sello. Sin textura.
 	var p := PanelContainer.new()
-	var s := box(fill, INK, BORDER + 1, 14, 0, 0, 3)
+	var ink := readable(fill.lightened(0.15) if kind("window") == "dark" else fill.darkened(0.2))
+	var s := box(Color(fill, 0.14), ink, 3, 2, 0, 0, 0)
 	s.content_margin_left = 22
 	s.content_margin_right = 22
 	s.content_margin_top = 2
-	s.content_margin_bottom = 4
+	s.content_margin_bottom = 3
 	p.add_theme_stylebox_override("panel", s)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tc := on_fill(fill)
-	var l := label(text_s, "title", tc["color"], tc["outline"])
+	var l := label(text_s, "title", ink)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p.add_child(l)
 	holder.add_child(p)
@@ -1771,7 +2013,7 @@ static func setting_row(row_name: String, glyph: String, text_s: String, control
 		outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		outer.add_child(row)
 	if glyph != "":
-		var ic := make_glyph(glyph, 26 if small else 34, sem("INFO"))
+		var ic := make_glyph(glyph, 26 if small else 34, info_ink())
 		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(ic)
 	var l := label(text_s, "button", text("window"))
@@ -1909,7 +2151,7 @@ static func list_button(glyph: String, text_s: String, small: bool = false, mark
 	var n := card_style("window")
 	var hv := card_style("window")
 	hv.bg_color = c("window", "CARD").darkened(0.04)
-	hv.border_color = sem("INFO")
+	hv.border_color = info_ink()
 	var pr := card_style("window")
 	pr.bg_color = c("window", "CARD_ALT")
 	for sb in [n, hv, pr]:
@@ -1924,7 +2166,7 @@ static func list_button(glyph: String, text_s: String, small: bool = false, mark
 	row.add_theme_constant_override("separation", 10)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if glyph != "":
-		var ic := make_glyph(glyph, 26 if small else 32, sem("INFO"))
+		var ic := make_glyph(glyph, 26 if small else 32, info_ink())
 		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(ic)
 	var l := label(text_s, "button", text("window", dim))
@@ -1947,12 +2189,13 @@ static func list_button(glyph: String, text_s: String, small: bool = false, mark
 ## El contorno grueso de lo que se dibuja sobre la superficie de `role`
 ## (bocadillo, piquito): tinta sobre lo claro, el borde de color sobre lo oscuro.
 static func edge(role: String = "window") -> Color:
-	return INK if kind(role) == "light" else c(role, "BORDER")
+	return c(role, "TRIM")
 
 ## El bocadillo del instructor (tutorial, consejos): el fondo de las ventanas
 ## con su contorno (tinta en Claro, el borde azul en Oscuro).
 static func bubble_style(small: bool = false) -> StyleBoxFlat:
-	var s := box(c("window", "BG"), edge("window"), BORDER, RADIUS_CARD, 10 if small else 14, 0, 2)
+	var s := box(c("window", "BG"), edge("window"), 1, RADIUS_CARD, 10 if small else 14, 0, 0)
+	s.border_width_top = 3 + border_k()
 	s.shadow_color = Color(INK, 0.35)
 	s.shadow_size = 1
 	s.shadow_offset = Vector2(0, 4)
@@ -2049,7 +2292,7 @@ static func rank_plate(rank: int) -> PanelContainer:
 	var plate := PanelContainer.new()
 	plate.name = "RankLock"
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := box(c("window", "CARD"), c("window", "CARD_BORDER"), 2, 8, 2)
+	var st := box(c("window", "CARD"), c("window", "CARD_BORDER"), 1, 2, 2)
 	st.content_margin_left = 6
 	st.content_margin_right = 6
 	plate.add_theme_stylebox_override("panel", st)
@@ -2095,11 +2338,8 @@ static func pick_fill(enabled: bool) -> Color:
 ## apagada (relleno hundido).
 static func pick_style(selected: bool, enabled: bool) -> StyleBoxFlat:
 	var fill := pick_fill(enabled)
-	var st := box(fill, sem("ACCENT") if selected else c("window", "CARD_BORDER"),
-		5 if selected else 2, 12, 4, 0, 0, "window")
-	if selected:
-		st.shadow_color = Color(sem("ACCENT"), 0.5)
-		st.shadow_size = 4
+	var st := box(fill, c("window", "TRIM") if selected else c("window", "CARD_BORDER"),
+		4 if selected else 1, RADIUS_CARD, 4, 0, 0, "window")
 	return st
 
 # --- BANDERA (feat/ui3-bandera) -------------------------------------------
@@ -2164,7 +2404,7 @@ static func piece_plate(icon: String, text_s: String) -> PanelContainer:
 	var plate := PanelContainer.new()
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var st := box(c("window", "CARD"), c("window", "CARD_BORDER"), 1, 7, 1)
+	var st := box(c("window", "CARD"), c("window", "CARD_BORDER"), 1, 2, 1)
 	st.content_margin_left = 4
 	st.content_margin_right = 4
 	plate.add_theme_stylebox_override("panel", st)
@@ -2342,3 +2582,158 @@ static func dodge_closes_in(root: Variant) -> void:
 	for n in (root as Control).get_tree().get_nodes_in_group("window_close"):
 		if n is Control and (root as Control).is_ancestor_of(n) and (n as Control).is_visible_in_tree():
 			dodge_menu_button(n as Control)
+
+# ══════════════════════════════════════
+# RECETAS (feat/recetas-tarjetas, 2026-10-25)
+# ══════════════════════════════════════
+# FABRICAR en la ficha: cada receta es una tarjeta grande
+#   [icono entrada ×N] → [icono salida ×N], reloj, el VERBO, ×1 / ×5 / MAX.
+# La tarjeta (ProcessCard) y la seccion (ProcessActionsPanel) solo piden
+# piezas aqui: tamanos, estilos, iconos y columnas. Piel dieselpunk
+# (2026-10-25): la tarjeta en marcha lleva filo de laton, la cerrada va
+# apagada (no disponible), el verbo es la accion principal (laton con luz
+# piloto, via text_pill "primary") y las cantidades van en Plex Condensed.
+
+## Lado del icono grande de una cantidad de receta.
+static func recipe_icon_px() -> int:
+	return 34 if phone else 44
+
+## Separacion entre tarjetas de receta (filas y columnas).
+static func recipe_gap() -> int:
+	return 8 if phone else GAP
+
+## Ancho por debajo del cual una tarjeta de receta ya no cabe en media
+## rejilla. Sale de la letra (no es un ancho fijo): con texto grande, menos
+## columnas.
+static func recipe_card_min_w() -> float:
+	return roundf(fs("button") * 12.0)
+
+## Columnas de la rejilla de recetas para `width`: una en telefono (a todo el
+## ancho); en tablet y PC dos si caben dos tarjetas de `card_min_w`.
+static func recipe_columns(width: float, card_min_w: float = 0.0) -> int:
+	if phone:
+		return 1
+	var w := maxf(card_min_w, recipe_card_min_w())
+	return 2 if width >= w * 2.0 + float(recipe_gap()) else 1
+
+## Ancho que pide la ficha de un edificio con recetas en tablet y PC: dos
+## tarjetas y los margenes, sin pasar de algo mas de media pantalla. Si no
+## llegan, la rejilla se queda en una columna (recipe_columns).
+static func recipe_panel_w(vp: Vector2) -> float:
+	var want := recipe_card_min_w() * 2.0 + float(recipe_gap()) + float(PAD) * 2.0 + 28.0
+	return clampf(want, 0.0, vp.x * 0.56)
+
+## Icono de un recurso o material en las recetas: el PNG de los recursos o el
+## glifo dibujado de los materiales (CartoonIcon "mat_<id>"). null si no hay.
+static func res_glyph(res_id: String, px: int) -> Control:
+	if res_id in ICON_RES:
+		return UITheme.make_icon(res_id, px)
+	if Icon.GLYPHS.has("mat_" + res_id):
+		return Icon.make("mat_" + res_id, px)
+	return null
+
+## El id de glifo (para make_glyph / tab) de un recurso o material.
+static func res_glyph_id(res_id: String) -> String:
+	if res_id in ICON_RES:
+		return "res:" + res_id
+	if Icon.GLYPHS.has("mat_" + res_id):
+		return "mat_" + res_id
+	return ""
+
+## Tarjeta de receta por estado: "open" (Placa con filo gris), "active" (la
+## que trabaja: filo de laton y el de arriba mas grueso, como las ventanas) o
+## "locked" (no disponible: apagada, con filo tenue).
+static func recipe_card_style(state: String) -> StyleBoxFlat:
+	var fill := Color(0, 0, 0, 0)
+	if state == "locked":
+		fill = c("window", "OFF")
+	var s := card_style("window", state == "active", fill)
+	if state == "active":
+		s.border_width_top = 3 + border_k()
+	elif state == "locked":
+		s.border_color = Color(c("window", "OFF_INK"), 0.45)
+	var pad := 8 if phone else 12
+	s.set_content_margin_all(pad)
+	return s
+
+## Titulo de la seccion: [icono] FABRICAR, en letra de boton.
+static func recipe_header(text_s: String, glyph: String = "build") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	if glyph != "":
+		var g := make_glyph(glyph, 24 if phone else 30)
+		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(g)
+	var l := label(text_s, "button", text("window"))
+	l.name = "RecipeTitle"
+	row.add_child(l)
+	return row
+
+## Una cantidad grande: [icono] ×20 en un hueco hundido. `short` > 0: lo que
+## falta, en rojo y con borde. `gain`: la cifra en verde (lo que sale). Sin
+## icono, el nombre va debajo en pequeno. La cifra se llama "Amount_<id>".
+static func recipe_amount(res_id: String, amount: int, short: int = 0, gain: bool = false) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.name = "Chip_" + res_id
+	var s := well_style("window", 2, 4)
+	s.content_margin_left = 6
+	s.content_margin_right = 10
+	if short > 0:
+		s.bg_color = Color(sem("DANGER"), 0.22)
+		s.border_color = sem("DANGER")
+		s.set_border_width_all(2)
+	p.add_theme_stylebox_override("panel", s)
+	p.mouse_filter = Control.MOUSE_FILTER_PASS
+	var cap := Tr.res_cap(res_id)
+	p.tooltip_text = cap if short <= 0 else "%s · %s" % [cap, Tr.t("OBJ_MISSING") % ("%d" % short)]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ic := res_glyph(res_id, recipe_icon_px())
+	if ic != null:
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", -4)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tone := text("window")
+	if gain:
+		tone = positive_text()
+	if short > 0:
+		tone = danger_text()
+	# Cifra en la letra de las cifras (Plex Condensed Bold), al tamano de titulo.
+	var n := label("×%d" % amount, "number", tone)
+	n.add_theme_font_size_override("font_size", fs("title"))
+	n.name = "Amount_" + res_id
+	col.add_child(n)
+	if ic == null:
+		col.add_child(label(Tr.res_name(res_id), "small", text("window", true)))
+	row.add_child(col)
+	p.add_child(row)
+	return p
+
+## Rehace una fila de recipe_amount (entrada o salida). No toca nada si no
+## cambio: la tarjeta se refresca cada poco y llega una senal por recurso.
+static func fill_recipe_row(row: Container, amounts: Dictionary, short: Dictionary = {}, gain: bool = false) -> void:
+	var sig := [amounts, short, gain, phone, UITheme.palette, UITheme.high_contrast]
+	if row.has_meta("recipe_sig") and row.get_meta("recipe_sig") == sig:
+		return
+	row.set_meta("recipe_sig", sig)
+	row.set_meta("amounts", amounts.duplicate())
+	for child in row.get_children():
+		row.remove_child(child)
+		child.free()
+	for res_id in amounts:
+		row.add_child(recipe_amount(String(res_id), int(amounts[res_id]), int(short.get(String(res_id), 0)), gain))
+
+## Una pastilla del selector ×1 / ×5 / MAX: la elegida en acero (abrir), las
+## demas Placa con filo.
+static func style_pick(b: Button, selected: bool) -> void:
+	style_text_pill(b, "info" if selected else "secondary", h("small"), "window", "button")
+
+## Pestana de taller (el Nucleo): la de tab(), mas justa de margen, para que en
+## telefono las seis quepan en una fila con solo el icono.
+static func recipe_tab(text_s: String, glyph: String, selected: bool) -> Button:
+	return tab(text_s, glyph, selected, "window", Color(0, 0, 0, 0), h("small"), 4 if text_s == "" else 14)

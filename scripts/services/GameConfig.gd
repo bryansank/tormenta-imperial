@@ -323,6 +323,21 @@ var material_sources := {
 func get_material_source(res_name: String) -> String:
 	return String(material_sources.get(res_name, ""))
 
+## Los recursos de era y el edificio cuya primera obra terminada los abre
+## (ProgressionManager._check_era_advance). Los materiales, en material_sources.
+var resource_unlock_buildings := {
+	"steel": "foundry",
+	"oil": "refinery",
+}
+
+## El edificio que trae al juego un recurso o material ("" si ya viene de
+## serie o no se sabe). Lo usa la tarjeta de receta bloqueada para decir el
+## porque: "Falta acero: llega con la Fundicion".
+func get_unlock_building(res_name: String) -> String:
+	if resource_unlock_buildings.has(res_name):
+		return String(resource_unlock_buildings[res_name])
+	return get_material_source(res_name)
+
 ## El material que fabrica un edificio ("" si ninguno).
 func get_material_of(building_id: String) -> String:
 	for m in material_sources:
@@ -737,8 +752,11 @@ var ui_scale_pct := 0
 var ui_text_size := "auto"
 ## Paleta de colores (UITheme.PALETTES), alto contraste y opacidad de paneles.
 var ui_palette := "default"
-## Tema de las ventanas: "light" (crema, de serie) o "dark" (CartoonTheme.window_theme).
-var ui_theme := "light"
+## Tema de las ventanas (CartoonTheme.window_theme): "dark" (bunker, de serie
+## desde la piel dieselpunk, 2026-10-25) o "light" (papel crema sobrio). Se
+## guarda en [interfaz] window_theme; la clave vieja ui_theme (el tema de la
+## piel caricatura, que tenia "light" de serie) se ignora a proposito.
+var ui_theme := "dark"
 var ui_high_contrast := false
 var ui_panel_opacity := 1.0
 ## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
@@ -918,8 +936,8 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	var pal := str(cf.get_value("interfaz", "palette", ui_palette))
 	ui_palette = pal if pal in UITheme.PALETTES else "default"
 	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
-	var theme_s := str(cf.get_value("interfaz", "ui_theme", ui_theme))
-	ui_theme = theme_s if theme_s in ["light", "dark"] else "light"
+	var theme_s := str(cf.get_value("interfaz", "window_theme", ui_theme))
+	ui_theme = theme_s if theme_s in ["light", "dark"] else "dark"
 	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
 	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
@@ -981,7 +999,9 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "text_size", ui_text_size)
 	cf.set_value("interfaz", "palette", ui_palette)
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
-	cf.set_value("interfaz", "ui_theme", ui_theme)
+	cf.set_value("interfaz", "window_theme", ui_theme)
+	if cf.has_section_key("interfaz", "ui_theme"):
+		cf.erase_section_key("interfaz", "ui_theme")
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
 	cf.set_value("interfaz", "combat_view", ui_combat_view)
