@@ -464,6 +464,18 @@ static func _draw_ada(ci: CanvasItem, b: Rect2, e: String) -> void:
 static func _draw_bombarda(ci: CanvasItem, b: Rect2, e: String) -> void:
 	draw_figure(ci, b, COMBAT, e, true, false)
 
+## El rectangulo de la figura para una cara en circulo de `size`: la boca de
+## `id` cae a 2/3 del alto del circulo, asi la cabeza queda centrada (la
+## caricatura de 2026-10-26 tiene la cabeza mas abajo que el busto viejo y el
+## recorte de antes solo ensenaba la gorra). Integracion v1.3.
+static func face_rect(size: Vector2, id: String) -> Rect2:
+	var sz := minf(size.x, size.y)
+	var h := sz * 2.15
+	var w := h * 0.8
+	var mouth_v: float = MOUTH_V_COMBAT if id == COMBAT else MOUTH_V_COLONY
+	var top := sz * 0.68 - mouth_v * h
+	return Rect2(Vector2(size.x * 0.5 - w * 0.5, top), Vector2(w, h))
+
 # ── Utilidades ───────────────────────────────────────────────────────
 
 ## Punto (u, v) en [0, 1] dentro de `box`.

@@ -1146,10 +1146,8 @@ class CaptainFace extends Control:
 			return
 		var center := size * 0.5
 		draw_circle(center, sz * 0.5, CartoonTheme.c("hud", "CARD_ALT"))
-		var h := sz * 2.15
-		var w := h * 0.8
 		var bust = load("res://scripts/ui/InstructorBust.gd")
-		bust._draw_ada(self, Rect2(Vector2(size.x * 0.5 - w * 0.5, -0.1 * h), Vector2(w, h)), mood)
+		bust._draw_ada(self, bust.face_rect(size, bust.COLONY), mood)
 		draw_arc(center, sz * 0.5 - 1.5, 0.0, TAU, 40, CartoonTheme.sem("ACCENT"), 3.0, true)
 
 static func captain_face(px: int) -> Control:

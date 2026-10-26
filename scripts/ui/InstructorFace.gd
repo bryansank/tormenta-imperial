@@ -40,9 +40,7 @@ func _draw() -> void:
 	var center := size * 0.5
 	# El hueco de la cara, como CartoonTheme.CaptainFace (token de la piel).
 	draw_circle(center, sz * 0.5, CartoonTheme.c("hud", "CARD_ALT"))
-	var h := sz * 2.15
-	var w := h * 0.8
-	var rect := Rect2(Vector2(size.x * 0.5 - w * 0.5, -0.1 * h), Vector2(w, h))
+	var rect := Bust.face_rect(size, who)
 	if who == Bust.COMBAT:
 		Bust._draw_bombarda(self, rect, mood)
 	else:
