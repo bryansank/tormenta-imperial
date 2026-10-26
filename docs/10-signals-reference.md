@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**141 signals** in 30 categories (2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**165 signals** in the categories of `EventBus.gd` (2026-10-26, integration v1.3: + `chapter_completed`, `tithe_choice_changed` and `campaign_piece_won` of `feat/ritmo-colono`; 2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -156,6 +156,7 @@ collected ([02-economy.md](02-economy.md)).
 | `milestone_completed` | `milestone_id: String` | ProgressionManager, TechTreeManager | ProgressPanel, NotificationPanel, AudioManager |
 | `phase_advanced` | `new_phase: int` | ProgressionManager | MarketPanel, NotificationPanel, StormManager |
 | `victory_achieved` | `stats: Dictionary` | ProgressionManager | VictoryScreen, AudioManager |
+| `chapter_completed` | `chapter: int` | ProgressionManager (once per chapter and game, never on load) | ChapterScreen (I and II; III is closed by the victory) |
 
 `victory_achieved` is still the end of the game, but it is now reached **only**
 through a won Final Audit — HQ level 3 summons the siege, it does not win.
@@ -219,6 +220,7 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `campaign_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
 | `campaign_mission_won` | domain: String, mission: int, is_boss: bool | CombatManager | RankManager, line_probe_player |
 | `campaign_completed` | domain: String | CombatManager | ProgressionManager (`try_summon_final_audit`), line_probe_player |
+| `campaign_piece_won` | domain: String | CombatManager (right after `campaign_completed`: the boss's HQ level 3 piece) | *(no listener)* |
 | `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
 | `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |
 | `enemy_routed` | — | CombatManager | BattleScreen |
@@ -287,6 +289,7 @@ follow `StormCycle.Phase`.
 | `tithe_demanded` | `severity: int` | StormManager | TutorialManager |
 | `tithe_resolved` | `paid: bool, taken: Dictionary` | StormManager | StormHUD, HelperPanel, WarReportScreen, AuditDefeatScreen |
 | `storm_order_changed` | `fresh: bool` | StormManager | StormHUD |
+| `tithe_choice_changed` | `open: bool` | StormManager (la Visita: an automatic Tax offers ¡PELEAR! for a few seconds) | StormHUD |
 
 `storm_incoming` carries no severity on purpose — the warning window says the ash
 is on the horizon, and the size of the bill is only announced with `storm_started`.

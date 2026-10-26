@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3120 tests (`func test_`, 3129 cases) in 234 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3180 tests (`func test_`, ~3180 cases) in 239 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -69,13 +69,13 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 162 signals in 36 categories (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 165 signals in 36 categories (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining), in batches of ×1 / ×5 / MÁX |
-| 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production that waits in each building until collected, Farm crops, spoilage (Gobernador), construction, upgrades |
+| 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production that waits in each building until collected, Farm crops, spoilage (Gobernador), construction, upgrades; advances by 0.1 s simulation ticks (`TICK_SECONDS`), not per frame (2026-10-26, `fix/tablet-y-rendimiento`, docs/26); HQ level 3 also asks for the three campaign pieces |
 | 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
 | 11 | `MarketManager` | `scripts/services/MarketManager.gd` | Buy/sell resources with floating prices |
 | 12 | `PopulationManager` | `scripts/services/PopulationManager.gd` | Population, workers, morale, consumption |
@@ -94,7 +94,7 @@ holds a service's state of its own.
 | 25 | `AudioManager` | `scripts/services/AudioManager.gd` | Signal-driven music/SFX/ambience (day, night and Storm loops), runtime buses |
 | 26 | `DeviceProfile` | `scripts/services/DeviceProfile.gd` | PC/tablet/phone detection + override, UI scale (`content_scale_factor`; the phone canvas follows the real dp, 360-540 tall in landscape, `phone_content_scale_for`, and turns `CartoonTheme.phone` on), applies `UITheme` tokens (palette, contrast, opacity, text size), the FPS cap, the non-world part of the graphics quality and the first-launch quality detection. See `docs/21-interfaz-y-dispositivos.md` |
 | 27 | `RankManager` | `scripts/services/RankManager.gd` | Governor rank: XP from EventBus signals, rank derived from XP, rank rewards (decoration unlocks, extra slots, small production/storage bonuses, flag pieces) and the player's country: name + flag recipe (`set_colony()`). See `docs/06-progression-victory.md` §Governor rank |
-| 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
+| 28 | `ContractManager` | `scripts/services/ContractManager.gd` | The contract board (ENCARGOS): ticks the pure `scripts/economy/ContractBoard.gd` (3 slots: Regency, neighbours, smuggler; ticked every 0.5 s since 2026-10-26), charges what is asked and pays the reward (resources, morale, colonists if `PopulationManager.add_colonists` exists, Tithe discount through `StormManager.add_tithe_discount` if it exists, else gold), emits `contract_*`; saved as `contracts`; off in Sandbox (`GameMode.contracts_enabled()`). See `docs/27-encargos.md` |
 | 29 | `EconomyManager` | `scripts/services/EconomyManager.gd` | The 1.2 economy buildings (`feat/edificios-economia`): the smuggler's ship of the Trade port (pure `scripts/economy/SmugglerShip.gd`: clock, 3 offers, deals through `take_offer()`), minor blueprints bought from it (`has_plan()`, read by `RankManager.is_building_unlocked`), the Diesel plants' fuel (`burn_fuel()`) and the Exchange's Governor interest; emits `smuggler_*`, `diesel_plant_fuel_changed`, `exchange_interest_paid`, `economy_changed`; saved as `economy`. See `docs/03-buildings.md` "Economía de la 1.2" |
 | 30 | `ThreatManager` | `scripts/services/ThreatManager.gd` | Coastal threats (1.2, optional loot only): ticks the pure `scripts/combat/ThreatBoard.gd` on a 5 s Timer, finds free shore cells only when a mark is due, launches the 1-fight pure-domain raid through `CombatManager.launch_threat_offer()`, closes it on `expedition_ended`, sends workers to wrecks (`busy_workers()`, read by PopulationManager) and pays them; emits `threat_*`; saved as `threats`. See `docs/15-combat.md` §14 |
 | 31 | `EmpireManager` | `scripts/services/EmpireManager.gd` | The **ending with a choice** and Volverse el Imperio (1.2): after the Final Audit is **won** (Campaña/Supervivencia, rule `empire_phase`) the Tax book waits on the table (`choice_pending()`); `choose_ending("sign"|"burn")` stores the choice once (`ending`, in the `empire` key, emits `ending_chosen`): signing opens the archipelago phase (`is_active()`), burning frees the island (`is_free()`: no phase, title `END_BURN_TITLE`, the Sun flag emblem). For the phase it owns the pure `scripts/empire/Archipelago.gd` (6 neighbouring islands, conquest progress, tribute clock), launches conquest missions through `CombatManager.launch_conquest_mission()`, records them on `expedition_ended`, pays the periodic tribute and grants the unique rewards; emits `empire_*`, `conquest_mission_won`, `island_conquered`; saved as `empire`. See `docs/06-progression-victory.md` §Volverse el Imperio |
@@ -180,6 +180,15 @@ open, amber warn, red destroy, dimmed + padlock unavailable), dark windows by
 default (`window_theme` "light" = sober paper) — `docs/21-interfaz-y-dispositivos.md`
 §17 and `docs/24-paleta.md`; `"classic"` stays as an internal fallback
 (`-- --ui-style=classic`), and the mockups come from `tools/ui_mockup_probe.gd`.
+The polish (`feat/piel-dieselpunk-pulido`) adds line icons (`CartoonIcon`, PNGs from
+`tools/gen_resource_icons.gd`), upper-case button text through
+`scripts/ui/CapsTranslation.gd`, a neutral ✕, corners from tokens (`CT.RADIUS_*`) and
+stamps on the victory and rank-up cards; the Regency Order card folds while a
+tutorial card (group `tutorial_card`) is on screen. Text on a title plate uses
+`CT.ribbon_text()`, never `CT.on_fill()`; every screen (1.2 ones and "De qué va"
+included) builds from tokens and factories, no hand-written cream colours.
+Overflow check: `tools/desborde_probe.gd` (+ `tests/ui/test_desbordes.gd`, scanner
+`tests/ui/overflow_scan.gd`); cost chips wrap with `CT.cost_flow()`.
 On a phone canvas (< 450 short side, `CartoonTheme.phone`, set by DeviceProfile)
 `UILayoutConfig.PHONE_SLOTS` is merged in `UILayoutManager.get_slot()` before
 `NARROW_SLOTS`. Under the old style, panels and buttons are plain
@@ -1311,7 +1320,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 234 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 239 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -1321,7 +1330,7 @@ tormenta-imperial/
 |   +-- buildings/BuildingPlacer.tscn
 |   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
 |   +-- ui/                          # One .tscn per panel (29), incl. PrologueScreen and HelpIndexPanel
-+-- scripts/                         # 207 .gd files, ~100k lines
++-- scripts/                         # 211 .gd files, ~102k lines
 |   +-- buildings/
 |   |   +-- BuildingData.gd          # Resource class for building definitions (get_display_name())
 |   |   +-- BuildingPlacer.gd        # 3D placement/move/demolish + mesh spawning
@@ -1408,7 +1417,7 @@ tormenta-imperial/
 |   +-- view2d/                      # The 2D view (docs/18): same services, flat world
 |       +-- ViewRouter.gd, ViewMode.gd, View2D.gd  # Scene routing, the view preference, world<->pixel maths
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
-|       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd, BuildingArt2D.gd, BuildingIcon2D.gd
+|       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd (no `_process` of its own: `Building2DClock.gd` checks one slice of the buildings per frame, a round every 0.4 s), BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
 +-- data/buildings/                  # 55 .tres building definitions
