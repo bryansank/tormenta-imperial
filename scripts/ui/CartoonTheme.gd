@@ -980,6 +980,9 @@ static func notice(text_s: String, glyph: String, tone: String = "info", count: 
 	# En telefono la X dibujada es pequena; el aviso entero tambien se cierra
 	# de un toque (docs/28 §10), asi que el dedo no tiene que acertarle.
 	x.custom_minimum_size = Vector2(40, 40) if not phone else Vector2(30, 30)
+	# Con el dedo, 48 como minimo (era 30 en telefono): la X es el control mas pequeno.
+	if UITheme.is_touch_ui() or phone:
+		x.custom_minimum_size = Vector2(48, 48)
 	x.tooltip_text = "Cerrar"
 	var empty := StyleBoxEmpty.new()
 	for st in ["normal", "hover", "pressed", "focus"]:
@@ -2138,7 +2141,8 @@ static func list_button(glyph: String, text_s: String, small: bool = false, mark
 		dim: bool = false) -> Button:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_ALL
-	var hgt := 48 if small else 56
+	var hgt := 56 if not small else 48
+	hgt = maxi(hgt, 48)
 	var n := card_style("window")
 	var hv := card_style("window")
 	hv.bg_color = c("window", "CARD").darkened(0.04)
@@ -2523,7 +2527,7 @@ static func safe_insets(vp: Viewport) -> Dictionary:
 ## ventana: si tapa la X de `close`, la X se corre a su izquierda. Se puede
 ## llamar cada vez que se recoloca la ventana: deshace el corrimiento anterior.
 ## Diferido por quien lo llame si la ventana se acaba de colocar.
-static func dodge_menu_button(close: Control, gap: float = 8.0) -> void:
+static func dodge_menu_button(close: Control, gap: float = 16.0) -> void:
 	if close == null or not is_instance_valid(close) or not close.is_inside_tree():
 		return
 	# Se deshace el corrimiento anterior solo si nadie ha recolocado la X desde

@@ -387,7 +387,7 @@ func _make_toast(e: Dictionary, compact: bool) -> PanelContainer:
 	close.text = "✕"
 	close.flat = true
 	close.focus_mode = Control.FOCUS_NONE
-	var side := UITheme.touch_px(22.0 if compact else 26.0)
+	var side := maxf(UITheme.touch_px(22.0 if compact else 26.0), 48.0) if UITheme.is_touch_ui() else UITheme.touch_px(22.0 if compact else 26.0)
 	close.custom_minimum_size = Vector2(side, side)
 	close.add_theme_font_size_override("font_size", UITheme.FONT_SMALL)
 	close.add_theme_color_override("font_color", UITheme.TEXT_DIM)

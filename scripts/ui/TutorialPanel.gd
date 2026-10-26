@@ -688,6 +688,11 @@ func _should_hide() -> bool:
 		return true
 	if _quick_guide != null and _quick_guide.is_open():
 		return true
+	# El menu ☰ abierto manda: la tarjeta no tapa su lista (en telefono la
+	# lista llena el alto).
+	var pause: Node = get_tree().get_first_node_in_group("game_menu")
+	if pause != null and pause.has_method("is_open") and pause.is_open():
+		return true
 	# Otra ventana encima (Tecnologia, Mercado...): la marca del tutorial no la
 	# tapa. CONSTRUIR si deja verla: los pasos del tutorial ocurren ahi dentro.
 	# La ficha del edificio tambien, en los pasos que ocurren en ella (mover,

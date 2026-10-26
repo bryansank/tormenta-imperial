@@ -35,7 +35,7 @@ const CARD_W := 800.0
 const PREVIEW := Vector2(168, 112)
 const PREVIEW_SMALL := Vector2(120, 80)
 const THUMB := Vector2(66, 44)
-const SWATCH := 46.0
+const SWATCH := 48.0
 const TABS := ["patterns", "emblems", "colors"]
 
 var auto_free := true
@@ -451,6 +451,8 @@ func _swatch(slot: int, color_id: String) -> Button:
 	var swatch := CT.piece_swatch(ColonyFlag.color_of(color_id), Vector2(SWATCH - 12.0, SWATCH - 16.0), not allowed)
 	var btn := CT.piece_tile(swatch, String(_spec["colors"][slot]) == color_id, allowed, lock, unlocked and not allowed)
 	btn.name = "Color_%d_%s" % [slot, color_id]
+	# Minimo para el dedo: 48 de ancho y de alto.
+	btn.custom_minimum_size = Vector2(maxf(btn.custom_minimum_size.x, 48.0), maxf(btn.custom_minimum_size.y, 48.0))
 	btn.tooltip_text = Tr.t("COLONY_COLOR_" + color_id.to_upper())
 	if unlocked and not allowed:
 		btn.tooltip_text += " · " + Tr.t("LBL_IDENTITY_UNREADABLE")
