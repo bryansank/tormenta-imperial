@@ -759,8 +759,16 @@ var quality_detected_reason := ""
 ## [interfaz] quality_detect_version; sin la clave, 0 = la del 1.0.0). La 2 mide
 ## sin tope ni vsync y descarta las medidas pegadas a un tope; DeviceProfile
 ## repara una sola vez lo que decidio una version anterior con una medida mala.
-const QUALITY_DETECT_VERSION := 2
+## La 3 (2026-10-26, QA en tablet real) mide ya en partida, tras compilar los
+## shaders: la 2 media detras del menu de titulo del primer arranque, mientras el
+## motor compilaba, y puso Minima a una Galaxy Tab A11+ que mueve Baja a 90 fps.
+const QUALITY_DETECT_VERSION := 3
 var quality_detect_version := 0
+## Mediana del fotograma (ms) de la ultima medida de la deteccion, aunque se
+## descartara por caer en el refresco (-1: sin medir). Decide el tope "auto" de
+## tablet y movil: si no sostiene 60, 30 (DeviceProfile.auto_fps_for).
+## settings.cfg [interfaz] quality_measured_ms.
+var quality_measured_ms := -1.0
 ## Nombres junto a los iconos del HUD ("Oro 300", feat/hud-y-tutorial): con siete
 ## numeros seguidos un chaval no sabe cual es la moral ni la comida (ronda 1.0,
 ## mejora 4). "auto" los pone en tableta y movil siempre y, en PC, mientras el
@@ -786,8 +794,14 @@ var ui_fps_cap := "auto"
 ## agua). Nunca por encima del tope elegido. Docs/21 §10.
 var fps_background := 10
 var fps_paused := 30
-## Tope "auto" en PC con la calidad Minima (en tablet y movil ya es 30).
+## Tope "auto" en PC con la calidad Minima.
 var fps_minimal_pc := 30
+## Tope "auto" de tablet y movil de gama baja (calidad Minima), en ahorro de
+## bateria o si la medida dice que no sostiene 60 (docs/26 §7.4).
+var fps_low_end_mobile := 30
+## Mediana medida (ms) por encima de la cual una tablet o un movil no sostiene
+## 60 fps: 15 ms son 67 fps sin tope, el margen justo para no ir a tirones a 60.
+var fps_sustain_60_ms := 15.0
 
 # ── Deteccion de la calidad en el primer arranque (docs/26 §7.2) ──
 # Solo con la calidad en "auto" y sin quality_detected en settings.cfg. Paso 1:
@@ -814,9 +828,16 @@ var quality_weak_ram_mb := 4600
 var quality_weak_threads := 4
 ## Un movil (perfil "phone") con esta RAM o menos va en Minima.
 var quality_phone_ram_mb := 6600
-## Paso 2: espera a que se asiente la carga y luego mide (segundos reales).
-var quality_detect_warmup := 2.0
-var quality_detect_seconds := 3.0
+## Paso 2: mide en partida (sin pausa: ni menu de titulo, ni prologo, ni menu
+## de pausa), tras quality_detect_warmup segundos jugando y con los shaders ya
+## compilados: el numero de pipelines compilados
+## (RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_*) no ha cambiado en
+## quality_detect_settle segundos. Si no se asienta, mide igual pasados
+## quality_detect_warmup_max. Luego mide quality_detect_seconds (reales).
+var quality_detect_warmup := 6.0
+var quality_detect_settle := 2.0
+var quality_detect_warmup_max := 40.0
+var quality_detect_seconds := 4.0
 ## Mediana o p95 del fotograma por encima de esto (ms) -> Minima; mediana
 ## por encima de quality_detect_low_ms midiendo en Alta -> Baja (nunca por debajo
 ## de 1,1 fotogramas del refresco de la pantalla: con vsync no se mide menos).
@@ -924,6 +945,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	quality_detected = bool(cf.get_value("interfaz", "quality_detected", quality_detected))
 	quality_detected_reason = str(cf.get_value("interfaz", "quality_detected_reason", quality_detected_reason))
 	quality_detect_version = int(cf.get_value("interfaz", "quality_detect_version", 0))
+	quality_measured_ms = float(cf.get_value("interfaz", "quality_measured_ms", -1.0))
 	var words := str(cf.get_value("interfaz", "hud_words", ui_hud_words))
 	ui_hud_words = words if words in HUD_WORDS_MODES else "auto"
 	var hidden: Variant = cf.get_value("interfaz", "hud_hidden", ui_hud_hidden)
@@ -983,6 +1005,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "quality_detected", quality_detected)
 	cf.set_value("interfaz", "quality_detected_reason", quality_detected_reason)
 	cf.set_value("interfaz", "quality_detect_version", quality_detect_version)
+	cf.set_value("interfaz", "quality_measured_ms", quality_measured_ms)
 	cf.set_value("interfaz", "hud_words", ui_hud_words)
 	cf.set_value("interfaz", "hud_hidden", ui_hud_hidden)
 	cf.set_value("interfaz", "layout", ui_layout)

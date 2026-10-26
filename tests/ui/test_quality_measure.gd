@@ -100,3 +100,31 @@ func test_without_a_detection_there_is_nothing_to_repair() -> void:
 
 func test_an_old_auto_is_left_alone() -> void:
 	assert_bool(GraphicsQuality.detection_needs_repair("auto", true, OLD_REASON, 0)).is_false()
+
+# ── Version 3 (QA en tablet real, 2026-10-26) ─────────────────────────
+
+func test_the_v2_minimal_of_the_tablet_is_repaired() -> void:
+	# La Galaxy Tab A11+ medio 45 ms en el menu del primer arranque, compilando
+	# shaders, con la regla 2: Minima. Con la 3 se repite, ya en partida.
+	assert_bool(GraphicsQuality.detection_needs_repair("minimal", true,
+		"medida low: mediana 45.0 ms, 70 fotogramas", 2)).is_true()
+
+func test_android_ram_comes_from_proc_meminfo() -> void:
+	var text := "MemTotal:        5760828 kB\nMemFree:          585412 kB\nMemAvailable:    2860744 kB\n"
+	assert_int(GraphicsQuality.meminfo_total_mb(text)).is_equal(5625)
+	assert_int(GraphicsQuality.meminfo_total_mb("MemFree: 12 kB\n")).is_equal(-1)
+	assert_int(GraphicsQuality.meminfo_total_mb("")).is_equal(-1)
+
+func test_a_5_5_gb_tablet_is_not_weak_by_ram() -> void:
+	var info := {"renderer": "mobile", "adapter_name": "Mali-G615 MC2", "ram_mb": 5625,
+		"threads": 8, "profile": "tablet", "mobile": true}
+	assert_str(str(GraphicsQuality.static_verdict(info)["quality"])).is_equal("")
+
+func test_the_warmup_waits_for_play_and_for_the_shaders() -> void:
+	var w := float(GameConfig.quality_detect_warmup)
+	var s := float(GameConfig.quality_detect_settle)
+	assert_bool(DeviceProfile.warmup_done(w - 0.1, 99.0)).is_false()
+	assert_bool(DeviceProfile.warmup_done(w, s - 0.1)).is_false()
+	assert_bool(DeviceProfile.warmup_done(w, s)).is_true()
+	# Si los shaders no paran de compilar, se mide igual pasado el maximo.
+	assert_bool(DeviceProfile.warmup_done(float(GameConfig.quality_detect_warmup_max), 0.0)).is_true()

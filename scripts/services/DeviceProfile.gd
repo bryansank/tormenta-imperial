@@ -66,9 +66,11 @@ const MIN_LOGICAL_WIDTH_PORTRAIT := 400.0
 
 ## Valores de cada perfil. `touch_controls` es lo que resuelve el "auto" de
 ## Controles en pantalla; `input` elige los textos de ayuda (Tr.ti); `fps` es el
-## tope de fotogramas en "auto": un juego de gestion no gana nada por encima de 60,
-## y en tablet y movil 30 estables gastan la mitad de bateria y no se calientan
-## (las baratas bajan el reloj con el calor y entonces tironean). Docs/26 §7.4.
+## tope de fotogramas en "auto": un juego de gestion no gana nada por encima de 60.
+## En tablet y movil tambien 60 (QA en tablet real, 2026-10-26: una Galaxy Tab
+## A11+ va a 90 sin calentarse y a 30 el arrastre se notaba a saltos); 30 solo en
+## gama baja (Minima), en ahorro de bateria o si la medida dice que no sostiene 60
+## (auto_fps_for). Docs/26 §7.4.
 ## `controls_size` es el "auto" de Ajustes → Controles → Tamano de los controles
 ## (cruceta, zoom, girar, R, CANCELAR, ✓); `settings_row` el alto de cada fila
 ## de Ajustes (deslizadores, interruptores, desplegables, pestanas, botones):
@@ -85,10 +87,10 @@ const DEFAULTS := {
 		"input": "mouse", "fps": 60, "controls_size": 1.0, "settings_row": 44},
 	TABLET: {"ui_scale": 1.15, "text_size": "normal", "touch_target": 48,
 		"touch_controls": true, "onscreen_controls": true, "layout": "standard",
-		"input": "touch", "fps": 30, "controls_size": 1.15, "settings_row": 56},
+		"input": "touch", "fps": 60, "controls_size": 1.15, "settings_row": 56},
 	PHONE: {"ui_scale": 1.0, "text_size": "normal", "touch_target": 48,
 		"touch_controls": true, "onscreen_controls": false, "layout": "compact",
-		"input": "touch", "fps": 30, "controls_size": 1.0, "settings_row": 52},
+		"input": "touch", "fps": 60, "controls_size": 1.0, "settings_row": 52},
 }
 
 ## Lienzo del telefono en apaisado (docs/28 §4.2): alto logico = alto en dp de
@@ -113,6 +115,11 @@ static var reopen_settings_tab := -1
 enum Detect { OFF, WAIT_GAME, WARMUP, MEASURE }
 var _detect := Detect.OFF
 var _detect_timer := 0.0
+## Calentamiento: segundos de partida sin pausa, y desde cuando no cambia el
+## numero de pipelines compilados (los shaders ya estan listos).
+var _detect_played := 0.0
+var _detect_settled := 0.0
+var _detect_pipelines := -1
 var _detect_frames: Array = []
 var _detect_quality := ""
 ## Reloj real del fotograma anterior (us). Se mide con Time y no con `delta`:
@@ -128,6 +135,17 @@ var _detect_seen_max_fps := 0
 var _detect_seen_vsync := false
 ## Aviso pendiente hasta que se cierre el menu de titulo ("" = ninguno).
 var _pending_notice := ""
+## Ahorro de bateria de Android (PowerManager.isPowerSaveMode), mirado al
+## arrancar, al volver el foco y cada POWER_SAVE_POLL segundos.
+const POWER_SAVE_POLL := 15.0
+var _power_save := false
+var _power_poll := 0.0
+## `-- --ram-log` (o command_line/extra_args del preset de Android): cada
+## RAM_LOG_EVERY segundos escribe en el registro la memoria del motor, la de
+## video y los fps. Para medir en un dispositivo (docs/26 §4.8).
+const RAM_LOG_EVERY := 20.0
+var _ram_log := false
+var _ram_log_timer := 0.0
 
 func _ready() -> void:
 	_detected = detect_from(_os_features(), _screen_px(), _screen_dpi())
@@ -135,6 +153,8 @@ func _ready() -> void:
 	get_tree().root.size_changed.connect(_on_window_resized)
 	# Sigue corriendo en pausa: es justo cuando tiene que bajar los fotogramas.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_ram_log = OS.get_cmdline_user_args().has("--ram-log") or OS.get_cmdline_args().has("--ram-log")
+	_power_save = _read_power_save()
 	EventBus.graphics_quality_changed.connect(_on_graphics_quality_changed)
 	GraphicsQuality.apply_runtime(get_tree())
 	# Una deteccion vieja con una medida mala (el 1.0.0 media el tope de 30 fps)
@@ -415,15 +435,25 @@ static func _min_cap(a: int, b: int) -> int:
 		return a
 	return mini(a, b)
 
-## El tope de "auto": el del perfil, o GameConfig.fps_minimal_pc en un PC con
-## la calidad Minima.
+## El tope de "auto": el del perfil (60), o menos en un equipo que no lo
+## aguanta (auto_fps_for).
 func auto_fps() -> int:
-	return auto_fps_for(current(), GraphicsQuality.is_minimal())
+	return auto_fps_for(current(), GraphicsQuality.is_minimal(), _power_save,
+		GameConfig.quality_measured_ms)
 
-static func auto_fps_for(profile: String, minimal: bool) -> int:
+## Puro. PC: 60, o GameConfig.fps_minimal_pc (30) en Minima. Tablet y movil: 60,
+## o GameConfig.fps_low_end_mobile (30) en gama baja (Minima), con el ahorro de
+## bateria puesto o si la ultima medida (`measured_ms`, la mediana sin tope; -1
+## sin medir) pasa de GameConfig.fps_sustain_60_ms: no sostiene 60.
+static func auto_fps_for(profile: String, minimal: bool, power_save: bool = false,
+		measured_ms: float = -1.0) -> int:
 	var fps := int(DEFAULTS.get(profile, DEFAULTS[PC])["fps"])
-	if profile == PC and minimal:
-		fps = mini(fps, int(GameConfig.fps_minimal_pc))
+	if profile == PC:
+		if minimal:
+			fps = mini(fps, int(GameConfig.fps_minimal_pc))
+		return fps
+	if minimal or power_save or measured_ms > float(GameConfig.fps_sustain_60_ms):
+		fps = mini(fps, int(GameConfig.fps_low_end_mobile))
 	return fps
 
 ## El tope que vale ahora mismo, con el foco y la pausa de este momento. Sin
@@ -467,6 +497,66 @@ func _process(delta: float) -> void:
 	elif _pending_notice != "" and not paused and GameManager.is_started():
 		EventBus.notification_posted.emit(_pending_notice, "notice", UITheme.INFO)
 		_pending_notice = ""
+	if GraphicsQuality.is_mobile_platform():
+		_power_poll += delta
+		if _power_poll >= POWER_SAVE_POLL:
+			_power_poll = 0.0
+			_refresh_power_save()
+	if _ram_log:
+		_ram_log_timer += delta
+		if _ram_log_timer >= RAM_LOG_EVERY:
+			_ram_log_timer = 0.0
+			print_memory("ram-log")
+
+## Una linea con la memoria del motor, la de video, los objetos y los fps (para
+## medir en un dispositivo con `--ram-log`; docs/26 §4.8).
+func print_memory(tag: String) -> void:
+	var mb := 1048576.0
+	print("[%s] static=%.1f MB (max %.1f) video=%.1f texture=%.1f buffer=%.1f MB objects=%d nodes=%d resources=%d fps=%.0f cap=%d calidad=%s pipelines=%d" % [
+		tag, Performance.get_monitor(Performance.MEMORY_STATIC) / mb,
+		Performance.get_monitor(Performance.MEMORY_STATIC_MAX) / mb,
+		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / mb,
+		Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / mb,
+		Performance.get_monitor(Performance.RENDER_BUFFER_MEM_USED) / mb,
+		Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
+		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT), Engine.get_frames_per_second(),
+		Engine.max_fps, GraphicsQuality.current(), _pipeline_compilations()])
+
+## Pipelines compilados hasta ahora (todas las clases). Mientras sube, el motor
+## esta compilando shaders y el fotograma no dice lo que vale el equipo.
+static func _pipeline_compilations() -> int:
+	var total := 0
+	for info in [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]:
+		total += int(RenderingServer.get_rendering_info(info))
+	return total
+
+## El ahorro de bateria de Android, por JNI (AndroidRuntime + PowerManager). En
+## otra plataforma, o si algo falla, false.
+func _read_power_save() -> bool:
+	if not OS.has_feature("android") or not Engine.has_singleton("AndroidRuntime"):
+		return false
+	var rt: Object = Engine.get_singleton("AndroidRuntime")
+	if rt == null:
+		return false
+	var activity: Variant = rt.call("getActivity")
+	if not activity is Object or activity == null:
+		return false
+	var pm: Variant = (activity as Object).call("getSystemService", "power")
+	if not pm is Object or pm == null:
+		return false
+	return bool((pm as Object).call("isPowerSaveMode"))
+
+func _refresh_power_save() -> void:
+	var now := _read_power_save()
+	if now == _power_save:
+		return
+	_power_save = now
+	print("[DeviceProfile] ahorro de bateria: %s" % ("si" if now else "no"))
+	apply_fps()
 
 ## La de aplicacion y no la de ventana: esto es un autoload (ver InputService).
 ## Minimizar en Windows tambien quita el foco.
@@ -485,6 +575,7 @@ func _notification(what: int) -> void:
 			apply_fps()
 		NOTIFICATION_APPLICATION_FOCUS_IN:
 			_focused = true
+			_power_save = _read_power_save()
 			apply_fps()
 
 ## Reconstruye la interfaz con los tokens nuevos conservando la partida (la misma
@@ -547,10 +638,23 @@ func start_quality_detection(force: bool) -> void:
 		return
 	_detect = Detect.WAIT_GAME
 	_detect_timer = 0.0
+	_detect_played = 0.0
+	_detect_settled = 0.0
+	_detect_pipelines = -1
 	_detect_frames.clear()
 
 func is_detecting_quality() -> bool:
 	return _detect != Detect.OFF
+
+## Si el calentamiento ya vale (puro): `played` segundos de partida sin pausa
+## (GameConfig.quality_detect_warmup) y los pipelines sin cambiar desde hace
+## `settled` segundos (quality_detect_settle), o, si nunca se asientan, pasado
+## quality_detect_warmup_max.
+static func warmup_done(played: float, settled: float) -> bool:
+	if played < float(GameConfig.quality_detect_warmup):
+		return false
+	return (settled >= float(GameConfig.quality_detect_settle)
+		or played >= float(GameConfig.quality_detect_warmup_max))
 
 ## Calentando o midiendo: sin tope de FPS y sin vsync.
 func _is_measuring() -> bool:
@@ -602,29 +706,58 @@ func _repair_bad_detection() -> bool:
 		return false
 	return RenderingServer.get_current_rendering_method() != GraphicsQuality.default_renderer()
 
+## RAM del sistema en MB, o -1. En Android OS.get_memory_info() no la da
+## (QA en tablet real: ram_mb=-1): se lee MemTotal de /proc/meminfo.
 func _system_ram_mb() -> int:
 	var mem := OS.get_memory_info()
 	var bytes := int(mem.get("physical", -1))
-	return int(bytes / (1024 * 1024)) if bytes > 0 else -1
+	if bytes > 0:
+		return int(bytes / (1024 * 1024))
+	if FileAccess.file_exists("/proc/meminfo"):
+		var f := FileAccess.open("/proc/meminfo", FileAccess.READ)
+		if f != null:
+			return GraphicsQuality.meminfo_total_mb(f.get_as_text())
+	return -1
 
 func _step_detection(delta: float) -> void:
+	# Solo cuenta la partida de verdad: con el menu de titulo, el prologo o el
+	# menu de pausa (el arbol en pausa) no se calienta ni se mide. La version 2
+	# media detras del menu del primer arranque, con el motor compilando shaders.
+	var playing := GameManager.is_started() and not get_tree().paused
 	match _detect:
 		Detect.WAIT_GAME:
-			# El mapa ya cargado detras del menu de titulo (TitleMenu va encima).
-			if GameManager.is_started():
+			if playing:
 				_detect = Detect.WARMUP
 				_detect_timer = 0.0
+				_detect_settled = 0.0
+				_detect_pipelines = _pipeline_compilations()
 				_begin_measure()
 		Detect.WARMUP:
-			_detect_timer += delta
 			_force_unthrottled()
-			if _detect_timer >= float(GameConfig.quality_detect_warmup):
+			if not playing:
+				return
+			_detect_played += delta
+			var pipelines := _pipeline_compilations()
+			if pipelines != _detect_pipelines:
+				_detect_pipelines = pipelines
+				_detect_settled = 0.0
+			else:
+				_detect_settled += delta
+			if warmup_done(_detect_played, _detect_settled):
 				_detect = Detect.MEASURE
 				_detect_timer = 0.0
 				_detect_frames.clear()
 				_detect_quality = GraphicsQuality.current()
 				_detect_last_usec = Time.get_ticks_usec()
 		Detect.MEASURE:
+			# Una pausa a mitad (menu, prologo) o un shader nuevo: se vuelve a
+			# calentar y se empieza otra vez.
+			if not playing or _pipeline_compilations() != _detect_pipelines:
+				_detect = Detect.WARMUP
+				_detect_settled = 0.0
+				_detect_pipelines = _pipeline_compilations()
+				_detect_frames.clear()
+				return
 			# Lo que haya en este fotograma (tope o vsync) pesa en la medida: se
 			# anota para el registro y se quita.
 			if Engine.max_fps != 0:
@@ -659,6 +792,9 @@ func _conclude_measure() -> void:
 		"si" if OS.is_delta_smoothing_enabled() else "no"])
 	var reason := "medida %s: mediana %.1f ms, %d fotogramas" % [
 		_detect_quality, float(stats["median"]), _detect_frames.size()]
+	# La mediana se guarda aunque la medida se descarte por caer en el refresco:
+	# pegada a 11,1 ms en una pantalla de 90 Hz dice que sostiene 60 (auto_fps_for).
+	GameConfig.quality_measured_ms = float(stats["median"])
 	# Una medida pegada a un tope o a un refresco no mide la GPU: no vale, y la
 	# calidad se queda en "auto". Nunca baja a Minima por eso.
 	var rejection := GraphicsQuality.measure_rejection(_detect_frames, refresh)

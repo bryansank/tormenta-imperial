@@ -158,6 +158,19 @@ static func static_verdict(info: Dictionary) -> Dictionary:
 	# Integrada sin mas senales: no basta (una Iris Xe o una 780M mueven Alta).
 	return {"quality": "", "reason": ""}
 
+## RAM total en MB de un texto de /proc/meminfo ("MemTotal:  5760828 kB"), o -1.
+## Puro. Android no la da por OS.get_memory_info() (DeviceProfile._system_ram_mb).
+static func meminfo_total_mb(text: String) -> int:
+	for line in text.split("\n"):
+		if not line.begins_with("MemTotal:"):
+			continue
+		var parts := line.trim_prefix("MemTotal:").strip_edges().split(" ", false)
+		if parts.is_empty() or not parts[0].is_valid_int():
+			return -1
+		var kb := int(parts[0])
+		return kb / 1024 if kb > 0 else -1
+	return -1
+
 ## Si el nombre de la GPU esta en la lista de flojas (GameConfig.quality_weak_gpu_patterns,
 ## expresiones regulares sin distinguir mayusculas).
 static func gpu_name_is_weak(adapter_name: String) -> bool:

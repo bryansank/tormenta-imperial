@@ -171,7 +171,20 @@ func test_auto_takes_the_cap_of_each_profile() -> void:
 	for prof in ["pc", "tablet", "phone"]:
 		GameConfig.ui_device_profile = prof
 		caps.append(DeviceProfile.effective_fps_cap())
-	assert_array(caps).is_equal([60, 30, 30])
+	# Tablet y movil, 60 desde la QA en tablet real (docs/26 §7.4).
+	assert_array(caps).is_equal([60, 60, 60])
+
+func test_auto_drops_to_30_only_on_weak_or_saving_mobiles() -> void:
+	assert_int(DeviceProfile.auto_fps_for("tablet", false)).is_equal(60)
+	assert_int(DeviceProfile.auto_fps_for("phone", false, false, 11.1)).is_equal(60)
+	# Gama baja (Minima), ahorro de bateria, o una medida que no sostiene 60.
+	assert_int(DeviceProfile.auto_fps_for("tablet", true)).is_equal(GameConfig.fps_low_end_mobile)
+	assert_int(DeviceProfile.auto_fps_for("phone", false, true)).is_equal(GameConfig.fps_low_end_mobile)
+	assert_int(DeviceProfile.auto_fps_for("tablet", false, false, 22.0)).is_equal(GameConfig.fps_low_end_mobile)
+	assert_int(GameConfig.fps_low_end_mobile).is_equal(30)
+	# En PC no cuentan ni la medida ni el ahorro: 60, y 30 en Minima.
+	assert_int(DeviceProfile.auto_fps_for("pc", false, true, 22.0)).is_equal(60)
+	assert_int(DeviceProfile.auto_fps_for("pc", true)).is_equal(GameConfig.fps_minimal_pc)
 
 func test_an_explicit_number_wins_over_the_profile() -> void:
 	assert_int(DeviceProfile.fps_for("45", 30, true, false)).is_equal(45)
