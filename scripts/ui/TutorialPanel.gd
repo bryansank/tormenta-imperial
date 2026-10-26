@@ -894,6 +894,12 @@ func _layout_step() -> void:
 	_set_card_text(text)
 
 	var has_rect := rect.size.x > 1.0 and rect.size.y > 1.0
+	# Derribar: la pregunta de confirmacion va con sus botones. El foco la
+	# incluye: ni la tarjeta ni el velo la tapan.
+	if has_rect and _step == "demolish":
+		var q := get_tree().get_first_node_in_group("hud_info_demolish_question") as Control
+		if q != null and is_instance_valid(q) and q.is_visible_in_tree():
+			rect = rect.merge(q.get_global_rect())
 	if has_rect:
 		rect = rect.grow(HOLE_PAD)
 	_place_dim(vp, rect if has_rect else Rect2())

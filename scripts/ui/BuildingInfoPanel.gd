@@ -29,6 +29,7 @@ const TrainingSectionScript := preload("res://scripts/ui/TrainingSection.gd")
 var _panel: Control
 var _win: Dictionary = {}
 var _scroll: ScrollContainer
+var _vbox_end: Control
 var _vbox: VBoxContainer
 var _title_label: Label
 ## Estado en una palabra ("Trabajando", "Sin carretera"...) junto al nivel.
@@ -173,6 +174,10 @@ func _build_ui() -> void:
 	_vbox.add_theme_constant_override("separation", 8 if _phone else CT.GAP)
 	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_vbox)
+	# Aire al final del contenido: lo ultimo nunca queda pegado al pie fijo.
+	_vbox_end = Control.new()
+	_vbox_end.name = "EndPad"
+	_vbox_end.custom_minimum_size = Vector2(0, 8 if _phone else 12)
 
 	# ── Nivel "2 de 3" con su barra, y el estado en una palabra ──
 	_level_row = HBoxContainer.new()
@@ -342,6 +347,7 @@ func _build_ui() -> void:
 	_no_upgrade_label.name = "NoUpgrade"
 	_no_upgrade_label.visible = false
 	_vbox.add_child(_no_upgrade_label)
+	_vbox.add_child(_vbox_end)
 
 	# ── Abajo, fuera del scroll: abrir, trabajadores, mover, girar, derribar ──
 	_open_btn = CT.pill_button("", "market", "open", CT.h("btn"))
@@ -369,7 +375,7 @@ func _build_ui() -> void:
 	_workers_hint.name = "WorkersHint"
 	_workers_hint.visible = false
 
-	_move_btn = CT.pill_button("" if _phone else Tr.t("UI2C_BTN_MOVE"), "move", "secondary", CT.h("small"), "window", "body")
+	_move_btn = CT.pill_button("" , "move", "secondary", CT.h("small"), "window", "body")
 	_move_btn.name = "MoveButton"
 	_move_btn.add_to_group("hud_info_move")
 	_move_btn.tooltip_text = Tr.t("LBL_MOVE_HINT")
@@ -377,7 +383,7 @@ func _build_ui() -> void:
 	_move_container = _move_btn
 	_actions_box.add_child(_move_btn)
 
-	_rotate_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_ROTATE"), "", "secondary", CT.h("small"), "window", "body")
+	_rotate_btn = CT.pill_button("" , "", "secondary", CT.h("small"), "window", "body")
 	_rotate_btn.name = "RotateButton"
 	var rot_glyph := CT.rotate_glyph(roundi(CT.h("small") * 0.56))
 	_rotate_btn.get_child(0).add_child(rot_glyph)
@@ -387,7 +393,7 @@ func _build_ui() -> void:
 	_actions_box.add_child(_rotate_btn)
 
 	# Derribar: rojo y solo icono; el nombre al mantener. Pide confirmacion.
-	_demolish_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_DEMOLISH"), "demolish", "danger", CT.h("small"), "window", "body")
+	_demolish_btn = CT.pill_button("" , "demolish", "danger", CT.h("small"), "window", "body")
 	_demolish_btn.name = "DemolishButton"
 	_demolish_btn.add_to_group("hud_info_demolish")
 	_demolish_btn.tooltip_text = Tr.t("UI2C_TIP_DEMOLISH")
@@ -398,6 +404,7 @@ func _build_ui() -> void:
 	_confirm_container = VBoxContainer.new()
 	_confirm_container.add_theme_constant_override("separation", 6)
 	_confirm_container.visible = false
+	_confirm_container.add_to_group("hud_info_demolish_question")
 	_confirm_label = CT.para("", "window")
 	_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_confirm_container.add_child(_confirm_label)
@@ -621,12 +628,41 @@ func _show_building_panel() -> void:
 	_set_actions_header(_process_panel.action_count() > 0)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
+	_reveal_primary_action()
 	(func(): CT.sync_ribbon_pad(_win)).call_deferred()
 	set_process(true)
 	UIManager.open_panel(self)
 
 ## El estado en una palabra (o dos): en obras, sin carretera, sin trabajadores,
 ## retirados, sin veta o trabajando. Lo mismo que dice su placa en el mapa.
+## La accion principal (REPARAR, ENTRENAR, RECOGER, MEJORAR) se ve siempre:
+## el contenido hace scroll por encima del pie y, al abrir, baja hasta ella.
+func _primary_action() -> Control:
+	if _repair_container != null and _repair_container.visible and _repair_btn.is_visible_in_tree():
+		return _repair_btn
+	if _training != null and _training.visible:
+		for b in _training.find_children("TrainButton", "Button", true, false):
+			if b.is_visible_in_tree():
+				return b
+	if _harvest != null and _harvest.visible:
+		var c := _harvest.find_child("CollectButton", true, false) as Control
+		if c != null and c.is_visible_in_tree():
+			return c
+	if _upgrade_btn != null and _upgrade_btn.is_visible_in_tree():
+		return _upgrade_btn
+	return null
+
+func _reveal_primary_action() -> void:
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if _scroll == null or not is_instance_valid(_scroll) or not _panel.visible:
+		return
+	var b := _primary_action()
+	if b != null and is_instance_valid(b):
+		_scroll.ensure_control_visible(b)
+
 func _refresh_status_line() -> void:
 	if _selected_node == null or not is_instance_valid(_selected_node) or _selected_data == null or _is_deposit:
 		_level_label.visible = false
