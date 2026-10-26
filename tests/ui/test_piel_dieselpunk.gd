@@ -12,11 +12,9 @@ var _parked: Dictionary
 func before_test() -> void:
 	_parked = SettingsParking.park()
 	UITheme.use_style(UITheme.STYLE_DEFAULT, "mixed", CartoonTheme.DEFAULT_COMBO)
-	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
 	UITheme.configure()
 
 func after_test() -> void:
-	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
 	UITheme.configure()
 	SettingsParking.restore(_parked)
 
@@ -28,7 +26,7 @@ func test_the_palette_is_the_one_bryan_chose() -> void:
 	for k in want:
 		assert_object(UITheme._BASE[k]).override_failure_message(k).is_equal(Color(want[k]))
 	# El bunker es la Pizarra y la Placa; el filo, el laton.
-	assert_str(CartoonTheme.window_theme).is_equal("dark")
+	assert_bool(CartoonTheme.dark_windows()).is_true()
 	assert_object(CartoonTheme.c("window", "BG")).is_equal(Color("1c2026"))
 	assert_object(CartoonTheme.c("window", "CARD")).is_equal(Color("252b32"))
 	assert_object(CartoonTheme.c("hud", "BG")).is_equal(Color("1c2026"))
@@ -44,9 +42,8 @@ func test_colour_blind_palettes_change_at_most_four_tokens() -> void:
 		assert_int(changed).override_failure_message(pal).is_less_equal(4)
 
 func test_high_contrast_reads_at_seven_to_one_on_every_surface() -> void:
-	for theme_s in CartoonTheme.WINDOW_THEMES:
+	for theme_s in ["dark"]:
 		for pal in UITheme.PALETTES:
-			CartoonTheme.window_theme = theme_s
 			UITheme.configure(pal, true)
 			for role in ["hud", "window"]:
 				for bg in ["BG", "CARD", "CARD_ALT"]:
@@ -60,10 +57,9 @@ func test_high_contrast_reads_at_seven_to_one_on_every_surface() -> void:
 ## Las palabras de boton son letra grande y gruesa (22 px, peso 800): 3:1 de
 ## serie (WCAG, texto grande) y 4,5:1 con alto contraste.
 func test_button_text_reads_on_every_intent() -> void:
-	for theme_s in CartoonTheme.WINDOW_THEMES:
+	for theme_s in ["dark"]:
 		for pal in UITheme.PALETTES:
 			for hc in [false, true]:
-				CartoonTheme.window_theme = theme_s
 				UITheme.configure(pal, hc)
 				for k in ["primary", "accent", "open", "warning", "danger", "disabled", "secondary"]:
 					var fill := CartoonTheme.kind_fill(k)

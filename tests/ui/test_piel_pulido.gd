@@ -16,13 +16,11 @@ func before_test() -> void:
 	_phone = CartoonTheme.phone
 	_mode_saved = GameMode.get_save_data()
 	UITheme.use_style(UITheme.STYLE_DEFAULT, "mixed", CartoonTheme.DEFAULT_COMBO)
-	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
 	UITheme.configure()
 
 func after_test() -> void:
 	CartoonTheme.phone = _phone
 	GameMode.load_save_data(_mode_saved)
-	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
 	UITheme.configure()
 	SettingsParking.restore(_parked)
 

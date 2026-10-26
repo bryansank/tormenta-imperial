@@ -64,7 +64,6 @@ func _run() -> void:
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = true
 	GameConfig.ui_touch_controls = "auto"
-	GameConfig.ui_theme = "light"
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()
@@ -537,9 +536,8 @@ func _test_settings_and_theme() -> void:
 				_check("Ajustes pestaña %d se desplaza con el dedo" % i, sc.scroll_vertical != v0, "%d -> %d" % [v0, sc.scroll_vertical])
 				await _shot("ajustes_tab_%d_desplazada" % i)
 			i += 1
-	# Tema oscuro (lo que haria el selector) y capturas.
-	sp.call("set_ui_theme", "dark")
-	await _frames(40)
+	# Las ventanas de la piel (ya sin modo claro, 0.9-beta) y capturas.
+	await _frames(10)
 	_main = get_tree().current_scene
 	_placer = _main.get_node("BuildingPlacer")
 	await _shot("tema_oscuro_ajustes")
@@ -566,7 +564,6 @@ func _test_settings_and_theme() -> void:
 		await _shot("tema_oscuro_ficha")
 		EventBus.building_deselected.emit()
 		await _frames(10)
-	GameConfig.ui_theme = "light"
 	DeviceProfile.apply_theme()
 	await _frames(10)
 

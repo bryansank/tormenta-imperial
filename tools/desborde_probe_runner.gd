@@ -9,8 +9,8 @@ extends "res://tools/revision_probe_runner.gd"
 ##
 ## Argumentos tras `--`: --shot-size=WxH, --profile=pc|tablet|phone,
 ## --canvas=WxH (fuerza ese lienzo logico: los de telefono 640x360, 800x360,
-## 400x720 no salen en un monitor de PC), --theme=dark|light (sin el, el de
-## serie: oscuro desde la piel dieselpunk), --view=2d, --tag=x,
+## 400x720 no salen en un monitor de PC), --view=2d, --tag=x (ya no hay modo
+## claro, 0.9-beta),
 ## --shots (guarda captura de cada pantalla; sin el, solo de las que se salen),
 ## --only=pantalla1,pantalla2 (solo esas tomas, por prefijo).
 ##
@@ -47,14 +47,12 @@ func _run() -> void:
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = false
 	GameConfig.ui_touch_controls = "auto"
-	var theme_arg := _arg("theme")
-	GameConfig.ui_theme = theme_arg if theme_arg in CartoonTheme.WINDOW_THEMES else CartoonTheme.WINDOW_THEME_DEFAULT
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()
 	var logical := get_tree().root.get_visible_rect().size
 	_tag = "%s_%s_%dx%d%s%s" % [_arg("view", "3d"), DeviceProfile.current(), win.x, win.y,
-		"_claro" if GameConfig.ui_theme == "light" else "",
+		"",
 		("_" + _arg("tag")) if _arg("tag") != "" else ""]
 	print("desborde_probe: ventana=%s lienzo=%s telefono=%s perfil=%s" % [win, logical,
 		CartoonTheme.phone, DeviceProfile.current()])

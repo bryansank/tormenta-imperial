@@ -76,16 +76,6 @@ func test_text_reads_on_both_surfaces_in_every_palette_and_contrast() -> void:
 					assert_float(UITheme.contrast_ratio(CartoonTheme.text(role, true), bg)) \
 						.override_failure_message("texto tenue " + msg).is_greater_equal(4.5)
 
-func test_old_panels_get_dark_text_on_the_cream_windows() -> void:
-	UITheme.use_style("cartoon", "mixed")
-	CartoonTheme.window_theme = "light"
-	UITheme.configure()
-	# Un panel viejo que pide texto claro: readable() lo oscurece sobre el papel.
-	var fixed := UITheme.readable(Color(0.95, 0.9, 0.8))
-	assert_float(UITheme.contrast_ratio(fixed, CartoonTheme.c("window", "BG"))).is_greater_equal(4.5)
-	CartoonTheme.window_theme = CartoonTheme.WINDOW_THEME_DEFAULT
-	UITheme.configure()
-
 func test_phone_sizes_keep_their_floor_and_touch_side() -> void:
 	CartoonTheme.phone = true
 	for level in CartoonTheme.SIZES_PHONE:

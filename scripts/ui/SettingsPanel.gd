@@ -288,15 +288,7 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 		_picker([Tr.t("UI2M_OPT_LANDSCAPE"), Tr.t("UI2M_OPT_PORTRAIT")], maxi(0, orients.find(GameConfig.ui_orientation)),
 			func(idx: int): GameConfig.set_orientation(orients[idx])), null, Tr.t("LBL_ORIENTATION")))
 
-	# Tema de las ventanas (2026-10-19; piel dieselpunk 2026-10-25): Oscuro
-	# (bunker, de serie) o Claro (papel). Se aplica al momento: la interfaz se
-	# rehace (como al cambiar el perfil de telefono).
-	var themes: Array = CT.WINDOW_THEMES
-	body.add_child(_row("ThemeRow", "screen", "UI2M_SET_THEME",
-		_picker([Tr.t("UI2M_THEME_DARK"), Tr.t("UI2M_THEME_LIGHT")], maxi(0, themes.find(GameConfig.ui_theme)),
-			func(idx: int): set_ui_theme(themes[idx])), null, Tr.t("UI2M_SET_THEME")))
-
-	body.add_child(_make_view_mode_row())
+	# Selector de vista 2D/3D oculto en la 0.9 beta (_make_view_mode_row queda para volver a mostrarlo).
 
 	var text_opts: Array = ["auto"] + UITheme.TEXT_SIZES
 	var text_labels: Array = []
@@ -346,16 +338,6 @@ func _build_interface_tab(body: VBoxContainer) -> void:
 
 	_build_advanced(body)
 	_add_reset(body, reset_interface)
-
-## Cambia el tema de las ventanas, lo guarda y rehace la interfaz ya.
-func set_ui_theme(theme_s: String) -> void:
-	if not (theme_s in CT.WINDOW_THEMES) or theme_s == GameConfig.ui_theme:
-		return
-	GameConfig.ui_theme = theme_s
-	GameConfig.save_user_settings()
-	DeviceProfile.apply_theme()
-	_needs_rebuild = true
-	apply_pending(true)
 
 ## "Mas opciones": lo que casi nadie toca, plegado al final de Pantalla.
 func _build_advanced(body: VBoxContainer) -> void:
@@ -548,9 +530,7 @@ func reset_interface() -> void:
 	GameConfig.ui_combat_view = "front"
 	GameConfig.ui_fps_cap = "auto"
 	GameConfig.set_hud_words("auto")
-	# El tema vuelve a Oscuro (el de serie); se ve al APLICAR, con lo demas.
-	GameConfig.ui_theme = CT.WINDOW_THEME_DEFAULT
-	for row_name in ["ProfileRow", "ScaleRow", "TextSizeRow", "QualityRow", "CombatViewRow", "FpsRow", "HudWordsRow", "ThemeRow"]:
+	for row_name in ["ProfileRow", "ScaleRow", "TextSizeRow", "QualityRow", "CombatViewRow", "FpsRow", "HudWordsRow"]:
 		var picker = _picker_of(row_name)
 		if picker != null:
 			picker.select(0)
