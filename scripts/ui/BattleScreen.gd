@@ -430,7 +430,14 @@ func _skin_action(btn: Button, kind_override: String = "") -> void:
 	var tip := String(btn.get_meta("tip", ""))
 	btn.tooltip_text = label if tip == "" else "%s\n%s" % [label, tip]
 	var kind := kind_override if kind_override != "" else String(btn.get_meta("kind", "secondary"))
-	CT.style_pill(btn, kind, 48 if phone else CT.BTN_SMALL, "hud", glyph)
+	CT.style_pill(btn, kind, action_height(phone), "hud", glyph)
+
+## Alto de los botones del combate: 48 px de lienzo con el dedo (telefono o
+## tablet, docs/28 §4.1; antes 44 en tablet, QA 2026-10-26) y CT.BTN_SMALL con
+## raton.
+const TOUCH_BTN_H := 48
+static func action_height(phone: bool) -> int:
+	return TOUCH_BTN_H if phone or UITheme.is_touch_ui() else CT.BTN_SMALL
 
 func _skin_actions() -> void:
 	for btn in [_advance_btn, _threat_btn, _defend_btn, _wait_btn, _end_btn, _abandon_board_btn, _auto_btn, _abandon_map_btn]:
@@ -2063,7 +2070,7 @@ func _refresh_view_button() -> void:
 	# El boton dice a donde lleva, no donde se esta.
 	var other := "OPT_COMBAT_VIEW_BOARD" if combat_view() == "front" else "OPT_COMBAT_VIEW_FRONT"
 	_view_btn.text = Tr.t(other)
-	CT.style_pill(_view_btn, "secondary", 44 if not CT.phone else 48, "hud", "", "small")
+	CT.style_pill(_view_btn, "secondary", action_height(CT.phone), "hud", "", "small")
 
 func view_button() -> Button:
 	return _view_btn
@@ -2198,7 +2205,7 @@ func _refresh_speed_button() -> void:
 	var fast := GameConfig.game_speed > 1.0
 	_speed_btn.text = "x%d" % int(GameConfig.game_speed)
 	_speed_btn.tooltip_text = Tr.ti("LBL_GAME_SPEED_TIP")
-	CT.style_pill(_speed_btn, "accent" if fast else "secondary", 44 if not CT.phone else 48, "hud", "", "small")
+	CT.style_pill(_speed_btn, "accent" if fast else "secondary", action_height(CT.phone), "hud", "", "small")
 
 func speed_button() -> Button:
 	return _speed_btn
@@ -2490,6 +2497,51 @@ func coach_move_cell(active: CombatUnit) -> Vector2i:
 				best_d = d
 				best = cell
 	return best
+
+## Lo que la tarjeta del combate guiado no debe tapar (QA de tablet,
+## 2026-10-26: el Sargento cubria las filas 2-5 del tablero): el tablero en
+## pantalla ("board", coordenadas globales del lienzo; en 3D, la caja de sus
+## cuatro esquinas proyectadas), el hueco libre entre la fila de turnos y los
+## botones ("top", "bottom") y las piezas vivas ("units", un Rect2 cada una).
+## {} sin tablero abierto.
+func coach_layout() -> Dictionary:
+	if not _board_open or not visible:
+		return {}
+	var vp := get_viewport().get_visible_rect().size
+	var top := 0.0
+	if _order_box != null and _order_box.is_visible_in_tree():
+		top = _order_box.get_global_rect().end.y
+	var bottom := vp.y
+	if _actions_row != null and _actions_row.is_visible_in_tree():
+		bottom = _actions_row.get_global_rect().position.y
+	var board := Rect2()
+	var units: Array = []
+	if _uses_3d():
+		var b = _board3d.board
+		var corners := [Vector2i(0, 0), Vector2i(_board.x - 1, 0), Vector2i(0, _board.y - 1), Vector2i(_board.x - 1, _board.y - 1)]
+		var first: Vector2 = _board3d_to_canvas(b.cell_screen(corners[0]))
+		board = Rect2(first, Vector2.ZERO)
+		for c in corners:
+			board = board.expand(_board3d_to_canvas(b.cell_screen(c)))
+		# Media casilla de borde: las esquinas son centros de casilla.
+		var step: float = first.distance_to(_board3d_to_canvas(b.cell_screen(Vector2i(1, 0))))
+		board = board.grow(step * 0.5)
+		for u in CombatManager.get_units():
+			if not u.is_alive():
+				continue
+			var raw: Vector2 = b.unit_screen(u.uid)
+			if raw.x < 0.0:
+				continue
+			var p := _board3d_to_canvas(raw)
+			units.append(Rect2(p - Vector2(36, 52), Vector2(72, 88)))
+	elif _grid != null and _grid.is_visible_in_tree():
+		board = _grid.get_global_rect()
+		for u in CombatManager.get_units():
+			if u.is_alive():
+				var cell := board_cell(u.position)
+				if cell != null:
+					units.append(cell.get_global_rect())
+	return {"board": board, "top": top, "bottom": bottom, "units": units}
 
 func _control_anchor(c: Control) -> Dictionary:
 	if c == null or not c.is_visible_in_tree():

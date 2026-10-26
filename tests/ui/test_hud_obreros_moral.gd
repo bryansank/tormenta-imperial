@@ -128,6 +128,12 @@ func test_a_tap_on_the_workers_icon_unfolds_the_words() -> void:
 	ev.button_index = MOUSE_BUTTON_LEFT
 	ev.pressed = true
 	hud.workers_chip().gui_input.emit(ev)
+	# Se despliega al soltar, no al apoyar (mantener solo ensena el globo).
+	assert_bool(hud.is_expanded()).is_false()
+	var up := InputEventMouseButton.new()
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	hud.workers_chip().gui_input.emit(up)
 	assert_bool(hud.is_expanded()).is_true()
 	var detail: Label = hud.find_child("WorkersDetail", true, false)
 	assert_bool(detail.is_visible_in_tree()).is_true()
