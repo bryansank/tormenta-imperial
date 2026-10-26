@@ -1,11 +1,14 @@
 extends Control
-## Los instructores (feat/instructores, docs/23 §9): un busto caricaturesco
-## de medio cuerpo que acompana a las tarjetas que le hablan al jugador.
+## Los instructores (feat/instructores, docs/23 §9): un busto de medio cuerpo
+## que acompana a las tarjetas que le hablan al jugador.
 ##
 ##   * **Capitana Ada Remache** (`COLONY`), Capitana de Ingenieros: la colonia.
 ##     Tutorial guiado de construccion y consejos de economia y edificios.
-##     Trenza pelirroja, gorra de faena con gafas de aviador encima, mancha de
-##     grasa en la mejilla y un lapiz detras de la oreja.
+##     Trenza, gorra de faena con gafas de aviador encima y un lapiz detras de
+##     la oreja. Desde la piel dieselpunk (docs/21 §17) es un **grabado a dos
+##     tintas, estilo cartel**: la figura en laton, las tallas y el fondo en
+##     Pizarra, rayos Art Deco detras de la cabeza y un rayado en la sombra.
+##     Nada de piel, mejillas ni colores de caricatura.
 ##   * **Sargento Mayor Casimiro Bombarda** (`COMBAT`): el combate. Combate
 ##     guiado, consejos de Tormenta, Impuesto, ejercito y misiones, y los partes
 ##     de guerra. Casco remachado, bigote de manillar, nariz de patata, medallas.
@@ -49,18 +52,12 @@ const FLAP_SECONDS := 0.11
 ## Tinta de la ilustracion (no es interfaz: ver la cabecera).
 const INK := Color(0.12, 0.09, 0.06)
 const WHITE := Color(0.98, 0.96, 0.92)
-const SKIN_ADA := Color(0.97, 0.81, 0.67)
 const SKIN_BOMB := Color(0.89, 0.67, 0.52)
 const CHEEK := Color(0.93, 0.48, 0.42, 0.45)
-const HAIR_ADA := Color(0.74, 0.31, 0.12)
-const RIBBON := Color(0.70, 0.15, 0.12)
 const MOUSTACHE := Color(0.33, 0.21, 0.12)
-const UNIFORM_ADA := Color(0.43, 0.44, 0.25)
 const UNIFORM_BOMB := Color(0.33, 0.38, 0.45)
 const COLLAR_TAB := Color(0.66, 0.17, 0.12)
 const HELMET := Color(0.37, 0.41, 0.31)
-const LENS := Color(0.48, 0.72, 0.82)
-const PENCIL := Color(0.95, 0.75, 0.20)
 const MOUTH_IN := Color(0.45, 0.10, 0.10)
 const TONGUE := Color(0.88, 0.42, 0.42)
 const SWEAT := Color(0.55, 0.80, 0.95)
@@ -345,14 +342,17 @@ static func draw_bust(ci: CanvasItem, area: Rect2, id: String, e: String, dir: i
 	var h := area.size.y
 	var border: Color = UITheme.DANGER.lightened(0.15) if id == COMBAT else UITheme.ACCENT
 	var bw := 3.0 if UITheme.high_contrast else 2.0
-	# Fondo del marco: la superficie, con un sol de laton detras de la cabeza.
+	# Fondo del marco: la superficie. Esquinas de la piel (4 px, no redondas).
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = UITheme.SURFACE.lightened(0.1)
+	bg.bg_color = UITheme.SURFACE.lightened(0.1) if id == COMBAT else ada_slate()
 	bg.border_color = border
 	bg.set_border_width_all(int(bw))
-	bg.set_corner_radius_all(int(maxf(4.0, h * 0.06)))
+	bg.set_corner_radius_all(4)
 	ci.draw_style_box(bg, area)
-	ci.draw_circle(area.position + Vector2(area.size.x * 0.5, h * 0.36), h * 0.30, Color(UITheme.ACCENT, 0.16))
+	if id == COMBAT:
+		ci.draw_circle(area.position + Vector2(area.size.x * 0.5, h * 0.36), h * 0.30, Color(UITheme.ACCENT, 0.16))
+	else:
+		_poster_rays(ci, area.grow(-bw), _p(area, 0.5, 0.36), h)
 	# La figura, espejada si mira a la izquierda.
 	var fig := area.grow(-bw)
 	_mirror(ci, area, dir)
@@ -396,13 +396,13 @@ static func _ell(c: Vector2, rx: float, ry: float, n: int = 24, from := 0.0, to 
 	return out
 
 ## Relleno con contorno de tinta.
-static func _shape(ci: CanvasItem, pts: PackedVector2Array, fill: Color, ow: float) -> void:
+static func _shape(ci: CanvasItem, pts: PackedVector2Array, fill: Color, ow: float, ink: Color = INK) -> void:
 	if pts.size() < 3:
 		return
 	ci.draw_colored_polygon(pts, fill)
 	var line := pts.duplicate()
 	line.append(pts[0])
-	ci.draw_polyline(line, INK, ow, true)
+	ci.draw_polyline(line, ink, ow, true)
 
 static func _poly(box: Rect2, uv: Array) -> PackedVector2Array:
 	var out := PackedVector2Array()
@@ -411,8 +411,8 @@ static func _poly(box: Rect2, uv: Array) -> PackedVector2Array:
 	return out
 
 ## Un trazo grueso (manga, dedo) con contorno: dos lineas, la de tinta debajo.
-static func _limb(ci: CanvasItem, pts: PackedVector2Array, col: Color, w: float, ow: float) -> void:
-	ci.draw_polyline(pts, INK, w + ow * 2.0, true)
+static func _limb(ci: CanvasItem, pts: PackedVector2Array, col: Color, w: float, ow: float, ink: Color = INK) -> void:
+	ci.draw_polyline(pts, ink, w + ow * 2.0, true)
 	ci.draw_polyline(pts, col, w, true)
 	for p in pts:
 		ci.draw_circle(p, w * 0.5, col)
@@ -475,97 +475,152 @@ static func _brows(ci: CanvasItem, b: Rect2, e: String, cy: float, ex: float, th
 		ci.draw_circle(o, thick * 0.5, col)
 
 ## Los gestos del brazo derecho (el del lado al que mira).
-static func _gesture(ci: CanvasItem, b: Rect2, e: String, cloth: Color, skin: Color, h: float, ow: float) -> void:
+static func _gesture(ci: CanvasItem, b: Rect2, e: String, cloth: Color, skin: Color, h: float, ow: float,
+		ink: Color = INK, drop: Color = SWEAT) -> void:
 	var sleeve := h * 0.085
 	match e:
 		"point":
-			_limb(ci, _poly(b, [0.86, 0.80, 0.90, 0.62, 0.92, 0.52]), cloth, sleeve, ow)
+			_limb(ci, _poly(b, [0.86, 0.80, 0.90, 0.62, 0.92, 0.52]), cloth, sleeve, ow, ink)
 			ci.draw_circle(_p(b, 0.925, 0.48), h * 0.036, skin)
-			ci.draw_arc(_p(b, 0.925, 0.48), h * 0.036, 0.0, TAU, 14, INK, ow, true)
+			ci.draw_arc(_p(b, 0.925, 0.48), h * 0.036, 0.0, TAU, 14, ink, ow, true)
 			# El indice, hacia la tarjeta.
-			_limb(ci, _poly(b, [0.94, 0.47, 0.99, 0.45]), skin, h * 0.018, ow * 0.7)
+			_limb(ci, _poly(b, [0.94, 0.47, 0.99, 0.45]), skin, h * 0.018, ow * 0.7, ink)
 		"salute":
-			_limb(ci, _poly(b, [0.86, 0.82, 0.95, 0.52, 0.78, 0.30]), cloth, sleeve, ow)
+			_limb(ci, _poly(b, [0.86, 0.82, 0.95, 0.52, 0.78, 0.30]), cloth, sleeve, ow, ink)
 			# La mano plana en la visera.
 			var hand := _poly(b, [0.78, 0.27, 0.62, 0.22, 0.61, 0.26, 0.77, 0.33])
-			_shape(ci, hand, skin, ow)
+			_shape(ci, hand, skin, ow, ink)
 		"happy":
 			# Pulgar arriba.
-			_limb(ci, _poly(b, [0.88, 0.96, 0.84, 0.72]), cloth, sleeve, ow)
+			_limb(ci, _poly(b, [0.88, 0.96, 0.84, 0.72]), cloth, sleeve, ow, ink)
 			var f := _p(b, 0.83, 0.66)
 			ci.draw_circle(f, h * 0.04, skin)
-			ci.draw_arc(f, h * 0.04, 0.0, TAU, 14, INK, ow, true)
-			_limb(ci, PackedVector2Array([f + Vector2(-h * 0.01, -h * 0.03), f + Vector2(-h * 0.012, -h * 0.075)]), skin, h * 0.022, ow * 0.7)
+			ci.draw_arc(f, h * 0.04, 0.0, TAU, 14, ink, ow, true)
+			_limb(ci, PackedVector2Array([f + Vector2(-h * 0.01, -h * 0.03), f + Vector2(-h * 0.012, -h * 0.075)]), skin, h * 0.022, ow * 0.7, ink)
 		"angry":
 			# El puno en alto.
-			_limb(ci, _poly(b, [0.88, 0.94, 0.92, 0.70, 0.90, 0.58]), cloth, sleeve, ow)
+			_limb(ci, _poly(b, [0.88, 0.94, 0.92, 0.70, 0.90, 0.58]), cloth, sleeve, ow, ink)
 			var f := _p(b, 0.90, 0.53)
 			ci.draw_circle(f, h * 0.042, skin)
-			ci.draw_arc(f, h * 0.042, 0.0, TAU, 14, INK, ow, true)
-			ci.draw_line(f + Vector2(-h * 0.03, -h * 0.005), f + Vector2(h * 0.02, -h * 0.005), INK, ow * 0.7)
+			ci.draw_arc(f, h * 0.042, 0.0, TAU, 14, ink, ow, true)
+			ci.draw_line(f + Vector2(-h * 0.03, -h * 0.005), f + Vector2(h * 0.02, -h * 0.005), ink, ow * 0.7)
 		"worried":
 			# Una gota de sudor en la sien.
 			var d := _p(b, 0.74, 0.30)
-			var drop := PackedVector2Array([d + Vector2(0, -h * 0.04), d + Vector2(h * 0.016, -h * 0.005), d + Vector2(0, h * 0.012), d + Vector2(-h * 0.016, -h * 0.005)])
-			_shape(ci, drop, SWEAT, ow * 0.7)
+			var tear := PackedVector2Array([d + Vector2(0, -h * 0.04), d + Vector2(h * 0.016, -h * 0.005), d + Vector2(0, h * 0.012), d + Vector2(-h * 0.016, -h * 0.005)])
+			_shape(ci, tear, drop, ow * 0.7, ink)
 		"surprised":
 			# Dos rayas de sorpresa sobre la cabeza.
 			for i in 3:
 				var a := _p(b, 0.80 + 0.06 * float(i), 0.10 + 0.03 * float(i))
-				ci.draw_line(a, a + Vector2(h * 0.03, -h * 0.03), INK, ow * 1.2, true)
+				ci.draw_line(a, a + Vector2(h * 0.03, -h * 0.03), ink, ow * 1.2, true)
 
 # ── La Capitana Ada Remache ──────────────────────────────────────────
 
+## Las dos tintas del grabado de la Capitana: laton (la figura) y Pizarra
+## (fondo y tallas). Siguen a UITheme (alto contraste incluido).
+static func ada_brass() -> Color:
+	return UITheme.ACCENT
+
+static func ada_slate() -> Color:
+	return UITheme.SURFACE.darkened(0.12)
+
+## Rayos Art Deco de cartel detras de la cabeza: lineas finas de laton.
+static func _poster_rays(ci: CanvasItem, box: Rect2, c: Vector2, h: float) -> void:
+	var col := Color(ada_brass(), 0.22)
+	var reach := h * 1.2
+	for i in 14:
+		var a := PI + PI * (float(i) + 0.5) / 14.0
+		var tip := c + Vector2(cos(a), sin(a)) * reach
+		# Recortado a la caja: los rayos no salen del marco.
+		var t := 1.0
+		if tip.y < box.position.y:
+			t = minf(t, (c.y - box.position.y) / maxf(0.001, c.y - tip.y))
+		if tip.x < box.position.x:
+			t = minf(t, (c.x - box.position.x) / maxf(0.001, c.x - tip.x))
+		if tip.x > box.end.x:
+			t = minf(t, (box.end.x - c.x) / maxf(0.001, tip.x - c.x))
+		ci.draw_line(c + (tip - c) * 0.32, c + (tip - c) * t, col, maxf(1.0, h * 0.012), true)
+	ci.draw_arc(c, h * 0.27, PI, TAU, 32, col, maxf(1.0, h * 0.01), true)
+
+## Ojos tallados (dos tintas): rayas y puntos de Pizarra sobre el laton.
+static func _eyes_engraved(ci: CanvasItem, b: Rect2, e: String, cy: float, ex: float, h: float, ow: float, ink: Color) -> void:
+	for side in [-1.0, 1.0]:
+		var c := _p(b, 0.5 + side * ex, cy)
+		match e:
+			"happy":
+				ci.draw_arc(c + Vector2(0, h * 0.012), h * 0.028, PI * 1.1, PI * 1.9, 10, ink, ow * 1.4, true)
+			"surprised":
+				ci.draw_arc(c, h * 0.034, 0.0, TAU, 18, ink, ow * 1.1, true)
+				ci.draw_circle(c, h * 0.012, ink)
+			"angry":
+				ci.draw_circle(c + Vector2(h * 0.006, h * 0.006), h * 0.016, ink)
+				ci.draw_line(c + Vector2(-h * 0.032, -h * 0.008), c + Vector2(h * 0.03, -h * 0.004), ink, ow * 1.3)
+			_:
+				# Mira hacia la tarjeta (a la derecha antes del espejo).
+				ci.draw_colored_polygon(_ell(c + Vector2(h * 0.006, 0), h * 0.017, h * 0.022, 12), ink)
+
 static func _draw_ada(ci: CanvasItem, b: Rect2, e: String) -> void:
 	var h := b.size.y
-	var ow := maxf(1.0, h * 0.012)
-	_torso(ci, b, SKIN_ADA, UNIFORM_ADA, ow)
-	# Botones de laton, a dos filas, y la llave inglesa en el bolsillo.
-	for v in [0.80, 0.90]:
-		for u in [0.44, 0.56]:
-			ci.draw_circle(_p(b, u, v), h * 0.013, UITheme.ACCENT)
-	_shape(ci, _poly(b, [0.66, 0.78, 0.68, 0.70, 0.71, 0.70, 0.70, 0.79]), Color(0.70, 0.72, 0.74), ow * 0.7)
-	ci.draw_arc(_p(b, 0.695, 0.69), h * 0.022, PI, TAU, 8, INK, ow * 0.9, true)
-	# La trenza, por delante del hombro (la cabeza tapa su arranque).
+	var ow := maxf(1.0, h * 0.014)
+	var B := ada_brass()
+	var S := ada_slate()
+	var hatch := maxf(1.0, h * 0.009)
+	# Torso y cuello: una silueta de laton con el filo tallado.
+	_shape(ci, _poly(b, [0.44, 0.52, 0.56, 0.52, 0.57, 0.66, 0.43, 0.66]), B, ow, S)
+	_shape(ci, _poly(b, [0.02, 0.98, 0.06, 0.76, 0.24, 0.64, 0.40, 0.61, 0.60, 0.61, 0.76, 0.64, 0.94, 0.76, 0.98, 0.98]), B, ow, S)
+	# Las solapas de la guerrera y la botonadura, solo como tallas.
+	ci.draw_polyline(_poly(b, [0.36, 0.63, 0.45, 0.76, 0.50, 0.72, 0.55, 0.76, 0.64, 0.63]), S, ow * 1.2, true)
+	ci.draw_line(_p(b, 0.50, 0.72), _p(b, 0.50, 0.98), S, ow, true)
+	for v in [0.82, 0.91]:
+		for u in [0.45, 0.55]:
+			ci.draw_circle(_p(b, u, v), h * 0.013, S)
+	# Rayado de grabado en la sombra del hombro y bajo la barbilla.
+	for i in 6:
+		var u0 := 0.08 + 0.045 * float(i)
+		ci.draw_line(_p(b, u0, 0.97), _p(b, u0 + 0.07, 0.80), S, hatch, true)
+	for i in 3:
+		var v := 0.55 + 0.035 * float(i)
+		ci.draw_line(_p(b, 0.445, v), _p(b, 0.48, v), S, hatch, true)
+	# La trenza, por delante del hombro: eslabones de laton tallados.
 	for i in 6:
 		var t := float(i) / 5.0
 		var c := _p(b, 0.30 - 0.05 * t, 0.42 + 0.30 * t)
-		var seg := _ell(c, h * (0.05 - 0.008 * t), h * 0.042, 14)
-		_shape(ci, seg, HAIR_ADA.darkened(0.08 * float(i % 2)), ow * 0.8)
-	# El lazo rojo al final de la trenza.
+		_shape(ci, _ell(c, h * (0.048 - 0.008 * t), h * 0.040, 14), B, ow * 0.9, S)
 	var knot := _p(b, 0.25, 0.75)
 	for side in [-1.0, 1.0]:
-		_shape(ci, PackedVector2Array([knot, knot + Vector2(side * h * 0.05, -h * 0.025), knot + Vector2(side * h * 0.05, h * 0.025)]), RIBBON, ow * 0.7)
-	# La cabeza: redonda, con barbilla suave.
-	var head := _ell(_p(b, 0.5, 0.40), h * 0.17, h * 0.19, 30)
-	_shape(ci, head, SKIN_ADA, ow)
-	# La oreja y el lapiz detras.
-	_shape(ci, _ell(_p(b, 0.70, 0.41), h * 0.025, h * 0.04, 12), SKIN_ADA, ow * 0.8)
-	_limb(ci, _poly(b, [0.66, 0.31, 0.78, 0.40]), PENCIL, h * 0.016, ow * 0.6)
+		_shape(ci, PackedVector2Array([knot, knot + Vector2(side * h * 0.05, -h * 0.025),
+			knot + Vector2(side * h * 0.05, h * 0.025)]), S, ow * 0.7, B)
+	# La cabeza y la oreja.
+	_shape(ci, _ell(_p(b, 0.5, 0.40), h * 0.17, h * 0.19, 30), B, ow, S)
+	_shape(ci, _ell(_p(b, 0.70, 0.41), h * 0.025, h * 0.04, 12), B, ow * 0.8, S)
+	# El lapiz detras de la oreja: una talla.
+	ci.draw_line(_p(b, 0.66, 0.31), _p(b, 0.78, 0.40), S, h * 0.016, true)
+	# Sombra de la cara (el lado de lejos), en rayado corto.
+	for i in 3:
+		var v := 0.38 + 0.04 * float(i)
+		ci.draw_line(_p(b, 0.345, v), _p(b, 0.375, v + 0.02), S, hatch, true)
 	# El flequillo bajo la gorra.
-	_shape(ci, _poly(b, [0.33, 0.33, 0.36, 0.25, 0.64, 0.25, 0.68, 0.33, 0.60, 0.29, 0.52, 0.32, 0.44, 0.28, 0.38, 0.32]), HAIR_ADA, ow)
-	# Mejillas, pecas y la mancha de grasa.
-	ci.draw_circle(_p(b, 0.39, 0.45), h * 0.03, CHEEK)
-	ci.draw_circle(_p(b, 0.61, 0.45), h * 0.03, CHEEK)
-	for f in [[0.37, 0.42], [0.41, 0.44], [0.59, 0.42], [0.63, 0.44], [0.61, 0.415]]:
-		ci.draw_circle(_p(b, f[0], f[1]), h * 0.005, HAIR_ADA.darkened(0.2))
-	ci.draw_colored_polygon(_ell(_p(b, 0.63, 0.49), h * 0.028, h * 0.012, 10), Color(INK, 0.35))
-	_eyes(ci, b, e, 0.38, 0.075, h, ow)
-	_brows(ci, b, e, 0.38, 0.075, h * 0.013, HAIR_ADA.darkened(0.25))
-	# Nariz de boton.
-	ci.draw_circle(_p(b, 0.51, 0.44), h * 0.02, SKIN_ADA.darkened(0.12))
-	# La gorra de faena, ladeada, con visera hacia donde mira.
-	_shape(ci, _poly(b, [0.32, 0.27, 0.35, 0.15, 0.50, 0.11, 0.66, 0.14, 0.70, 0.27]), UNIFORM_ADA.darkened(0.12), ow)
-	_shape(ci, _poly(b, [0.48, 0.27, 0.70, 0.26, 0.80, 0.29, 0.70, 0.31, 0.50, 0.30]), INK.lightened(0.15), ow * 0.8)
-	# Las gafas de aviador sobre la gorra.
-	ci.draw_line(_p(b, 0.33, 0.20), _p(b, 0.69, 0.20), INK.lightened(0.2), h * 0.02)
+	_shape(ci, _poly(b, [0.33, 0.33, 0.36, 0.25, 0.64, 0.25, 0.68, 0.33, 0.60, 0.29, 0.52, 0.32, 0.44, 0.28, 0.38, 0.32]), B, ow, S)
+	_eyes_engraved(ci, b, e, 0.38, 0.075, h, ow, S)
+	_brows(ci, b, e, 0.38, 0.075, h * 0.014, S)
+	# La nariz: una sola talla.
+	ci.draw_polyline(_poly(b, [0.515, 0.40, 0.53, 0.445, 0.505, 0.455]), S, ow, true)
+	# La gorra de faena: laton con la cinta rayada y la visera en Pizarra
+	# maciza (el contraste del cartel).
+	_shape(ci, _poly(b, [0.32, 0.27, 0.35, 0.15, 0.50, 0.11, 0.66, 0.14, 0.70, 0.27]), B, ow, S)
+	for i in 4:
+		var u := 0.38 + 0.07 * float(i)
+		ci.draw_line(_p(b, u, 0.235), _p(b, u + 0.03, 0.265), S, hatch, true)
+	_shape(ci, _poly(b, [0.48, 0.27, 0.70, 0.26, 0.80, 0.29, 0.70, 0.31, 0.50, 0.30]), S, ow * 0.8, S)
+	# Las gafas de aviador sobre la gorra: aros tallados con la lente de laton.
+	ci.draw_line(_p(b, 0.33, 0.20), _p(b, 0.69, 0.20), S, h * 0.022)
 	for u in [0.43, 0.57]:
 		var g := _p(b, u, 0.195)
-		ci.draw_circle(g, h * 0.042, UITheme.ACCENT)
-		ci.draw_circle(g, h * 0.03, LENS)
-		ci.draw_arc(g, h * 0.042, 0.0, TAU, 18, INK, ow, true)
-		ci.draw_arc(g + Vector2(-h * 0.008, -h * 0.008), h * 0.016, PI * 1.1, PI * 1.6, 6, WHITE, ow, true)
-	_gesture(ci, b, e, UNIFORM_ADA, SKIN_ADA, h, ow)
+		ci.draw_circle(g, h * 0.044, S)
+		ci.draw_circle(g, h * 0.028, B)
+		ci.draw_arc(g + Vector2(-h * 0.006, -h * 0.006), h * 0.014, PI * 1.1, PI * 1.6, 6, S, ow, true)
+	_gesture(ci, b, e, B, B, h, ow, S, S)
 
 # ── El Sargento Mayor Casimiro Bombarda ──────────────────────────────
 
@@ -635,6 +690,10 @@ static func draw_mouth(ci: CanvasItem, area: Rect2, id: String, e: String, dir: 
 	_mirror(ci, area, dir)
 	var c := _p(b, 0.5, 0.505) if id == COLONY else _p(b, 0.5, 0.535)
 	var w := h * (0.06 if id == COLONY else 0.07)
+	if id == COLONY:
+		_mouth_engraved(ci, c, w, e, ow, open)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	if open:
 		match e:
 			"surprised", "worried":
@@ -661,6 +720,34 @@ static func draw_mouth(ci: CanvasItem, area: Rect2, id: String, e: String, dir: 
 			_:
 				ci.draw_arc(c + Vector2(0, -w * 0.3), w * 0.8, PI * 0.15, PI * 0.85, 12, INK, ow * 1.4, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## La boca de la Capitana, tallada en Pizarra sobre el laton (sin rojos).
+static func _mouth_engraved(ci: CanvasItem, c: Vector2, w: float, e: String, ow: float, open: bool) -> void:
+	var S := ada_slate()
+	var B := ada_brass()
+	if open:
+		match e:
+			"surprised", "worried":
+				ci.draw_colored_polygon(_ell(c, w * 0.45, w * 0.55, 14), S)
+			"angry":
+				ci.draw_colored_polygon(_poly(Rect2(c - Vector2(w, w * 0.45), Vector2(w * 2.0, w * 0.9)),
+					[0.0, 0.0, 1.0, 0.0, 0.9, 1.0, 0.1, 1.0]), S)
+				ci.draw_line(c + Vector2(-w * 0.8, -w * 0.15), c + Vector2(w * 0.8, -w * 0.15), B, ow)
+			_:
+				var d := _ell(c, w, w * 0.75, 16, 0.0, PI)
+				d.append(c + Vector2(-w, 0))
+				ci.draw_colored_polygon(d, S)
+		return
+	match e:
+		"surprised":
+			ci.draw_arc(c, w * 0.3, 0.0, TAU, 12, S, ow * 1.3, true)
+		"worried":
+			ci.draw_polyline(PackedVector2Array([c + Vector2(-w * 0.7, w * 0.1), c + Vector2(-w * 0.25, -w * 0.12),
+				c + Vector2(w * 0.25, w * 0.12), c + Vector2(w * 0.7, -w * 0.1)]), S, ow * 1.4, true)
+		"angry":
+			ci.draw_line(c + Vector2(-w * 0.7, w * 0.1), c + Vector2(w * 0.7, w * 0.1), S, ow * 1.6, true)
+		_:
+			ci.draw_arc(c + Vector2(0, -w * 0.3), w * 0.8, PI * 0.15, PI * 0.85, 12, S, ow * 1.5, true)
 
 class _Mouth extends Control:
 	## El InstructorBust padre (sin tipo: draw_mouth es suya, no de Control).
