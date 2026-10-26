@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **1.0.0** in progress (`project.godot` `config/version`; the 1.0 is assembled on the `integracion/arte-v1` branch). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid (only one Tax in three on the board, "la Visita"; the rest by automatic report), three separate mission campaigns (Land, Sea, Air: each a chain of missions in a single domain with a boss at the end; each boss hands over a piece of HQ level 3), and the Final Audit — in Campaña HQ level 3 (which asks for the three pieces) summons a 3-5 wave siege you have to survive; winning it no longer ends the game: "Volverse el Imperio" (1.2) turns you into the one who collects, with an archipelago of six neighbouring islands to conquer (short land/sea/air mission chains) that then pay you tribute. Colono plays in three chapters (the three acts of the lore) and lasts 3-4 h; Gobernador, 6-8 h. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one, a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
+**Tormenta Imperial** is a dieselpunk management + turn-based strategy game built in Godot 4.7 .NET, version **0.9-beta** (`project.godot` `config/version`, Android `version/code` 10001, Windows `file_version` 0.9.0.0; set by `fix/ajustes-beta`, 2026-10-26). The player builds and manages a persistent base on a procedurally generated island (an irregular coast with bays and capes on a grid rolled per game, 60-74 cells a side, with the sea inside the grid and 3-6 deposits of each type on land), where every building is joined to the Núcleo by roads and staffed by workers you can see walking, progressing through 3 economic eras while the Imperial Storm keeps coming back to collect. The management loop: five resources in one shared pool (food included, grown on Farms and eaten by the people), four workshop materials, production that waits in each building until it is collected with a tap, manual processes in batches (the Núcleo can run every workshop recipe, slower), population and morale, market and laboratory as buildings, tech tree, army training. Turn-based PVE combat: an 8x8 board shown by default as a "front" view (both sides face to face, no grid in sight; the 3D 8x8 board and a flat 2D grid are the alternatives), rock-paper-scissors type advantage, roguelike expeditions with their own map and drafts, the Tithe fought instead of paid (only one Tax in three on the board, "la Visita"; the rest by automatic report), three separate mission campaigns (Land, Sea, Air: each a chain of missions in a single domain with a boss at the end; each boss hands over a piece of HQ level 3), and the Final Audit — in Campaña HQ level 3 (which asks for the three pieces) summons a 3-5 wave siege you have to survive; winning it no longer ends the game: "Volverse el Imperio" (1.2) turns you into the one who collects, with an archipelago of six neighbouring islands to conquer (short land/sea/air mission chains) that then pay you tribute. Colono plays in three chapters (the three acts of the lore) and lasts 3-4 h; Gobernador, 6-8 h. Around that core: a "toy diorama" look (buildings and units baked from CC0 pieces into one vertex-coloured mesh each; a building "pops" when it finishes and collected goods fly to the HUD), 27 building types (10 of them new cheap decorations, with no cap), building limits that rise with the era, a day/night cycle, ambient sound for day, night and Storm, up to five saved games, x1/x2 game speed, graphics quality down to "Mínima" with an FPS cap, four game modes (only Campaña is offered today; the other three are set aside, not deleted), a 2D top-down view next to the 3D one (its selector is hidden in the 0.9 beta), a configurable UI with PC/tablet/phone profiles and touch placement, a prologue + guided tutorial + help index, and Windows and Android exports. See `docs/15-combat.md` for the combat pillar and `docs/13-roadmap.md` for what is done, what is left and the redesign in progress.
 
 Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3180 tests (`func test_`, ~3180 cases) in 239 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3200 tests in 242 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -30,7 +30,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 3. WASD / arrows to pan, Q/E or right-drag to rotate, scroll to zoom, middle-drag or left-drag on the ground to grab-pan, F11 fullscreen
 4. Touch: one finger grabs the terrain, two-finger pinch to zoom and twist to rotate (3D only); tap to aim a building, tap the ghost / ✓ to build (docs/21 §9)
 5. A fresh game: ☰ → SALIR (main menu) → Nueva partida (mode picker; today it only offers Campaña). It never deletes the current game: it goes to a new slot (up to 5, see "Save/Load System"). Deleting `user://partidas/` starts from scratch
-6. **2D view:** Settings → Map view, or `godot --path . -- --view=2d`. Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
+6. **2D view:** `godot --path . -- --view=2d` (the Settings selector is hidden in the 0.9 beta, and a saved `view_mode=2d` loads 3D). Same services, UI and save; only the world view differs (`scenes/main/Main2D.tscn`, `scripts/view2d/`). See `docs/18-vista-2d.md`
 7. **User args** (after `--`): `--view=2d|3d`, `--no-title` (skip the title menu, used by probes), `--multi` (allow a second copy, see 9), `--dev` / `--no-dev` (force `dev_mode`, see "Dev Mode")
 8. **Your save lives in the editor's user dir** (`%APPDATA%\Godot\app_userdata\Tormenta Imperial`). Anything that plays or writes saves outside a normal play session (probes, experiments, a second agent) needs a git-ignored `override.cfg` at the project root with its own dir, deleted afterwards:
    ```ini
@@ -69,8 +69,8 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 166 signals in 36 categories (`docs/10-signals-reference.md`) |
-| 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 167 signals in 36 categories (incl. `game_load_progress` and `shortcut_pressed`) (`docs/10-signals-reference.md`) |
+| 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9). PC shortcuts (`feat/atajos-pc`): it filters the keys and emits `EventBus.shortcut_pressed` (B build, M missions, H help in BottomBar; Space in PauseMenu; Enter/D/E on the board), and `InputService.hint()` adds the key to tooltips on PC |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
@@ -183,8 +183,8 @@ guide in `docs/28-guia-ui.md`). **Since 2026-10-25 `CartoonTheme` (historical na
 paints the dieselpunk skin "D · Mezcla sobria"**: slate bunker panels with brass
 edges, Big Shoulders Display headings + IBM Plex Sans Condensed text and figures,
 near-square corners, five button intents (brass primary with a pilot light, steel
-open, amber warn, red destroy, dimmed + padlock unavailable), dark windows by
-default (`window_theme` "light" = sober paper) — `docs/21-interfaz-y-dispositivos.md`
+open, amber warn, red destroy, dimmed + padlock unavailable), dark windows only
+(the light "paper" mode was removed in the 0.9 beta, `fix/ajustes-beta`) — `docs/21-interfaz-y-dispositivos.md`
 §17 and `docs/24-paleta.md`; `"classic"` stays as an internal fallback
 (`-- --ui-style=classic`), and the mockups come from `tools/ui_mockup_probe.gd`.
 The polish (`feat/piel-dieselpunk-pulido`) adds line icons (`CartoonIcon`, PNGs from
@@ -1192,7 +1192,7 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   `touch_controls` (`auto` / `always` / `never`; "auto" follows the device profile:
   tablet and phone yes, PC no — a touch on a touch laptop does not turn them on) and
   `touch_controls_opacity`, `instructors_visible` (the instructor busts, docs/23 §9), `view_mode` (`3d` / `2d`), `fullscreen`, `locale`;
-- `[interfaz]`: `window_theme` (`dark` slate bunker windows, the default since the dieselpunk skin of 2026-10-25, / `light` sober paper; `CartoonTheme.window_theme`, `GameConfig.ui_theme`; the old `ui_theme` key of the cartoon skin is ignored and erased on save), device profile, UI scale, text size, palette, high contrast, panel
+- `[interfaz]`: (no theme any more: the 0.9 beta has only the dark slate windows; old `window_theme` / `ui_theme` keys are ignored and erased on save), device profile, UI scale, text size, palette, high contrast, panel
   opacity, hidden HUD elements, moved layout, `touch_controls_size` (size of the
   on-screen controls: `auto` = the profile's, PC 100 % / tablet 115 % / phone
   130 %, or `small` … `xlarge`; docs/21 §9), `fps_cap` (`auto` / `30`…`120` /
@@ -1315,7 +1315,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config (version 1.0.0), 32 autoloads (31 game + BeckettRuntime), renderer override hook
++-- project.godot                    # Engine config (version 0.9-beta, main scene Boot.tscn), 32 autoloads (31 game + BeckettRuntime), renderer override hook
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
@@ -1327,7 +1327,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 239 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 242 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
@@ -1337,7 +1337,7 @@ tormenta-imperial/
 |   +-- buildings/BuildingPlacer.tscn
 |   +-- combat/Board3D.tscn          # The 3D combat diorama (camera, sun, terrain, marks, units, fx)
 |   +-- ui/                          # One .tscn per panel (29), incl. PrologueScreen and HelpIndexPanel
-+-- scripts/                         # 211 .gd files, ~102k lines
++-- scripts/                         # 214 .gd files, ~103k lines
 |   +-- buildings/
 |   |   +-- BuildingData.gd          # Resource class for building definitions (get_display_name())
 |   |   +-- BuildingPlacer.gd        # 3D placement/move/demolish + mesh spawning
