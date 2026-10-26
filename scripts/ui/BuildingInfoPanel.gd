@@ -60,9 +60,10 @@ var _repair_container: PanelContainer
 var _repair_btn: Button
 var _repair_label: Label
 var _repair_cost_row: HBoxContainer
-## La cabecera de los procesos: solo con procesos que ofrecer.
-var _actions_header: Control
-var _actions_sep: Control
+## FABRICAR (ProcessActionsPanel): solo con recetas que ofrecer. Con recetas,
+## en tablet y PC la ficha se ensancha para dos columnas de tarjetas.
+var _recipes: VBoxContainer
+var _wide := false
 ## Fila de acciones de abajo (mover, girar, derribar...).
 var _actions_box: HFlowContainer
 ## ENTRENAR en los edificios militares (2026-10-19): las unidades de ESE edificio.
@@ -111,6 +112,7 @@ func _ready() -> void:
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
 	EventBus.deposit_depleted.connect(func(n, _id): if n == _selected_node: _hide_panel())
 	UILayoutManager.layout_changed.connect(_fit_layout)
+	UILayoutManager.panel_rect_changed.connect(_on_layout_rect_changed)
 	get_viewport().size_changed.connect(_fit_layout)
 
 func _process(_delta: float) -> void:
@@ -264,6 +266,13 @@ func _build_ui() -> void:
 	_repair_container.visible = false
 	_vbox.add_child(_repair_container)
 
+	# ── FABRICAR: las recetas como tarjetas grandes (feat/recetas-tarjetas) ──
+	# Antes que mejorar: es lo que se viene a hacer a un taller.
+	_recipes = VBoxContainer.new()
+	_recipes.visible = false
+	_vbox.add_child(_recipes)
+	_process_panel = ProcessActionsPanel.new(_recipes)
+
 	# ── Mejorar: la accion principal, con su coste al lado ──
 	_upgrade_container = VBoxContainer.new()
 	_upgrade_container.name = "UpgradeBox"
@@ -309,24 +318,6 @@ func _build_ui() -> void:
 	_no_upgrade_label.name = "NoUpgrade"
 	_no_upgrade_label.visible = false
 	_vbox.add_child(_no_upgrade_label)
-
-	# ── Procesos del taller ──
-	_actions_sep = Control.new()
-	_actions_sep.custom_minimum_size.y = 2
-	_vbox.add_child(_actions_sep)
-	_actions_header = CT.section(Tr.t("LBL_ACTIONS"), "build")
-	_vbox.add_child(_actions_header)
-	var processes_box := VBoxContainer.new()
-	processes_box.add_theme_constant_override("separation", 6)
-	_vbox.add_child(processes_box)
-	var progress_container := VBoxContainer.new()
-	progress_container.add_theme_constant_override("separation", 4)
-	var progress_label := CT.label("", "small", CT.text("window"))
-	var progress_bar := CT.progress(0.0, CT.sem("ACCENT"), "window", 14)
-	progress_container.add_child(progress_label)
-	progress_container.add_child(progress_bar)
-	_vbox.add_child(progress_container)
-	_process_panel = ProcessActionsPanel.new(processes_box, progress_container, progress_bar, progress_label)
 
 	# ── Abajo, fuera del scroll: abrir, trabajadores, mover, girar, derribar ──
 	_open_btn = CT.pill_button("", "market", "open", CT.h("btn"))
@@ -414,13 +405,16 @@ func _fit_layout() -> void:
 	if not ph:
 		UILayoutManager.apply_layout("BuildingInfoPanel", _panel)
 		CT.fit_desktop(_win)
+		_widen_for_recipes()
 		# Tablet: la zona segura (muesca, bordes curvos) tampoco se pisa.
 		var safe := _safe_right()
 		if safe > 0.0:
 			_panel.offset_left -= safe
 			_panel.offset_right -= safe
 		return
-	var width := minf(330.0, vp.x * 0.52)
+	# Con FABRICAR algo mas ancha: las tarjetas a todo el ancho y las pestanas
+	# del Nucleo en una fila. El edificio se sigue viendo a la izquierda.
+	var width := minf(380.0, vp.x * 0.56) if _wide else minf(330.0, vp.x * 0.52)
 	_panel.anchor_left = 1.0
 	_panel.anchor_right = 1.0
 	_panel.anchor_top = 0.0
@@ -441,6 +435,26 @@ func _fit_layout() -> void:
 	(_win["panel"] as PanelContainer).add_theme_stylebox_override("panel", s)
 	_close_btn.offset_left = -_close_btn.custom_minimum_size.x - 2
 	_close_btn.offset_right = -2
+
+## Con recetas, la ficha de tablet y PC pide sitio para dos columnas de
+## tarjetas (CartoonTheme.recipe_panel_w: de la letra y como mucho algo mas de
+## media pantalla), creciendo hacia la izquierda desde su sitio. Sin recetas,
+## el ancho del slot.
+func _widen_for_recipes() -> void:
+	if not _wide or _phone or _panel == null:
+		return
+	var want := CT.recipe_panel_w(_vp())
+	var now := _panel.offset_right - _panel.offset_left
+	if want <= now + 0.5:
+		return
+	_panel.offset_left = _panel.offset_right - want
+	_panel.custom_minimum_size.x = want
+
+## UILayoutManager recoloca la ficha cuando se mueve lo de encima: vuelve a
+## pedir su ancho de recetas (sin bucle: si ya lo tiene, no toca nada).
+func _on_layout_rect_changed(panel_id: String) -> void:
+	if panel_id == "BuildingInfoPanel" and _wide and not _phone:
+		_widen_for_recipes.call_deferred()
 
 ## Cuanto hay que apartarse del borde derecho para no caer debajo del ☰ (el
 ## boton del menu, arriba a la derecha). 0 si no esta o no se ve.
@@ -969,5 +983,9 @@ static func missing_by_name(cost: Dictionary) -> Dictionary:
 	return out
 
 func _set_actions_header(shown: bool) -> void:
-	_actions_header.visible = shown
-	_actions_sep.visible = shown
+	_recipes.visible = shown
+	# Una sola tarjeta (un yacimiento) cabe en la ficha de siempre.
+	var wide := shown and (_process_panel.action_count() > 1 or not _process_panel.tab_ids().is_empty())
+	if wide != _wide:
+		_wide = wide
+		_fit_layout()

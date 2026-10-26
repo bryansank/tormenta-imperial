@@ -804,11 +804,11 @@ static func segmented(options: Array, selected: int, role: String = "window", he
 
 ## Pestana: [icono] Palabra. La elegida, en color y con labio; las demas, planas.
 static func tab(text_s: String, glyph: String, selected: bool, role: String = "window",
-		fill: Color = Color(0, 0, 0, 0), height: int = BTN) -> Button:
+		fill: Color = Color(0, 0, 0, 0), height: int = BTN, pad_h: int = 18) -> Button:
 	if selected:
 		var f := fill if fill.a > 0.0 else sem("ACCENT")
 		var b := Button.new()
-		_btn_states(b, f, RADIUS_BTN, 18, role)
+		_btn_states(b, f, RADIUS_BTN, pad_h, role)
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
@@ -817,15 +817,15 @@ static func tab(text_s: String, glyph: String, selected: bool, role: String = "w
 			row.add_child(make_glyph(glyph, roundi(height * 0.58)))
 		var tc := on_fill(f)
 		row.add_child(label(text_s, "button", tc["color"], tc["outline"]))
-		_fill_button(b, row, height, 18)
+		_fill_button(b, row, height, pad_h)
 		return b
 	var btn := Button.new()
 	var border := c(role, "CARD_BORDER")
 	var n := box(c(role, "CARD_ALT"), Color(border, 0.55), 1, RADIUS_BTN, 0, 0, 0, role)
 	var h := box(c(role, "CARD_ALT").lightened(0.08), border, 1, RADIUS_BTN, 0, 0, 0, role)
 	for sb in [n, h]:
-		sb.content_margin_left = 18
-		sb.content_margin_right = 18
+		sb.content_margin_left = pad_h
+		sb.content_margin_right = pad_h
 	btn.add_theme_stylebox_override("normal", n)
 	btn.add_theme_stylebox_override("hover", h)
 	btn.add_theme_stylebox_override("pressed", h)
@@ -837,7 +837,7 @@ static func tab(text_s: String, glyph: String, selected: bool, role: String = "w
 	if glyph != "":
 		row2.add_child(make_glyph(glyph, roundi(height * 0.5)))
 	row2.add_child(label(text_s, "button", text(role, true)))
-	_fill_button(btn, row2, height, 18)
+	_fill_button(btn, row2, height, pad_h)
 	return btn
 
 ## Globo de ayuda (lo que sale al pasar el raton o mantener el dedo): hueco
@@ -1411,7 +1411,9 @@ static func style_text_pill(b: Button, kind_s: String, height: int, role: String
 	b.add_theme_color_override("font_outline_color", INK)
 	b.add_theme_constant_override("h_separation", 8)
 	b.set_meta("pill_kind", kind_s)
-	_sync_pilot(b, kind_s == "primary" and b.text != "", fill, 10)
+	# Los botones de texto ponen su texto luego (el verbo de las recetas): la
+	# luz piloto va con la clase, no con el texto.
+	_sync_pilot(b, kind_s == "primary", fill, 10)
 
 ## Tarjeta-boton (tecnologias): una tarjeta que se toca. `state`: "open",
 ## "done" (verde claro), "locked" (CARD_ALT). `selected`: borde de laton.
@@ -1652,6 +1654,13 @@ static func _sync_pilot(btn: Button, on: bool, fill: Color, x: int) -> int:
 		var sb := btn.get_theme_stylebox(st)
 		if sb != null:
 			sb.content_margin_left += lead
+	# Apagada (gris) mientras el boton este desactivado; se mira al redibujar.
+	if not btn.has_meta("pilot_watch"):
+		btn.set_meta("pilot_watch", true)
+		btn.draw.connect(func():
+			var l := btn.get_node_or_null("PilotLight") as Control
+			if l != null:
+				l.self_modulate = Color(0.5, 0.5, 0.5, 0.6) if btn.disabled else Color(1, 1, 1, 1))
 	return lead
 
 static func _army_first_label(n: Node) -> Label:
@@ -2523,3 +2532,158 @@ static func dodge_closes_in(root: Variant) -> void:
 	for n in (root as Control).get_tree().get_nodes_in_group("window_close"):
 		if n is Control and (root as Control).is_ancestor_of(n) and (n as Control).is_visible_in_tree():
 			dodge_menu_button(n as Control)
+
+# ══════════════════════════════════════
+# RECETAS (feat/recetas-tarjetas, 2026-10-25)
+# ══════════════════════════════════════
+# FABRICAR en la ficha: cada receta es una tarjeta grande
+#   [icono entrada ×N] → [icono salida ×N], reloj, el VERBO, ×1 / ×5 / MAX.
+# La tarjeta (ProcessCard) y la seccion (ProcessActionsPanel) solo piden
+# piezas aqui: tamanos, estilos, iconos y columnas. Piel dieselpunk
+# (2026-10-25): la tarjeta en marcha lleva filo de laton, la cerrada va
+# apagada (no disponible), el verbo es la accion principal (laton con luz
+# piloto, via text_pill "primary") y las cantidades van en Plex Condensed.
+
+## Lado del icono grande de una cantidad de receta.
+static func recipe_icon_px() -> int:
+	return 34 if phone else 44
+
+## Separacion entre tarjetas de receta (filas y columnas).
+static func recipe_gap() -> int:
+	return 8 if phone else GAP
+
+## Ancho por debajo del cual una tarjeta de receta ya no cabe en media
+## rejilla. Sale de la letra (no es un ancho fijo): con texto grande, menos
+## columnas.
+static func recipe_card_min_w() -> float:
+	return roundf(fs("button") * 12.0)
+
+## Columnas de la rejilla de recetas para `width`: una en telefono (a todo el
+## ancho); en tablet y PC dos si caben dos tarjetas de `card_min_w`.
+static func recipe_columns(width: float, card_min_w: float = 0.0) -> int:
+	if phone:
+		return 1
+	var w := maxf(card_min_w, recipe_card_min_w())
+	return 2 if width >= w * 2.0 + float(recipe_gap()) else 1
+
+## Ancho que pide la ficha de un edificio con recetas en tablet y PC: dos
+## tarjetas y los margenes, sin pasar de algo mas de media pantalla. Si no
+## llegan, la rejilla se queda en una columna (recipe_columns).
+static func recipe_panel_w(vp: Vector2) -> float:
+	var want := recipe_card_min_w() * 2.0 + float(recipe_gap()) + float(PAD) * 2.0 + 28.0
+	return clampf(want, 0.0, vp.x * 0.56)
+
+## Icono de un recurso o material en las recetas: el PNG de los recursos o el
+## glifo dibujado de los materiales (CartoonIcon "mat_<id>"). null si no hay.
+static func res_glyph(res_id: String, px: int) -> Control:
+	if res_id in ICON_RES:
+		return UITheme.make_icon(res_id, px)
+	if Icon.GLYPHS.has("mat_" + res_id):
+		return Icon.make("mat_" + res_id, px)
+	return null
+
+## El id de glifo (para make_glyph / tab) de un recurso o material.
+static func res_glyph_id(res_id: String) -> String:
+	if res_id in ICON_RES:
+		return "res:" + res_id
+	if Icon.GLYPHS.has("mat_" + res_id):
+		return "mat_" + res_id
+	return ""
+
+## Tarjeta de receta por estado: "open" (Placa con filo gris), "active" (la
+## que trabaja: filo de laton y el de arriba mas grueso, como las ventanas) o
+## "locked" (no disponible: apagada, con filo tenue).
+static func recipe_card_style(state: String) -> StyleBoxFlat:
+	var fill := Color(0, 0, 0, 0)
+	if state == "locked":
+		fill = c("window", "OFF")
+	var s := card_style("window", state == "active", fill)
+	if state == "active":
+		s.border_width_top = 3 + border_k()
+	elif state == "locked":
+		s.border_color = Color(c("window", "OFF_INK"), 0.45)
+	var pad := 8 if phone else 12
+	s.set_content_margin_all(pad)
+	return s
+
+## Titulo de la seccion: [icono] FABRICAR, en letra de boton.
+static func recipe_header(text_s: String, glyph: String = "build") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
+	if glyph != "":
+		var g := make_glyph(glyph, 24 if phone else 30)
+		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(g)
+	var l := label(text_s, "button", text("window"))
+	l.name = "RecipeTitle"
+	row.add_child(l)
+	return row
+
+## Una cantidad grande: [icono] ×20 en un hueco hundido. `short` > 0: lo que
+## falta, en rojo y con borde. `gain`: la cifra en verde (lo que sale). Sin
+## icono, el nombre va debajo en pequeno. La cifra se llama "Amount_<id>".
+static func recipe_amount(res_id: String, amount: int, short: int = 0, gain: bool = false) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.name = "Chip_" + res_id
+	var s := well_style("window", 2, 4)
+	s.content_margin_left = 6
+	s.content_margin_right = 10
+	if short > 0:
+		s.bg_color = Color(sem("DANGER"), 0.22)
+		s.border_color = sem("DANGER")
+		s.set_border_width_all(2)
+	p.add_theme_stylebox_override("panel", s)
+	p.mouse_filter = Control.MOUSE_FILTER_PASS
+	var cap := Tr.res_cap(res_id)
+	p.tooltip_text = cap if short <= 0 else "%s · %s" % [cap, Tr.t("OBJ_MISSING") % ("%d" % short)]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ic := res_glyph(res_id, recipe_icon_px())
+	if ic != null:
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", -4)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tone := text("window")
+	if gain:
+		tone = positive_text()
+	if short > 0:
+		tone = danger_text()
+	# Cifra en la letra de las cifras (Plex Condensed Bold), al tamano de titulo.
+	var n := label("×%d" % amount, "number", tone)
+	n.add_theme_font_size_override("font_size", fs("title"))
+	n.name = "Amount_" + res_id
+	col.add_child(n)
+	if ic == null:
+		col.add_child(label(Tr.res_name(res_id), "small", text("window", true)))
+	row.add_child(col)
+	p.add_child(row)
+	return p
+
+## Rehace una fila de recipe_amount (entrada o salida). No toca nada si no
+## cambio: la tarjeta se refresca cada poco y llega una senal por recurso.
+static func fill_recipe_row(row: Container, amounts: Dictionary, short: Dictionary = {}, gain: bool = false) -> void:
+	var sig := [amounts, short, gain, phone, UITheme.palette, UITheme.high_contrast]
+	if row.has_meta("recipe_sig") and row.get_meta("recipe_sig") == sig:
+		return
+	row.set_meta("recipe_sig", sig)
+	row.set_meta("amounts", amounts.duplicate())
+	for child in row.get_children():
+		row.remove_child(child)
+		child.free()
+	for res_id in amounts:
+		row.add_child(recipe_amount(String(res_id), int(amounts[res_id]), int(short.get(String(res_id), 0)), gain))
+
+## Una pastilla del selector ×1 / ×5 / MAX: la elegida en acero (abrir), las
+## demas Placa con filo.
+static func style_pick(b: Button, selected: bool) -> void:
+	style_text_pill(b, "info" if selected else "secondary", h("small"), "window", "button")
+
+## Pestana de taller (el Nucleo): la de tab(), mas justa de margen, para que en
+## telefono las seis quepan en una fila con solo el icono.
+static func recipe_tab(text_s: String, glyph: String, selected: bool) -> Button:
+	return tab(text_s, glyph, selected, "window", Color(0, 0, 0, 0), h("small"), 4 if text_s == "" else 14)

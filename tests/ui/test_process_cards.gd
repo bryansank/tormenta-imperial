@@ -31,7 +31,8 @@ func test_a_card_shows_cost_output_time_and_batch_buttons() -> void:
 	assert_object(card.find_child("Cost", true, false)).is_not_null()
 	assert_object(card.find_child("Produces", true, false)).is_not_null()
 	assert_object(card.find_child("Time", true, false)).is_not_null()
-	assert_int(card.batch_buttons().size()).is_equal(GameConfig.process_batch_sizes.size() + 1)
+	# El selector (×1, ×5, MAX) y el verbo.
+	assert_int(card.batch_buttons().size()).is_equal(GameConfig.process_batch_sizes.size() + 2)
 
 func test_busy_disables_every_batch_button() -> void:
 	ResourceManager.set_amounts({"wood": 200, "food": 0})

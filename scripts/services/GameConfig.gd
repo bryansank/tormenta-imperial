@@ -318,6 +318,21 @@ var material_sources := {
 func get_material_source(res_name: String) -> String:
 	return String(material_sources.get(res_name, ""))
 
+## Los recursos de era y el edificio cuya primera obra terminada los abre
+## (ProgressionManager._check_era_advance). Los materiales, en material_sources.
+var resource_unlock_buildings := {
+	"steel": "foundry",
+	"oil": "refinery",
+}
+
+## El edificio que trae al juego un recurso o material ("" si ya viene de
+## serie o no se sabe). Lo usa la tarjeta de receta bloqueada para decir el
+## porque: "Falta acero: llega con la Fundicion".
+func get_unlock_building(res_name: String) -> String:
+	if resource_unlock_buildings.has(res_name):
+		return String(resource_unlock_buildings[res_name])
+	return get_material_source(res_name)
+
 ## El material que fabrica un edificio ("" si ninguno).
 func get_material_of(building_id: String) -> String:
 	for m in material_sources:
