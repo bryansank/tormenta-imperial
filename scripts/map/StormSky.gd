@@ -318,6 +318,11 @@ func _spawn_gust() -> void:
 	var tree := get_tree()
 	if tree == null or tree.root == null:
 		return
+	# Con el arbol en pausa (un aviso o el tablero abiertos) las motas no llegan
+	# a procesarse y se dibujan en su estado de fabrica: un disco negro opaco,
+	# quieto, en mitad del mapa (QA 28 punto 5). Sin pausa, no hay rafaga.
+	if tree.paused:
+		return
 	var cam := tree.root.get_viewport().get_camera_3d()
 	if cam == null or not cam.is_inside_tree():
 		return
