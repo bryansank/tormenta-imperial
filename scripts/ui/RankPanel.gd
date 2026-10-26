@@ -201,7 +201,11 @@ func _setup_ui() -> void:
 
 	var edit := ModalKit.make_menu_button(Tr.t("BTN_COLONY_EDIT"), UITheme.ACCENT_DIM, open_editor)
 	edit.name = "EditColony"
-	col.add_child(edit)
+	# En telefono va en la fila de abajo, con los demas: a lo ancho, la tarjeta
+	# medía 395 de alto y se salia de un lienzo de 360 por arriba y por abajo.
+	var edit_in_hub := _cartoon() and CartoonTheme.phone
+	if not edit_in_hub:
+		col.add_child(edit)
 
 	# ── La colonia, en una fila (rediseno 2026-10): lo que salio del menu ☰ y no
 	# va en la barra de abajo. Progreso, Encargos, Registro y, en su modo,
@@ -223,6 +227,10 @@ func _setup_ui() -> void:
 		b.name = "Hub_" + id
 		_hub.add_child(b)
 		_hub_buttons[id] = b
+	if edit_in_hub:
+		edit.size_flags_horizontal = Control.SIZE_FILL
+		_hub.add_child(edit)
+		_hub.move_child(edit, 0)
 	_relayout()
 
 func _make_flag_rect(px: Vector2) -> TextureRect:

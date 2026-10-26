@@ -69,7 +69,7 @@ var _detail_panel: VBoxContainer
 var _detail_name: Label
 var _detail_desc: Label
 ## El coste en fila de iconos con su cifra; en rojo lo que falta.
-var _detail_cost: HBoxContainer
+var _detail_cost: HFlowContainer
 ## Lo que produce: "+6 [madera] cada 12 s".
 var _detail_production: HBoxContainer
 ## Trabajadores que pide, alojamiento y moral que da, en fichas de cifra.
@@ -394,7 +394,9 @@ func _build_detail(main: HBoxContainer) -> void:
 	_detail_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_detail_column.add_child(_detail_block)
 
-	_detail_cost = CT.cost_strip({})
+	# Las fichas del coste bajan de linea si no caben (el Cuartel General pide
+	# siete cosas y empujaba la ventana fuera por la derecha).
+	_detail_cost = CT.cost_flow()
 	_detail_cost.name = "DetailCost"
 	_detail_column.add_child(_detail_cost)
 
@@ -418,7 +420,7 @@ func _build_detail(main: HBoxContainer) -> void:
 var _strip: PanelContainer
 var _strip_name: Label
 var _strip_why: Label
-var _strip_cost: HBoxContainer
+var _strip_cost: HFlowContainer
 var _strip_build: Button
 var _strip_upgrade: Button
 
@@ -438,6 +440,9 @@ func _build_strip(parent: Control) -> void:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	col.add_theme_constant_override("separation", 0)
+	# Nunca a 1 px: el porque se partia letra a letra (franja de 900 de alto en
+	# un telefono en vertical).
+	col.custom_minimum_size.x = 100.0
 	row.add_child(col)
 	_strip_name = CT.name_label("", "button")
 	_strip_name.name = "StripName"
@@ -446,9 +451,11 @@ func _build_strip(parent: Control) -> void:
 	_strip_why.name = "StripWhy"
 	_strip_why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_strip_why)
-	_strip_cost = CT.cost_strip({})
+	_strip_cost = CT.cost_flow({}, {}, "window", "", "number", Color(0, 0, 0, 0), true)
 	_strip_cost.name = "StripCost"
 	_strip_cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_strip_cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_strip_cost.size_flags_stretch_ratio = 1.5
 	row.add_child(_strip_cost)
 	_strip_upgrade = CT.pill_button("", "upgrade", "open", 48)
 	_strip_upgrade.name = "StripUpgradeOne"
@@ -456,8 +463,11 @@ func _build_strip(parent: Control) -> void:
 	_strip_upgrade.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_strip_upgrade.pressed.connect(_on_upgrade_one)
 	row.add_child(_strip_upgrade)
-	_strip_build = CT.pill_button(Tr.t("BTN_BUILD"), "build", "primary", 48)
+	# En vertical, solo el martillo (CONSTRUIR al mantener pulsado).
+	_strip_build = CT.pill_button("" if CT.portrait() else Tr.t("BTN_BUILD"), "build", "primary", 48)
 	_strip_build.name = "StripBuildButton"
+	if CT.portrait():
+		_strip_build.tooltip_text = Tr.t("BTN_BUILD")
 	_strip_build.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_strip_build.pressed.connect(_on_build_pressed)
 	row.add_child(_strip_build)
@@ -682,6 +692,20 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_label.custom_minimum_size.x = 96.0 if _phone else 150.0
 	row.add_child(name_label)
+	# Telefono en vertical: el coste (o el candado) baja bajo el nombre; en una
+	# fila la lista salia 50-130 px por la derecha en 400 de ancho.
+	var info_box: Container = row
+	if CT.portrait():
+		var stack := VBoxContainer.new()
+		stack.add_theme_constant_override("separation", 2)
+		stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stack.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.remove_child(name_label)
+		name_label.custom_minimum_size.x = 72.0
+		stack.add_child(name_label)
+		row.add_child(stack)
+		info_box = stack
 
 	if locked:
 		var lock := HBoxContainer.new()
@@ -698,19 +722,30 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		why.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		why.name = "RankLockLabel" if lock.name == "RankLock" else "LockLabel"
 		lock.add_child(why)
-		row.add_child(lock)
+		info_box.add_child(lock)
 	else:
 		# El coste, con lo que falta en rojo (y los trabajadores, si faltan).
-		var cost := CT.cost_strip({}, {}, "window", "", "number")
+		# Las fichas bajan a otra linea antes que ensanchar la lista (Astillero,
+		# Refineria: cinco fichas con tablones y vigas sacaban la ventana por la
+		# derecha en 1280x720 y en telefono).
+		var cost := CT.cost_flow({}, {}, "window", "", "number", Color(0, 0, 0, 0), true)
 		cost.name = "CardCost"
 		cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(cost)
+		cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cost.size_flags_stretch_ratio = 1.6
+		info_box.add_child(cost)
 		# La primera a mitad de precio (GameConfig.first_building_discount, 2026-10-19).
 		var deal := CT.badge(Tr.t("LBL_FIRST_HALF_PRICE"), CT.sem("POSITIVE"))
 		deal.name = "CardDeal"
 		deal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		deal.visible = data.first_discount_factor() < 1.0
-		row.add_child(deal)
+		if _phone or _compact:
+			# A dos lineas en la lista estrecha (tablet, telefono): en una sola
+			# sacaba la ventana por la derecha.
+			for l in deal.find_children("*", "Label", true, false):
+				(l as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				(l as Label).custom_minimum_size.x = 84
+		info_box.add_child(deal)
 		# Lleno: una palabra en vez del coste, y el atajo para mejorar uno.
 		var full := CT.badge(Tr.t("TOPE_CARD_FULL"), CT.sem("WARNING"))
 		full.name = "CardFull"

@@ -172,6 +172,12 @@ func refresh_line() -> void:
 	_line.visible = not hide and title != "" and not HudRegistry.is_hidden("ObjectivePanel.line")
 	_line_text.text = title
 	var max_w := LINE_TEXT_MAX_PHONE if CartoonTheme.phone else LINE_TEXT_MAX
+	# Nunca mas ancha que el lienzo (cara, flecha y margenes aparte): en un
+	# telefono en vertical (400 de ancho) la linea salia 16 px por la derecha.
+	if is_inside_tree():
+		var room: float = get_viewport().get_visible_rect().size.x - _line.get_global_rect().position.x \
+			- float(_line_face.custom_minimum_size.x) - 18.0 - 12.0 - 15.0 - 10.0
+		max_w = minf(max_w, maxf(room, 80.0))
 	var font := _line_text.get_theme_font("font")
 	var fsize := _line_text.get_theme_font_size("font_size")
 	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x if font != null else max_w

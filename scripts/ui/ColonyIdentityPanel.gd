@@ -219,6 +219,12 @@ func _build() -> void:
 	_root.add_child(_window)
 	_card = w["panel"]
 	_card.name = "IdentityCard"
+	if _small:
+		# Sin cinta de verdad: con ella la tarjeta bajaba 30 px y LISTO quedaba
+		# por debajo del borde de un telefono de 360 de alto.
+		(w["ribbon"] as Control).visible = false
+		_card.offset_top = 0.0
+		(w["top_pad"] as Control).custom_minimum_size.y = 0.0
 	var close: Button = w["close"]
 	close.name = "CloseButton"
 	close.tooltip_text = Tr.t("BTN_CLOSE")
@@ -260,6 +266,14 @@ func _build() -> void:
 	name_dice.focus_mode = Control.FOCUS_NONE
 	name_dice.pressed.connect(randomize_name)
 	name_row.add_child(name_dice)
+	if _small:
+		# Sin cinta la ✕ cae en la fila del nombre: se le deja su hueco para que
+		# no tape el dado.
+		var close_room := Control.new()
+		close_room.name = "CloseRoom"
+		close_room.custom_minimum_size = Vector2(close.custom_minimum_size.x, 0)
+		close_room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		name_row.add_child(close_room)
 	_name_error = CT.label(Tr.t("LBL_IDENTITY_NAME_BAD"), "small", CT.danger_text())
 	_name_error.name = "NameError"
 	_name_error.visible = false
@@ -267,9 +281,12 @@ func _build() -> void:
 
 	# Bandera a la izquierda (con su dado y los botones de abajo); piezas a la
 	# derecha: asi cabe en un telefono apaisado de 360 de alto.
-	var main := HBoxContainer.new()
+	var main := BoxContainer.new()
 	main.add_theme_constant_override("separation", 10 if _small else 16)
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Telefono en vertical: bandera arriba y piezas debajo (lado a lado salia
+	# 28 px por la derecha en 400 de ancho).
+	main.vertical = CT.portrait()
 	col.add_child(main)
 	var left := VBoxContainer.new()
 	left.add_theme_constant_override("separation", 6 if _small else 10)
@@ -278,6 +295,9 @@ func _build() -> void:
 	frame.add_theme_stylebox_override("panel", CT.well_style("window", 12, 6))
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left.add_child(frame)
+	if main.vertical:
+		# En columna la bandera no se estira a lo ancho.
+		frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_preview = TextureRect.new()
 	_preview.name = "FlagPreview"
 	_preview.custom_minimum_size = PREVIEW_SMALL if _small else PREVIEW
@@ -295,6 +315,8 @@ func _build() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(spacer)
+	# En columna el hueco sobrante es para las piezas, no para la bandera.
+	spacer.visible = not main.vertical
 	_secondary_btn = CT.text_button(Tr.t("BTN_CANCEL"), "back", "secondary", CT.menu_h("small"))
 	_secondary_btn.name = "Secondary"
 	_secondary_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -308,6 +330,8 @@ func _build() -> void:
 
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if main.vertical:
+		right.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_theme_constant_override("separation", 6)
 	main.add_child(right)
 	_tabs_row = HBoxContainer.new()

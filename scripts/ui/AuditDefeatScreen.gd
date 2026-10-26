@@ -132,7 +132,8 @@ func _relayout() -> void:
 	_relayout_queued = false
 	if not is_inside_tree():
 		return
-	CT.fit_card(_win, get_viewport().get_visible_rect().size, CARD_WIDTH)
+	# Sin scroll: en un telefono de 360 de alto la cinta lo sacaba 7 px por abajo.
+	CT.fit_card(_win, get_viewport().get_visible_rect().size, CARD_WIDTH, true)
 
 func _queue_relayout() -> void:
 	if _relayout_queued:

@@ -8,6 +8,10 @@ var _is_open := false
 var _milestone_labels: Dictionary = {}
 var _era_label: Label
 var _bar: ProgressBar
+## Los hitos van en un scroll: en un telefono de 360 de alto la lista entera
+## sacaba la ventana por arriba y por abajo (fix/desbordes-derecha).
+var _list_scroll: ScrollContainer
+var _list: VBoxContainer
 
 func _ready() -> void:
 	layer = 11
@@ -69,6 +73,14 @@ func _setup_ui() -> void:
 	vbox.add_child(UITheme.make_separator())
 
 	# Milestones
+	_list_scroll = ScrollContainer.new()
+	_list_scroll.name = "MilestoneScroll"
+	_list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(_list_scroll)
+	_list = VBoxContainer.new()
+	_list.add_theme_constant_override("separation", UITheme.SEPARATION)
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list_scroll.add_child(_list)
 	for milestone in ProgressionManager.get_milestone_list():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -87,10 +99,11 @@ func _setup_ui() -> void:
 			UITheme.TEXT if is_done else UITheme.TEXT_DIM
 		)
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row.add_child(name_label)
 
 		_milestone_labels[milestone["id"]] = {"check": check, "name": name_label}
-		vbox.add_child(row)
+		_list.add_child(row)
 
 func _on_milestone_completed(milestone_id: String) -> void:
 	if _milestone_labels.has(milestone_id):
@@ -129,6 +142,16 @@ func _toggle_panel() -> void:
 	_panel.visible = _is_open
 	_backdrop.visible = _is_open
 	if _is_open:
+		_fit_list()
 		UIManager.open_panel(self)
 	else:
 		UIManager.close_panel(self)
+
+## El alto del scroll de hitos: la lista entera si cabe; si no, lo que deja el
+## lienzo bajo la cabecera, la era y la barra (el resto se arrastra).
+func _fit_list() -> void:
+	if _list_scroll == null or not is_inside_tree():
+		return
+	var vp_h: float = get_viewport().get_visible_rect().size.y
+	var need: float = _list.get_combined_minimum_size().y
+	_list_scroll.custom_minimum_size.y = clampf(need, 80.0, maxf(80.0, vp_h - 190.0))

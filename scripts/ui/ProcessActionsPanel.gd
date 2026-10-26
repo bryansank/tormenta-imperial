@@ -62,6 +62,9 @@ func _build_cancel_controls() -> void:
 	# Cancelar: rojo (quita), con lo que devuelve escrito en el propio boton.
 	_cancel_btn = CT.text_pill(Tr.t("BTN_CANCEL"), "danger", CT.h("small"), "window", "body")
 	_cancel_btn.name = "CancelProcess"
+	# "Cancelar (vuelven 114 acero · 57 madera)" baja a dos lineas antes que
+	# sacar la ficha por la derecha (ficha estrecha, telefono en vertical).
+	_cancel_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_cancel_btn.pressed.connect(_on_cancel_pressed)
 	_progress_container.add_child(_cancel_btn)
 

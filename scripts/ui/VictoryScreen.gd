@@ -312,11 +312,14 @@ func _open_window(title: String, fill: Color, node_name: String, max_size: Vecto
 	_set_menu_button_hidden(true)
 	return vbox
 
-func _button_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
+## Uno debajo del otro si no caben (telefono en vertical: salian 33 px por la
+## derecha).
+func _button_row() -> HFlowContainer:
+	var row := HFlowContainer.new()
 	row.name = "Buttons"
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
+	row.alignment = FlowContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("h_separation", 12)
+	row.add_theme_constant_override("v_separation", 8)
 	_body.add_child(row)
 	return row
 
