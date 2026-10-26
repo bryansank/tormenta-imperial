@@ -50,6 +50,9 @@ func before_test() -> void:
 		"era": ProgressionManager.current_era, "units": ArmyManager._units.duplicate(),
 		"campaigns": CombatManager._campaigns.progress.duplicate(),
 		"amounts": amounts, "unlocks": ResourceManager.get_unlock_state(),
+		# Colocar edificios da XP (rango, bandera) y abre consejos: se devuelve
+		# todo para no colar consejos en las suites de detras.
+		"tutorial": TutorialManager.get_save_data(), "rank": RankManager.get_save_data(),
 	}
 	GridManager.clear_all()
 	# Una colonia avanzada: era 3, todo abierto, tropa en los tres frentes y poco
@@ -89,6 +92,8 @@ func after_test() -> void:
 	CombatManager._campaigns.progress = _saved["campaigns"]
 	ResourceManager.set_unlock_state(_saved["unlocks"])
 	ResourceManager.set_amounts(_saved["amounts"])
+	RankManager.load_save_data(_saved["rank"])
+	TutorialManager.load_save_data(_saved["tutorial"])
 	UILayoutManager.refresh_viewport()
 	SettingsParking.restore(_parked)
 
