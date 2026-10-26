@@ -9,7 +9,8 @@ extends Node
 ## (launch_conquest_mission); al volver, este servicio apunta el progreso.
 ##
 ## La fase esta activa cuando el modo la tiene (GameMode.empire_enabled:
-## Campana y Supervivencia) y el Ataque Final esta GANADO. Un guardado viejo con
+## Campana y Supervivencia), el Ataque Final esta GANADO y el jugador FIRMO el
+## libro (final con eleccion, v1.2; quemarlo deja la isla libre, sin fase). Un guardado viejo con
 ## la victoria ya conseguida entra en la fase al cargar (sin la clave "empire",
 ## nada empezado: el reloj del tributo arranca entonces).
 ##
@@ -25,6 +26,19 @@ extends Node
 const ArchipelagoScript := preload("res://scripts/empire/Archipelago.gd")
 const ConquestGen := preload("res://scripts/empire/ConquestGenerator.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+
+# ── Final con eleccion (v1.2, decision de Bryan 2026-10-25) ──
+## Tras ganar el Ataque Final el libro del Impuesto queda en la mesa del
+## jugador, que elige: FIRMAR (la fase del archipielago: ahora cobras tu) o
+## QUEMAR (la isla queda libre: sin fase, sin cobros, la Tormenta ya paro).
+## "" = aun no eligio (la pantalla de victoria se lo pregunta, tambien al
+## cargar). Se guarda en la clave "empire" como "ending".
+const ENDING_SIGN := "sign"
+const ENDING_BURN := "burn"
+## La pieza de bandera que da quemar el libro: el sol que vuelve a salir.
+const BURN_REWARD := {"emblems": ["sun"]}
+const BURN_TITLE_KEY := "END_BURN_TITLE"
+var _ending: String = ""
 
 ## Untyped: Archipelago se usa por preload para que los tests puedan crear uno.
 var _book
@@ -51,10 +65,45 @@ func _ready() -> void:
 
 ## La fase esta en marcha: el modo la tiene y el Ataque Final esta ganado.
 func is_active() -> bool:
+	return _ending == ENDING_SIGN and _audit_won()
+
+## El modo tiene el final con eleccion y el Ataque Final esta ganado.
+func _audit_won() -> bool:
 	if not GameMode.empire_enabled() or GameMode.is_run_over():
 		return false
 	var audit = ProgressionManager.final_audit
 	return audit != null and audit.is_won()
+
+# ── Final con eleccion ───────────────────────────────────────────────
+
+## Lo que eligio el jugador con el libro: "sign", "burn" o "" (nada aun).
+func ending() -> String:
+	return _ending
+
+## Ganado el Ataque Final y el libro sigue en la mesa: hay que elegir.
+func choice_pending() -> bool:
+	return _ending == "" and _audit_won()
+
+## Quemo el libro: la isla es libre (sin fase del archipielago).
+func is_free() -> bool:
+	return _ending == ENDING_BURN and _audit_won()
+
+## FIRMAR o QUEMAR. Una vez por partida: false si no toca elegir o la opcion no
+## existe. Firmar arranca la fase (aviso y consejo); quemar da el emblema del
+## sol. Se guarda en el acto.
+func choose_ending(choice: String) -> bool:
+	if not choice_pending() or not choice in [ENDING_SIGN, ENDING_BURN]:
+		return false
+	_ending = choice
+	EventBus.ending_chosen.emit(choice)
+	if choice == ENDING_SIGN:
+		_maybe_start()
+	else:
+		EventBus.notification_posted.emit(Tr.t("MSG_END_BURN"), "notice", UITheme.POSITIVE)
+	EventBus.empire_changed.emit()
+	if GameManager.has_method("request_save"):
+		GameManager.request_save()
+	return true
 
 ## El modelo, para leer (la UI y las pruebas). Nadie fuera de aqui lo muta.
 func get_book() -> Variant:
@@ -100,6 +149,8 @@ func conquest_offer(island_id: String) -> Dictionary:
 
 ## El titulo imperial por islas conquistadas (clave de Tr, "" si ninguna).
 func title_key() -> String:
+	if is_free():
+		return BURN_TITLE_KEY
 	return _book.title_key() if is_active() else ""
 
 ## Lo que pagan las islas en cada cobro, y cuanto falta para el siguiente.
@@ -116,6 +167,8 @@ func unlocks_building(building_id: String) -> bool:
 ## ¿Abre una isla conquistada esta pieza de bandera ("patterns", "emblems",
 ## "colors")?
 func unlocks_piece(kind: String, id: String) -> bool:
+	if _ending == ENDING_BURN and id in BURN_REWARD.get(kind, []):
+		return true
 	return _book.unlocks(kind, id)
 
 func cooldown_left(island_id: String) -> float:
@@ -297,7 +350,9 @@ func _new_seed() -> int:
 # ── Guardado ─────────────────────────────────────────────────────────
 
 func get_save_data() -> Dictionary:
-	return _book.to_dict()
+	var data: Dictionary = _book.to_dict()
+	data["ending"] = _ending
+	return data
 
 ## Idempotente: sustituye el modelo entero. Sin la clave (guardado anterior a
 ## esta fase) llega {}: nada empezado, semilla nueva. Si ese guardado ya habia
@@ -305,6 +360,12 @@ func get_save_data() -> Dictionary:
 func load_save_data(data: Dictionary) -> void:
 	_book = ArchipelagoScript.from_dict(data)
 	_book.ensure_seed(_new_seed())
+	# Final con eleccion: un guardado de la rama del imperio sin "ending" que ya
+	# habia empezado la fase, firmo. Uno que no la empezo vuelve a la mesa.
+	var ending_raw: String = String(data.get("ending", ""))
+	if not ending_raw in [ENDING_SIGN, ENDING_BURN]:
+		ending_raw = ENDING_SIGN if _book.started else ""
+	_ending = ending_raw
 	_resting.clear()
 	EventBus.empire_changed.emit()
 
@@ -312,4 +373,5 @@ func load_save_data(data: Dictionary) -> void:
 func reset() -> void:
 	_book = ArchipelagoScript.new()
 	_book.ensure_seed(_new_seed())
+	_ending = ""
 	_resting.clear()

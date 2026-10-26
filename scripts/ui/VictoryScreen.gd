@@ -8,15 +8,35 @@ extends CanvasLayer
 ##   La Regencia bajo a cobrar y se fue sin nada...
 ##   [reloj] 3 h 05   [casa] 30   [mercado] 12   [estrella] 9
 ##   [tormenta] 11    [check] 9   [misiones] 2
-##   [ SEGUIR JUGANDO ]  [ Nueva partida ]
+##   [ EL LIBRO > ]  [ Nueva partida ]        (Campana / Supervivencia)
+##   [ SEGUIR JUGANDO ]  [ Nueva partida ]    (Constructor)
+##
+## Final con eleccion (v1.2, decision de Bryan 2026-10-25): donde el modo tiene
+## la fase del imperio (GameMode.empire_enabled), EL LIBRO lleva a la mesa: el
+## libro del Impuesto, y dos tarjetas con lo que dicen los instructores:
+##   FIRMAR  (Sargento Bombarda) -> "AHORA FIRMAS TU": el archipielago.
+##   QUEMAR  (Capitana Remache)  -> "LA ISLA ES LIBRE": seguir sin cobros.
+## La eleccion la guarda EmpireManager (choose_ending). Si se sale sin elegir,
+## la mesa vuelve a salir al cargar la partida (choice_pending).
+##
+## Esta pantalla tambien monta ArchipelagoPanel como hermano (lo crea al
+## arrancar, en las dos vistas): asi lo encuentran por nombre MISIONES y la
+## tarjeta de la colonia, sin tocar Main.tscn ni Main2D.tscn.
 
 const ColonyByline := preload("res://scripts/ui/ColonyByline.gd")
 const CT := preload("res://scripts/ui/CartoonTheme.gd")
 const ArchipelagoPanelScript := preload("res://scripts/ui/ArchipelagoPanel.gd")
+const Face := preload("res://scripts/ui/InstructorFace.gd")
+const Bust := preload("res://scripts/ui/InstructorBust.gd")
 
 ## Tope de la ventana en PC/tablet.
 const WINDOW_MAX := Vector2(720, 560)
+## La mesa del libro: dos tarjetas lado a lado.
+const CHOICE_MAX := Vector2(860, 560)
 
+## Que se ve: "victory" (las cifras), "choice" (la mesa del libro) o el final
+## elegido ("sign" / "burn"). "" = nada.
+var _step: String = ""
 var _backdrop: ColorRect
 var _window: Control
 
@@ -25,6 +45,9 @@ func _ready() -> void:
 	# Mientras se ve, los avisos esperan (NotificationPanel.is_busy).
 	add_to_group("modal_screen")
 	EventBus.victory_achieved.connect(_on_victory_achieved)
+	# Una partida ganada que se guardo con el libro aun en la mesa: al cargarla,
+	# se vuelve a preguntar.
+	EventBus.game_load_completed.connect(func(): _offer_pending_choice.call_deferred())
 	_mount_archipelago.call_deferred()
 
 ## Pone el ArchipelagoPanel de hermano (una vez). Oculto y sin _process hasta
@@ -37,7 +60,7 @@ func _mount_archipelago() -> void:
 	archipelago.name = ArchipelagoPanelScript.NODE_NAME
 	parent.add_child(archipelago)
 
-## Cierra la pantalla (CONTINUAR o VER EL ARCHIPIELAGO).
+## Cierra la pantalla (SEGUIR, VER EL ARCHIPIELAGO).
 func dismiss() -> void:
 	_close()
 
@@ -56,29 +79,31 @@ func _on_victory_achieved(stats: Dictionary) -> void:
 func is_showing() -> bool:
 	return _backdrop != null and is_instance_valid(_backdrop) and not _backdrop.is_queued_for_deletion()
 
-func _show_victory(stats: Dictionary) -> void:
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var small := CT.is_phone()
-	_backdrop = CT.veil()
-	add_child(_backdrop)
+## El paso que se ve ("victory", "choice", "sign", "burn" o "").
+func current_step() -> String:
+	return _step if is_showing() else ""
 
+## Hay que elegir que hacer con el libro (modo con la fase y Ataque Final
+## ganado, sin eleccion todavia).
+static func choice_due() -> bool:
+	return EmpireManager.choice_pending()
+
+func _offer_pending_choice() -> void:
+	if is_showing() or not choice_due() or not GameManager.is_started():
+		return
+	show_choice()
+
+# ── Paso 1: la victoria ──────────────────────────────────────────────
+
+func _show_victory(stats: Dictionary) -> void:
+	_clear()
+	_step = "victory"
+	var small := CT.is_phone()
 	# Constructor gana sin asedio: su victoria no habla de la Tormenta.
 	var builder: bool = GameMode.capstone_wins()
+	var book: bool = not builder and choice_due()
 	var title := Tr.t("LBL_VICTORY_TITLE_BUILDER" if builder else "LBL_VICTORY_TITLE")
-	var w := CT.menu_window(title, CT.sem("POSITIVE"), small, false)
-	_window = w["root"]
-	_window.name = "VictoryWindow"
-	add_child(_window)
-	var body: VBoxContainer = w["body"]
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_child(scroll)
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 8 if small else 12)
-	scroll.add_child(vbox)
+	var vbox := _open_window(title, CT.sem("POSITIVE"), "VictoryWindow", WINDOW_MAX)
 
 	# El pais que gana: su bandera y su nombre.
 	var byline := ColonyByline.new("section", CT.text("window"), Vector2(60, 40) if small else Vector2(72, 48))
@@ -110,36 +135,216 @@ func _show_victory(stats: Dictionary) -> void:
 		_add_stat(grid, "storm", Tr.t("LBL_STAT_STORMS"), "%d" % int(stats.get("storms_survived", 0)))
 		_add_stat(grid, "check", Tr.t("LBL_STAT_TITHES_REPELLED"), "%d" % int(stats.get("tithes_repelled", 0)))
 		_add_stat(grid, "missions", Tr.t("LBL_STAT_SUMMONS"), "%d" % int(stats.get("audit_summons", 1)))
-		var coda := CT.para(Tr.t("LBL_VICTORY_CODA"), "window", true, "small")
+		# Con el libro en la mesa, la coda es la pregunta; sin el, seguir jugando.
+		var coda := CT.para(Tr.t("END_BOOK_TEASER" if book else "LBL_VICTORY_CODA"), "window", true, "small")
 		coda.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(coda)
 
-	# Botones: seguir es lo principal (verde); una partida nueva, crema.
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 12)
-	var bh := CT.menu_h("btn")
-	var continue_btn := CT.text_button(Tr.t("BTN_CONTINUE"), "next", "primary", bh)
-	continue_btn.name = "ContinueButton"
-	continue_btn.pressed.connect(_close)
-	btn_row.add_child(continue_btn)
-	var new_btn := CT.text_button(Tr.t("BTN_NEW_GAME"), "plus", "secondary", bh)
+	# Botones: lo principal en verde (el libro, o seguir); partida nueva, crema.
+	var row := _button_row()
+	if book:
+		var book_btn := CT.text_button(Tr.t("BTN_END_BOOK"), "next", "primary", CT.menu_h("btn"))
+		book_btn.name = "BookButton"
+		book_btn.pressed.connect(show_choice)
+		row.add_child(book_btn)
+	else:
+		var continue_btn := CT.text_button(Tr.t("BTN_CONTINUE"), "next", "primary", CT.menu_h("btn"))
+		continue_btn.name = "ContinueButton"
+		continue_btn.pressed.connect(_close)
+		row.add_child(continue_btn)
+	row.add_child(_new_game_button())
+
+# ── Paso 2: la mesa del libro ────────────────────────────────────────
+
+## La mesa: el libro del Impuesto y las dos salidas, cada una con lo que dice
+## su instructor. Publica para las pruebas y para la carga de una partida que
+## se guardo antes de elegir.
+func show_choice() -> void:
+	_clear()
+	_step = "choice"
+	var small := CT.is_phone()
+	var vbox := _open_window(Tr.t("END_BOOK_RIBBON"), CT.sem("ACCENT"), "BookWindow", CHOICE_MAX)
+	var intro := CT.para(Tr.t("END_BOOK_INTRO"), "window")
+	intro.name = "BookIntro"
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(intro)
+	# Dos tarjetas lado a lado (en telefono apaisado tambien caben: son cortas).
+	var cards := HBoxContainer.new()
+	cards.name = "Choices"
+	cards.add_theme_constant_override("separation", 8 if small else 14)
+	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(cards)
+	cards.add_child(_choice_card(EmpireManager.ENDING_SIGN, Bust.COMBAT, "salute",
+		"END_SIGN_WHO", "END_SIGN_SAYS", "END_SIGN_WHAT", "BTN_END_SIGN", "accent", "upgrade"))
+	cards.add_child(_choice_card(EmpireManager.ENDING_BURN, Bust.COLONY, "point",
+		"END_BURN_WHO", "END_BURN_SAYS", "END_BURN_WHAT", "BTN_END_BURN", "warning", "sun"))
+
+func _choice_card(choice: String, who: String, mood: String, who_key: String, says_key: String,
+		what_key: String, btn_key: String, kind: String, glyph: String) -> PanelContainer:
+	var small := CT.is_phone()
+	var card := PanelContainer.new()
+	card.name = "Choice_" + choice
+	var st := CT.card_style("window")
+	st.set_content_margin_all(6 if small else 12)
+	card.add_theme_stylebox_override("panel", st)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4 if small else 8)
+	card.add_child(box)
+	# Quien habla: su cara y su nombre; lo que dice, entre comillas.
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	var face := Face.make(who, mood, 40 if small else 56)
+	face.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	head.add_child(face)
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_theme_constant_override("separation", 0)
+	head.add_child(words)
+	words.add_child(CT.label(Tr.t(who_key), "small", CT.text("window", true)))
+	var says := CT.para(Tr.t(says_key), "window", false, "small" if small else "body")
+	says.name = "Says"
+	words.add_child(says)
+	box.add_child(head)
+	# Lo que pasa, en una frase (gris).
+	var what := CT.para(Tr.t(what_key), "window", true, "small")
+	what.name = "What"
+	box.add_child(what)
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(spacer)
+	var btn := CT.text_button(Tr.t(btn_key), glyph, kind, CT.menu_h("btn"))
+	btn.name = "Choose_" + choice
+	btn.pressed.connect(choose.bind(choice))
+	box.add_child(btn)
+	return card
+
+## FIRMAR o QUEMAR (los botones de la mesa; publica para las pruebas).
+func choose(choice: String) -> void:
+	if not EmpireManager.choose_ending(choice):
+		return
+	show_ending(choice)
+
+# ── Paso 3: el final elegido ─────────────────────────────────────────
+
+## La pantalla de cierre de cada final, con lo que dice el OTRO instructor.
+func show_ending(choice: String) -> void:
+	_clear()
+	_step = choice
+	var small := CT.is_phone()
+	var sign: bool = choice == EmpireManager.ENDING_SIGN
+	var vbox := _open_window(Tr.t("END_SIGN_RIBBON" if sign else "END_BURN_RIBBON"),
+		CT.sem("ACCENT") if sign else CT.sem("POSITIVE"), "EndingWindow", WINDOW_MAX)
+	var byline := ColonyByline.new("section", CT.text("window"), Vector2(60, 40) if small else Vector2(72, 48))
+	byline.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(byline)
+	var body := CT.para(Tr.t("END_SIGN_BODY" if sign else "END_BURN_BODY"), "window")
+	body.name = "EndingBody"
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(body)
+	# El otro instructor dice la ultima palabra.
+	var reply := HBoxContainer.new()
+	reply.name = "EndingReply"
+	reply.alignment = BoxContainer.ALIGNMENT_CENTER
+	reply.add_theme_constant_override("separation", 8)
+	var face := Face.make(Bust.COLONY if sign else Bust.COMBAT, "worried" if sign else "happy", 40 if small else 52)
+	face.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	reply.add_child(face)
+	var reply_text := CT.para(Tr.t("END_SIGN_REPLY" if sign else "END_BURN_REPLY"), "window", false, "small")
+	reply_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reply.add_child(reply_text)
+	vbox.add_child(reply)
+	# Quemar: el premio (el emblema del sol) a la vista.
+	if not sign:
+		var reward := CT.icon_line("sun", Tr.t("END_BURN_REWARD"), "positive")
+		reward.name = "EndingReward"
+		reward.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_child(reward)
+	var coda := CT.para(Tr.t("END_SIGN_CODA" if sign else "END_BURN_CODA"), "window", true, "small")
+	coda.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(coda)
+	var row := _button_row()
+	if sign:
+		var arch := CT.text_button(Tr.t("BTN_VIEW_ARCHIPELAGO"), "anchor", "primary", CT.menu_h("btn"))
+		arch.name = "ArchipelagoButton"
+		arch.pressed.connect(open_archipelago)
+		row.add_child(arch)
+		var later := CT.text_button(Tr.t("BTN_CONTINUE"), "", "secondary", CT.menu_h("btn"))
+		later.name = "ContinueButton"
+		later.pressed.connect(_close)
+		row.add_child(later)
+	else:
+		var keep := CT.text_button(Tr.t("BTN_CONTINUE"), "next", "primary", CT.menu_h("btn"))
+		keep.name = "ContinueButton"
+		keep.pressed.connect(_close)
+		row.add_child(keep)
+		row.add_child(_new_game_button())
+
+# ── Piezas ───────────────────────────────────────────────────────────
+
+## Velo + ventana con cinta; devuelve la columna (dentro de un scroll) y deja
+## la fila de botones para _button_row(), fuera del scroll.
+var _body: VBoxContainer
+var _max := WINDOW_MAX
+
+func _open_window(title: String, fill: Color, node_name: String, max_size: Vector2) -> VBoxContainer:
+	var small := CT.is_phone()
+	_backdrop = CT.veil()
+	add_child(_backdrop)
+	var w := CT.menu_window(title, fill, small, false)
+	_window = w["root"]
+	_window.name = node_name
+	add_child(_window)
+	_body = w["body"]
+	_max = max_size
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body.add_child(scroll)
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 6 if small else 12)
+	scroll.add_child(vbox)
+	_place.call_deferred()
+	_set_menu_button_hidden(true)
+	return vbox
+
+func _button_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "Buttons"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	_body.add_child(row)
+	return row
+
+func _new_game_button() -> Button:
+	var new_btn := CT.text_button(Tr.t("BTN_NEW_GAME"), "plus", "secondary", CT.menu_h("btn"))
 	new_btn.name = "NewGameButton"
 	# Ya no borra nada: abre el selector de modo y crea otra partida.
 	new_btn.pressed.connect(func(): GameManager.request_new_game())
-	btn_row.add_child(new_btn)
-	body.add_child(btn_row)
+	return new_btn
 
-	var max_size := Vector2(WINDOW_MAX.x, minf(WINDOW_MAX.y, vp.y - 32.0))
-	CT.place_window(_window, vp, max_size, small)
-	_set_menu_button_hidden(true)
+func _place() -> void:
+	if _window == null or not is_instance_valid(_window):
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var max_size := Vector2(_max.x, minf(_max.y, vp.y - 32.0))
+	CT.place_window(_window, vp, max_size, CT.is_phone())
 
-func _close() -> void:
-	_set_menu_button_hidden(false)
+## Quita la ventana de ahora sin devolver el ☰ (se va a abrir otra).
+func _clear() -> void:
 	if _backdrop != null and is_instance_valid(_backdrop):
 		_backdrop.queue_free()
 	if _window != null and is_instance_valid(_window):
 		_window.queue_free()
+	_backdrop = null
+	_window = null
+
+func _close() -> void:
+	_clear()
+	_step = ""
+	_set_menu_button_hidden(false)
 
 ## El ☰ (capa 30) caia sobre la esquina de la ventana, que no tiene X que
 ## apartar: mientras se ve la Victoria, el ☰ se esconde. Lo que se escondio aqui

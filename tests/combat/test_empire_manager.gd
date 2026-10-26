@@ -54,11 +54,14 @@ func after_test() -> void:
 	ResourceManager.set_warehouse_count(_saved_warehouses)
 	ResourceManager.set_amounts(_saved_resources)
 
-## Un Ataque Final ya ganado en ProgressionManager.
-func _win_audit() -> void:
+## Un Ataque Final ya ganado en ProgressionManager y, con el final con eleccion
+## (v1.2), el libro FIRMADO (sin pasar por choose_ending: sin avisos ni guardado).
+func _win_audit(sign := true) -> void:
 	var audit: FinalAudit = FinalAuditScript.create(99, {"infantry": 3}, 3, 70.0)
 	audit.state = FinalAudit.State.WON
 	ProgressionManager.final_audit = audit
+	if sign:
+		EmpireManager._ending = EmpireManager.ENDING_SIGN
 
 func _book() -> Archipelago:
 	return EmpireManager.get_book()
@@ -85,13 +88,24 @@ func test_builder_and_sandbox_have_no_phase() -> void:
 	GameMode.begin_run(GameMode.Mode.SURVIVAL)
 	assert_bool(EmpireManager.is_active()).is_true()
 
-func test_an_old_saved_victory_enters_the_phase_on_load() -> void:
-	_win_audit()
-	# Guardado anterior a la fase: sin clave "empire".
+## Final con eleccion (v1.2): un guardado ganado sin clave "empire" vuelve a la
+## mesa del libro (no entra solo en la fase); uno de la rama del imperio que ya
+## la habia empezado, firmo.
+func test_an_old_saved_victory_goes_back_to_the_book_on_load() -> void:
+	_win_audit(false)
 	EmpireManager.load_save_data({})
-	assert_bool(_book().started).is_false()
+	assert_bool(EmpireManager.choice_pending()).is_true()
 	EventBus.game_load_completed.emit()
-	assert_bool(_book().started).is_true()
+	assert_bool(_book().started).is_false()
+	assert_bool(EmpireManager.is_active()).is_false()
+
+func test_an_old_started_empire_save_counts_as_signed() -> void:
+	_win_audit(false)
+	var data: Dictionary = BookScript.new().to_dict()
+	data["started"] = true
+	EmpireManager.load_save_data(data)
+	assert_str(EmpireManager.ending()).is_equal(EmpireManager.ENDING_SIGN)
+	assert_bool(EmpireManager.is_active()).is_true()
 
 # ── Candados ─────────────────────────────────────────────────────────
 

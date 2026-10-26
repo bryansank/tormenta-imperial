@@ -589,3 +589,10 @@ signal archipelago_conquered()
 ## Las islas conquistadas pagaron (recurso -> cantidad, ya en la bolsa).
 @warning_ignore("unused_signal")
 signal empire_tribute_paid(amounts: Dictionary)
+
+# ── Final con eleccion (v1.2, decision de Bryan 2026-10-25) ──
+## El jugador decidio que hacer con el libro del Impuesto tras ganar el Ataque
+## Final: `choice` = "sign" (firma: la fase del archipielago) o "burn" (lo
+## quema: la isla queda libre). Una vez por partida (EmpireManager.choose_ending).
+@warning_ignore("unused_signal")
+signal ending_chosen(choice: String)

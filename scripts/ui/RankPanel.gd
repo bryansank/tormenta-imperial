@@ -49,6 +49,8 @@ var _is_open := false
 const HUB_ENTRIES := [
 	["progress", "BTN_PROGRESS", "ProgressPanel", "star"],
 	["contracts", "BTN_CONTRACTS", "ContractPanel", "check"],
+	# Volverse el Imperio (v1.2): el mapa de las islas, solo tras FIRMAR el libro.
+	["archipelago", "BTN_ARCHIPELAGO", "ArchipelagoPanel", "anchor"],
 	["log", "BTN_LOG_MENU", "NotificationPanel", "clock"],
 	["sandbox", "BTN_SANDBOX", "SandboxPanel", "wrench"],
 ]
@@ -71,6 +73,8 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(refresh)
 	# Volverse el Imperio: una isla tomada puede cambiar el titulo imperial.
 	EventBus.island_conquered.connect(func(_i): refresh())
+	# Final con eleccion: firmar abre el ARCHIPIELAGO; quemar cambia el titulo.
+	EventBus.ending_chosen.connect(func(_c): refresh())
 	EventBus.game_new_started.connect(refresh)
 	get_viewport().size_changed.connect(_relayout)
 	refresh()
@@ -413,6 +417,8 @@ static func hub_entry_available(id: String) -> bool:
 			return GameMode.sandbox_tools()
 		"contracts":
 			return GameMode.contracts_enabled()
+		"archipelago":
+			return EmpireManager.is_active()
 	return true
 
 ## Cierra la tarjeta y abre el panel de esa entrada (si ya estaba abierto, lo

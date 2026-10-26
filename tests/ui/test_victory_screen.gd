@@ -100,26 +100,36 @@ func test_it_opens_at_once() -> void:
 	screen._on_victory_achieved(STATS)
 	assert_bool(screen.is_showing()).is_true()
 
-# ── Volverse el Imperio (feat/volverse-imperio) ──────────────────────
+# ── Final con eleccion (v1.2) ────────────────────────────────────────
 
-## En Campana la victoria dice "Ahora el Imperio eres tu" y lleva el boton del
-## archipielago; en Constructor, no.
-func test_the_campaign_victory_is_now_the_empire() -> void:
+## En Campana, ganado el Ataque Final y sin elegir aun, la victoria lleva a la
+## mesa del libro (EL LIBRO) en vez de SEGUIR; en Constructor, no.
+func test_the_campaign_victory_leads_to_the_book() -> void:
 	var saved_mode: int = GameMode.current
+	var saved_audit = ProgressionManager.final_audit
+	var saved_empire: Dictionary = EmpireManager.get_save_data()
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
+	EmpireManager.reset()
+	var audit: FinalAudit = preload("res://scripts/combat/FinalAudit.gd").create(7, {"infantry": 3}, 3, 70.0)
+	audit.state = FinalAudit.State.WON
+	ProgressionManager.final_audit = audit
 	var screen := _screen()
 	screen._on_victory_achieved(STATS)
+	var has_book: bool = screen.find_child("BookButton", true, false) != null
+	var has_continue: bool = screen.find_child("ContinueButton", true, false) != null
+	ProgressionManager.final_audit = saved_audit
+	EmpireManager.load_save_data(saved_empire)
 	GameMode.current = saved_mode
-	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_TITLE_EMPIRE"))).is_true()
-	assert_bool(_has_label(screen, Tr.t("LBL_VICTORY_CODA_EMPIRE"))).is_true()
-	assert_object(screen.find_child("ArchipelagoButton", true, false)).is_not_null()
+	assert_bool(has_book).is_true()
+	assert_bool(has_continue).is_false()
 
-func test_the_builder_victory_has_no_archipelago() -> void:
+func test_the_builder_victory_has_no_book() -> void:
 	var saved_mode: int = GameMode.current
 	GameMode.begin_run(GameMode.Mode.BUILDER)
 	var screen := _screen()
 	screen._on_victory_achieved(STATS.merged({"mode": "builder"}))
 	GameMode.current = saved_mode
+	assert_object(screen.find_child("BookButton", true, false)).is_null()
 	assert_object(screen.find_child("ArchipelagoButton", true, false)).is_null()
 
 ## La pantalla monta el ArchipelagoPanel como hermano (asi ☰ MENU lo encuentra).

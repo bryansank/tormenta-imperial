@@ -157,6 +157,9 @@ static func _next(support: bool) -> Dictionary:
 	# siguiente es la proxima conquista del archipielago (su edificio, tropa de
 	# su medio o la mision); con todas las islas tuyas, mundo libre.
 	if StormManager.is_halted():
+		# Final con eleccion (v1.2): antes de nada, que hacer con el libro.
+		if EmpireManager.choice_pending():
+			return {"kind": "sandbox", "why": "OBJ_WHY_BOOK"}
 		var conquest: Dictionary = empire_step()
 		if not conquest.is_empty():
 			return _support_or(conquest) if String(conquest["kind"]) != "conquest" else conquest
