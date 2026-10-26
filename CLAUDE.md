@@ -14,7 +14,7 @@ Detailed per-system docs live in `docs/` (see `docs/INDEX.md`).
 
 - **Engine:** Godot 4.7 .NET Edition (Forward+ renderer on PC, Mobile renderer on Android via `rendering_method.mobile`)
 - **Languages:** GDScript for everything, turn-based combat included (it shipped in GDScript). There is no C# project (no `.csproj`, no `.cs` files) and none is planned for v1 — see "Key Rule" below
-- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3200 tests in 242 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
+- **Tests:** gdUnit4 (`addons/gdUnit4`), ~3210 tests in 244 suites under `tests/` (audio, build, buildings, combat, economy, input, integration, map, modes, save, storm, support, tutorial, ui, view2d) — **always** through the wrapper:
   ```bash
   GODOT=/path/to/godot tools/run_tests.sh              # whole suite
   GODOT=/path/to/godot tools/run_tests.sh -a tests/combat
@@ -1327,7 +1327,7 @@ tormenta-imperial/
 |   +-- 01_...08_*.yaml              # One regression flow per tablet bug (README.md explains how to run them)
 |   +-- comun/                       # Shared sub-flows: start, new game, skip lore, wait
 |   +-- herramientas/                # Python helpers to collect and compare screenshots
-+-- tests/                           # gdUnit4, 242 suites: audio/ build/ buildings/ combat/ economy/ input/
++-- tests/                           # gdUnit4, 244 suites: audio/ build/ buildings/ combat/ economy/ input/
 |                                    #   integration/ map/ modes/ save/ storm/ support/ tutorial/ ui/ view2d/
 |   +-- save/save_parking.gd         # Parks the real save during a suite; refuses the player's dir
 |   +-- save/settings_parking.gd     # Same for settings.cfg and GameConfig's UI fields
