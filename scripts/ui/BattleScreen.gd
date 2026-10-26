@@ -221,6 +221,7 @@ func _ready() -> void:
 	_setup_ui()
 	visible = false
 
+	EventBus.shortcut_pressed.connect(_on_shortcut)
 	EventBus.encounter_started.connect(_on_encounter_started)
 	EventBus.turn_started.connect(_on_turn_started)
 	EventBus.unit_moved.connect(_on_unit_moved)
@@ -378,8 +379,11 @@ func _build_board_view() -> void:
 	_defend_btn.name = "DefendButton"
 	_wait_btn = _make_action(Tr.t("BTN_WAIT"), func(): _act_wait(), "clock", "secondary")
 	_wait_btn.name = "WaitButton"
+	_defend_btn.tooltip_text = InputService.hint(Tr.t("BTN_DEFEND"), "defend")
+	_wait_btn.tooltip_text = InputService.hint(Tr.t("BTN_WAIT"), "wait")
 	_end_btn = _make_action(Tr.t("BTN_END_TURN"), func(): _act_end_turn(), "next", "primary")
 	_end_btn.name = "EndTurnButton"
+	_end_btn.tooltip_text = InputService.hint(Tr.t("BTN_END_TURN"), "end_turn")
 	# AVANZAR: solo en el frente, donde no hay casillas que tocar para moverse.
 	_advance_btn = _make_action(Tr.t("BTN_ADVANCE"), func(): _act_advance(), "upgrade", "open")
 	_advance_btn.name = "AdvanceButton"
@@ -1287,6 +1291,26 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.device != InputEvent.DEVICE_ID_EMULATION:
 		if _touch_mode:
 			set_touch_mode(false)
+
+## Hay algo de combate a la vista (tablero, mapa, reparto o parte).
+func is_open() -> bool:
+	return visible
+
+## Atajos de PC (InputService): Enter fin de turno, D defender, E esperar. Solo con
+## el tablero a la vista y el boton vivo (el turno es del jugador).
+func _on_shortcut(action: StringName) -> void:
+	if not visible or _view != View.BOARD:
+		return
+	match action:
+		&"end_turn":
+			if not _end_btn.disabled:
+				_act_end_turn()
+		&"defend":
+			if not _defend_btn.disabled:
+				_act_defend()
+		&"wait":
+			if not _wait_btn.disabled:
+				_act_wait()
 
 func map_button_count() -> int:
 	return _map_buttons.size()

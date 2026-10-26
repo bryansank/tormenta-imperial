@@ -90,6 +90,84 @@ func _purge_touch_state() -> void:
 func _process(_delta: float) -> void:
 	_handle_keyboard()
 
+# ── Atajos de teclado de PC ──
+# Raw Input -> InputService -> EventBus.shortcut_pressed -> quien lo posee.
+# B construir, M misiones, H ayuda (solo en el mapa), 1/2/3 velocidad, y en el
+# tablero de combate Enter fin de turno, D defender, E esperar. Espacio (pausa)
+# lo atiende PauseMenu. Esc sigue en UIManager.
+
+## tecla -> accion.
+const SHORTCUT_KEYS := {
+	KEY_B: "build", KEY_M: "missions", KEY_H: "help",
+	KEY_1: "speed_1", KEY_2: "speed_2", KEY_3: "speed_3",
+	KEY_ENTER: "end_turn", KEY_KP_ENTER: "end_turn", KEY_D: "defend", KEY_E: "wait",
+}
+const MAP_ACTIONS := ["build", "missions", "help"]
+const BATTLE_ACTIONS := ["end_turn", "defend", "wait"]
+## Texto de la tecla para los tooltips.
+const SHORTCUT_LABELS := {"build": "B", "missions": "M", "help": "H", "pause": "Espacio",
+	"end_turn": "Enter", "defend": "D", "wait": "E"}
+
+## Pura: la accion de un atajo, o "" si en este contexto no toca. `battle_open`: el
+## tablero de combate esta abierto; `title_open`: el menu principal esta encima.
+static func shortcut_action(keycode: int, battle_open: bool, title_open: bool, typing: bool) -> String:
+	if typing or title_open:
+		return ""
+	var action: String = SHORTCUT_KEYS.get(keycode, "")
+	if action in MAP_ACTIONS and battle_open:
+		return ""
+	if action in BATTLE_ACTIONS and not battle_open:
+		return ""
+	return action
+
+## "Construir (B)" solo en perfil PC; en tablet y telefono el texto tal cual.
+func hint(text: String, action: String) -> String:
+	if DeviceProfile.current() != DeviceProfile.PC or not SHORTCUT_LABELS.has(action):
+		return text
+	return "%s (%s)" % [text, SHORTCUT_LABELS[action]]
+
+## Hay un tablero (o mapa de expedicion) de combate a la vista.
+func battle_open() -> bool:
+	if not is_inside_tree():
+		return false
+	var b: Node = get_tree().get_first_node_in_group("battle_screen")
+	return b != null and b.has_method("is_open") and bool(b.is_open())
+
+func _title_open() -> bool:
+	if not is_inside_tree() or get_tree().current_scene == null:
+		return false
+	var t: Node = get_tree().current_scene.get_node_or_null("TitleMenu")
+	return t != null and t.has_method("is_open") and bool(t.is_open())
+
+func is_typing() -> bool:
+	var focused := get_viewport().gui_get_focus_owner()
+	return focused is LineEdit or focused is TextEdit
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	if key.ctrl_pressed or key.alt_pressed or key.meta_pressed or key.shift_pressed:
+		return
+	handle_shortcut(key.keycode)
+	if SHORTCUT_KEYS.has(key.keycode) and shortcut_action(key.keycode, battle_open(), _title_open(), is_typing()) != "":
+		get_viewport().set_input_as_handled()
+
+## Resuelve y emite un atajo. Publico para pruebas. Devuelve la accion ("" si nada).
+func handle_shortcut(keycode: int) -> String:
+	var action := shortcut_action(keycode, battle_open(), _title_open(), is_typing())
+	if action == "":
+		return ""
+	if action.begins_with("speed_"):
+		var speed := float(action.trim_prefix("speed_"))
+		if speed in GameConfig.GAME_SPEEDS:
+			GameConfig.set_game_speed(speed)
+		else:
+			return ""
+	else:
+		EventBus.shortcut_pressed.emit(StringName(action))
+	return action
+
 ## F11 alterna pantalla completa desde cualquier parte del juego. Va en _input
 ## (no en _unhandled_input) para que siga funcionando con un panel abierto.
 func _input(event: InputEvent) -> void:
@@ -130,6 +208,9 @@ func _is_mouse_over_ui() -> bool:
 # ── Keyboard ──
 
 func _handle_keyboard() -> void:
+	# Con el tablero de combate abierto el mapa no se mueve (D y E son del combate).
+	if battle_open():
+		return
 	# Don't process camera keys when a text field has focus
 	var focused := get_viewport().gui_get_focus_owner()
 	if focused is LineEdit or focused is TextEdit:

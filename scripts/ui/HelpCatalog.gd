@@ -62,6 +62,9 @@ const ENTRIES := {
 	# danos (la leccion de reparar). La de reparar solo donde hay Tormenta.
 	"guide_rotate": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_ROTATE", "body": "HELP_B_ROTATE", "target": "build_button"},
+	# Atajos de teclado de PC (2026-10-26, feat/atajos-pc).
+	"guide_keys": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_KEYS", "body": "HELP_B_KEYS", "target": ""},
 	"guide_move": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_MOVE", "body": "HELP_B_MOVE", "target": ""},
 	"guide_demolish": {"kind": "guide", "cat": CAT_BASICS, "basic": true,

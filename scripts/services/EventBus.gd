@@ -363,6 +363,14 @@ signal graphics_quality_changed(quality: String)
 @warning_ignore("unused_signal")
 signal game_speed_changed(speed: float)
 
+## Un atajo de teclado de PC ya filtrado por InputService (sin LineEdit con foco,
+## sin menu principal, con el contexto bueno): "build", "missions", "help",
+## "end_turn", "defend" o "wait". Quien lo posee (BottomBar, BattleScreen) lo
+## ejecuta. La velocidad (1/2) la aplica el propio InputService, y la pausa
+## (Espacio) PauseMenu, que es el unico que oye con el arbol en pausa.
+@warning_ignore("unused_signal")
+signal shortcut_pressed(action: StringName)
+
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
 
