@@ -62,7 +62,8 @@ func test_short_of_gold_greys_the_deal_and_sold_says_done() -> void:
 	var second := (cards[1] as Node).find_child("Take", true, false) as Button
 	assert_bool(first.disabled).is_true()
 	assert_bool(second.disabled).is_true()
-	assert_str(second.text).is_equal(Tr.t("BTN_SMUGGLER_DONE"))
+	# CartoonTheme: el texto de la pastilla vive en su meta (CT.button_text).
+	assert_str(preload("res://scripts/ui/CartoonTheme.gd").button_text(second)).is_equal(Tr.t("BTN_SMUGGLER_DONE"))
 
 func test_without_a_ship_it_says_so() -> void:
 	EconomyManager.load_save_data({})

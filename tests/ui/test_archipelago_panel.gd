@@ -27,6 +27,8 @@ func before_test() -> void:
 	var audit: FinalAudit = FinalAuditScript.create(7, {"infantry": 3}, 3, 70.0)
 	audit.state = FinalAudit.State.WON
 	ProgressionManager.final_audit = audit
+	# Final con eleccion (v1.2): el archipielago es de quien firmo el libro.
+	EmpireManager._ending = EmpireManager.ENDING_SIGN
 
 func after_test() -> void:
 	ProgressionManager.final_audit = null
@@ -117,7 +119,7 @@ func test_the_missions_panel_has_the_empire_tab() -> void:
 	assert_str(String(offer.get("kind", ""))).is_equal(ExpeditionGenerator.KIND_CONQUEST)
 	assert_str(String(offer.get("island", ""))).is_equal("ember")
 	# La tropa se filtra por el medio de la mision que toca (aire en Brasa).
-	assert_str(panel._picker_domain()).is_equal(BookScript.mission_domain("ember", 0))
+	assert_str(panel.pure_domain()).is_equal(BookScript.mission_domain("ember", 0))
 
 func test_a_conquest_map_names_the_island_and_paints_its_domain() -> void:
 	var screen: CanvasLayer = auto_free(load("res://scenes/ui/BattleScreen.tscn").instantiate())

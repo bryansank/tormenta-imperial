@@ -14,20 +14,27 @@ extends CanvasLayer
 ## Rendimiento: se construye la primera vez que se abre; el mapa es un _draw
 ## que solo se repinta al cambiar algo (empire_changed, eleccion, tamano); un
 ## Timer de 1 s cuenta el proximo cobro solo mientras esta abierto.
+##
+## v1.2 (integracion): ventana de CartoonTheme (cinta azul, X con dodge del menu,
+## velo), el mapa a la izquierda y la ficha de la isla a la derecha con su
+## propio scroll (cabe en 640x360), y la cara del Sargento quieta (sin
+## animacion de hablar, docs/28 §0.6).
 
 const NODE_NAME := "ArchipelagoPanel"
 const InstructorBust := preload("res://scripts/ui/InstructorBust.gd")
+const Face := preload("res://scripts/ui/InstructorFace.gd")
+const CT := preload("res://scripts/ui/CartoonTheme.gd")
+## Tope de la ventana en PC/tablet.
+const WINDOW_MAX := Vector2(1080, 640)
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const ConquestGen := preload("res://scripts/empire/ConquestGenerator.gd")
 const ArchipelagoScript := preload("res://scripts/empire/Archipelago.gd")
 const DragScroll := preload("res://scripts/ui/DragScroll.gd")
-const CARD_WIDTH := 760.0
-const BUST_SIZE := Vector2(88, 110)
 
 var _built := false
 var _root: Control
 var _backdrop: ColorRect
-var _card: PanelContainer
+var _card: Control
 var _scroll: ScrollContainer
 var _voice_row: HBoxContainer
 var _bust: Control
@@ -61,8 +68,6 @@ func open() -> void:
 	_refresh()
 	_timer.start()
 	# La primera vez, el Sargento cuenta de que va (y ya no se repite).
-	if _voice_row.visible:
-		_bust.speak(_quote)
 	if not EmpireManager.intro_seen() and EmpireManager.is_active():
 		EmpireManager.mark_intro_seen()
 
@@ -70,8 +75,6 @@ func close() -> void:
 	visible = false
 	if _timer != null:
 		_timer.stop()
-	if _bust != null:
-		_bust.finish_speaking()
 
 func toggle() -> void:
 	if visible:
@@ -97,79 +100,91 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build() -> void:
 	_built = true
+	var small := CT.is_phone()
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	_backdrop = UITheme.make_backdrop()
+	_backdrop = CT.veil()
+	_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_backdrop.gui_input.connect(func(e): if e is InputEventMouseButton and e.pressed: close())
 	_root.add_child(_backdrop)
 
-	_card = PanelContainer.new()
+	var w := CT.menu_window(Tr.t("LBL_ARCHIPELAGO_TITLE"), CT.sem("INFO"), small, true)
+	_card = w["root"]
 	_card.name = "ArchipelagoCard"
-	_card.add_theme_stylebox_override("panel", UITheme.make_war_table_style())
 	_root.add_child(_card)
+	(w["close"] as Button).pressed.connect(close)
+	var column: VBoxContainer = w["body"]
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	_card.add_child(column)
-	column.add_child(UITheme.make_panel_header(Tr.t("LBL_ARCHIPELAGO_TITLE"), close))
-
-	_scroll = ScrollContainer.new()
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(_scroll)
-	DragScroll.attach.call_deferred(_scroll)
-
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 10)
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll.add_child(body)
-
-	# El Sargento y su frase (se puede apagar en Ajustes, como en los partes).
+	# El Sargento (cara quieta) y su frase.
 	_voice_row = HBoxContainer.new()
 	_voice_row.name = "InstructorRow"
-	_voice_row.add_theme_constant_override("separation", 10)
+	_voice_row.add_theme_constant_override("separation", 8)
 	_voice_row.visible = GameConfig.ui_instructors_visible
-	body.add_child(_voice_row)
-	_bust = InstructorBust.new()
+	column.add_child(_voice_row)
+	_bust = Face.make(InstructorBust.COMBAT, "salute", 36 if small else 48)
 	_bust.name = "Instructor"
-	_bust.custom_minimum_size = BUST_SIZE
 	_bust.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_bust.show_as(InstructorBust.COMBAT, "salute", 1)
 	_voice_row.add_child(_bust)
-	_quote = UITheme.make_label("", "body", UITheme.TEXT_BRIGHT)
+	_quote = CT.para("", "window", false, "small" if small else "body")
 	_quote.name = "Quote"
-	_quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_quote.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_quote.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_voice_row.add_child(_quote)
 	EventBus.instructors_visibility_changed.connect(func(on: bool): _voice_row.visible = on)
 
-	_summary = UITheme.make_label("", "section", UITheme.ACCENT)
-	_summary.name = "Summary"
-	_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(_summary)
-	_tribute = UITheme.make_label("", "small", UITheme.POSITIVE)
-	_tribute.name = "TributeLine"
-	_tribute.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(_tribute)
-	_countdown = UITheme.make_label("", "small", UITheme.TEXT_DIM)
-	_countdown.name = "TributeCountdown"
-	body.add_child(_countdown)
+	var main := HBoxContainer.new()
+	main.name = "Main"
+	main.add_theme_constant_override("separation", 8 if small else 14)
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(main)
 
+	# Izquierda: el mapa y, debajo, cuantas islas, el tributo y el proximo cobro.
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 1.4
+	left.add_theme_constant_override("separation", 2)
+	main.add_child(left)
 	_map = ArchipelagoMap.new()
 	_map.name = "ArchipelagoMap"
-	_map.custom_minimum_size = Vector2(0, 300)
+	_map.custom_minimum_size = Vector2(0, 120)
 	_map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_map.island_pressed.connect(select_island)
-	body.add_child(_map)
+	left.add_child(_map)
+	_summary = CT.label("", "small", CT.text("window"))
+	_summary.name = "Summary"
+	_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	left.add_child(_summary)
+	_tribute = CT.label("", "small", CT.positive_text())
+	_tribute.name = "TributeLine"
+	_tribute.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	left.add_child(_tribute)
+	_countdown = CT.label("", "small", CT.text("window", true))
+	_countdown.name = "TributeCountdown"
+	left.add_child(_countdown)
 
+	# Derecha: la ficha de la isla elegida, con su propio scroll.
+	var right := PanelContainer.new()
+	right.name = "IslandPanel"
+	var st := CT.card_style("window")
+	st.set_content_margin_all(6 if small else 12)
+	right.add_theme_stylebox_override("panel", st)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_child(right)
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right.add_child(_scroll)
+	DragScroll.attach.call_deferred(_scroll)
 	_island_box = VBoxContainer.new()
 	_island_box.name = "IslandCard"
-	_island_box.add_theme_constant_override("separation", 6)
-	body.add_child(_island_box)
+	_island_box.add_theme_constant_override("separation", 4 if small else 6)
+	_island_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_island_box)
 
 	_timer = Timer.new()
 	_timer.wait_time = 1.0
@@ -182,15 +197,7 @@ func _relayout() -> void:
 	if _card == null or not visible:
 		return
 	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var edge: float = 16.0
-	var w: float = minf(CARD_WIDTH, maxf(vp.x - edge * 2.0, 200.0))
-	var h: float = maxf(vp.y - edge * 2.0, 200.0)
-	_card.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_card.position = Vector2((vp.x - w) * 0.5, edge)
-	_card.size = Vector2(w, h)
-	_card.custom_minimum_size = Vector2(w, h)
-	# El mapa, mas bajo en pantallas bajas (movil apaisado).
-	_map.custom_minimum_size.y = clampf(h * 0.45, 200.0, 360.0)
+	CT.place_window(_card, vp, WINDOW_MAX, CT.is_phone())
 
 func _rebuild_if_open() -> void:
 	if not _built:
@@ -253,85 +260,85 @@ func quote_text() -> String:
 ## La ficha de la isla elegida.
 func _rebuild_island_card() -> void:
 	for child in _island_box.get_children():
+		_island_box.remove_child(child)
 		child.queue_free()
+	var small := CT.is_phone()
 	if _selected == "":
-		_island_box.add_child(UITheme.make_label(Tr.t("LBL_ARCH_PICK"), "small", UITheme.TEXT_DIM))
+		_island_box.add_child(CT.icon_line("anchor", Tr.t("LBL_ARCH_PICK"), "", "window", "body"))
 		return
 	var island_id: String = _selected
 	var def: Dictionary = GameConfig.empire_island(island_id)
 	var conquered: bool = EmpireManager.is_conquered(island_id)
 
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 10)
+	head.add_theme_constant_override("separation", 8)
 	_island_box.add_child(head)
 	var crest := TextureRect.new()
 	crest.name = "Crest"
 	crest.texture = ColonyFlag.current_small_texture() if conquered else ColonyFlag.small_texture(def.get("crest", {}))
-	crest.custom_minimum_size = Vector2(48, 32)
+	crest.custom_minimum_size = Vector2(42, 28) if small else Vector2(48, 32)
 	crest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	crest.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	crest.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(crest)
 	var names := VBoxContainer.new()
 	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	names.add_theme_constant_override("separation", 0)
 	head.add_child(names)
-	var name_label := UITheme.make_label(Tr.t(ConquestGen.island_name_key(island_id)), "section", UITheme.TEXT_BRIGHT)
+	var name_label := CT.label(Tr.t(ConquestGen.island_name_key(island_id)), "button" if small else "title", CT.text("window"))
 	name_label.name = "IslandName"
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	names.add_child(name_label)
 	var stars: String = "★".repeat(ArchipelagoScript.tier(island_id)) + "☆".repeat(3 - ArchipelagoScript.tier(island_id))
-	names.add_child(UITheme.make_label(Tr.t("LBL_ARCH_TIER") % stars, "small", UITheme.WARNING))
+	names.add_child(CT.label(Tr.t("LBL_ARCH_TIER") % stars, "small", CT.tone_color("warning")))
 
-	var desc := UITheme.make_label(Tr.t("EMP_ISLE_%s_DESC" % island_id.to_upper()), "small", UITheme.TEXT_DIM)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var desc := CT.para(Tr.t("EMP_ISLE_%s_DESC" % island_id.to_upper()), "window", true, "small")
 	_island_box.add_child(desc)
 
-	# La cadena de misiones: ✔ hechas, ▶ la que toca, ☠ el jefe.
+	# La cadena de misiones: el recorrido de siempre (hechas, la que toca, jefe)
+	# y una linea por mision (medio y combates) en pequeno.
 	var won: int = EmpireManager.won(island_id)
 	var total: int = EmpireManager.total(island_id)
-	_island_box.add_child(UITheme.make_label(Tr.t("LBL_ARCH_MISSIONS") % [won, total], "small", UITheme.ACCENT))
+	var track := CT.campaign_track(won, total, small, Tr.t("EMP_BOSS_WARNING"))
+	track.name = "IslandTrack"
+	track.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_island_box.add_child(track)
 	for i in range(total):
 		var m: Dictionary = ArchipelagoScript.mission_def(island_id, i)
-		var mark: String = "✔" if i < won else ("▶" if i == won else ("☠" if bool(m.get("boss", false)) else "·"))
-		var line := "%s  %s · %s · %s" % [mark, Tr.t(String(m.get("name", ""))),
-			Tr.t("LBL_DOMAIN_" + String(m.get("domain", "land")).to_upper()),
-			Tr.t("CAMP_KIND_FIGHTS") % int(m.get("fights", 1))]
-		var row := UITheme.make_label(line, "small", UITheme.TEXT if i >= won else UITheme.TEXT_DIM)
+		var domain: String = String(m.get("domain", "land"))
+		var glyph: String = String({"land": "tank", "sea": "anchor", "air": "plane"}.get(domain, "missions"))
+		if i < won:
+			glyph = "check"
+		var line := "%s · %s" % [Tr.t(String(m.get("name", ""))), Tr.t("CAMP_KIND_FIGHTS") % int(m.get("fights", 1))]
+		var row := CT.icon_line(glyph, line, "" if i >= won else "positive")
 		row.name = "Mission_%d" % i
-		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.tooltip_text = Tr.t("LBL_DOMAIN_" + domain.to_upper())
 		_island_box.add_child(row)
 
 	var tribute: Dictionary = ArchipelagoScript.tribute_of(island_id)
-	var pays := UITheme.make_label(Tr.t("LBL_ARCH_ISLAND_PAYS" if conquered else "LBL_ARCH_ISLAND_TRIBUTE") % EmpireManager.amounts_text(tribute),
-		"small", UITheme.POSITIVE)
-	pays.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var pays := CT.icon_line("market", Tr.t("LBL_ARCH_ISLAND_PAYS" if conquered else "LBL_ARCH_ISLAND_TRIBUTE") % EmpireManager.amounts_text(tribute), "positive")
+	pays.name = "IslandPays"
 	_island_box.add_child(pays)
 
 	var rewards: Array = EmpireManager.reward_lines(island_id)
-	if not rewards.is_empty():
-		_island_box.add_child(UITheme.make_label(Tr.t("LBL_ARCH_REWARD"), "small", UITheme.ACCENT))
-		for text in rewards:
-			var r := UITheme.make_label("  " + String(text), "small", UITheme.TEXT_DIM if conquered else UITheme.TEXT)
-			r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			_island_box.add_child(r)
+	for text in rewards:
+		_island_box.add_child(CT.icon_line("star", String(text), "" if conquered else "accent"))
 
 	if conquered:
-		var yours := UITheme.make_label(Tr.t("LBL_ARCH_YOURS"), "section", UITheme.POSITIVE)
+		var yours := CT.icon_line("check", Tr.t("LBL_ARCH_YOURS"), "positive", "window", "body")
 		yours.name = "IslandYours"
 		_island_box.add_child(yours)
 		return
 
 	var lock: String = EmpireManager.lock_reason(island_id)
 	if lock != "":
-		var why := UITheme.make_label(EmpireManager.lock_text(island_id), "small", UITheme.WARNING)
+		var why := CT.icon_line("lock", EmpireManager.lock_text(island_id), "warning")
 		why.name = "IslandLock"
-		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_island_box.add_child(why)
-	var attack := Button.new()
-	attack.name = "AttackButton"
-	attack.text = Tr.t("BTN_ARCH_ATTACK")
-	attack.custom_minimum_size = Vector2(0, UITheme.MIN_BTN_H + 6)
-	UITheme.style_button(attack, UITheme.CAT_MILITARY.darkened(0.15), UITheme.FONT_BUTTON)
 	# Con la tropa descansando o una columna fuera, se puede mirar pero no salir.
+	var attack := CT.text_button(Tr.t("BTN_ARCH_ATTACK"), "missions", "primary" if lock == "" else "disabled",
+		CT.menu_h("btn"))
+	attack.name = "AttackButton"
 	attack.disabled = lock != ""
 	attack.tooltip_text = EmpireManager.lock_text(island_id)
 	attack.pressed.connect(func(): prepare_attack(island_id))
