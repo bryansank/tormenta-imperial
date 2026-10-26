@@ -18,6 +18,9 @@ const BookScript := preload("res://scripts/combat/CampaignBook.gd")
 
 var _storm_saved: Dictionary = {}
 var _army_saved: Dictionary = {}
+## El rango: estas pruebas ganan peleas y piezas (XP); sin devolverlo, otra suite
+## veria subir de rango y sus consejos.
+var _rank_saved: Dictionary = {}
 var _progression_saved: Dictionary = {}
 var _campaigns_saved: Dictionary = {}
 var _spread_saved := 0.0
@@ -29,6 +32,7 @@ var _chapters: Array = []
 func before_test() -> void:
 	_storm_saved = StormManager.get_save_data()
 	_army_saved = ArmyManager.get_save_data()
+	_rank_saved = RankManager.get_save_data()
 	_progression_saved = ProgressionManager.get_save_data()
 	_campaigns_saved = CombatManager.get_campaigns_save_data()
 	_spread_saved = GameConfig.combat_damage_spread
@@ -54,6 +58,7 @@ func after_test() -> void:
 	CombatManager.load_campaigns_save_data(_campaigns_saved)
 	StormManager.load_save_data(_storm_saved)
 	ArmyManager.load_save_data(_army_saved)
+	RankManager.load_save_data(_rank_saved)
 
 func _on_auto(victory: bool, rounds: int, summary: Dictionary) -> void:
 	_auto.append([victory, rounds, summary])
@@ -217,7 +222,7 @@ func test_the_final_assault_has_a_single_key() -> void:
 	# El CG nivel 3 ya pidio las piezas: con el, el Ataque Final esta listo.
 	assert_bool(ProgressionManager.final_audit_ready()).is_true()
 
-func test_colonist_hq_asks_for_less_workshop_material() -> void:
+func test_colonist_hq_asks_for_less_material_and_bag() -> void:
 	var hq: BuildingData = load("res://data/buildings/headquarters.tres")
 	GameMode.tier = GameMode.Tier.GOVERNOR
 	var full: Dictionary = GameConfig.get_upgrade_cost(hq, 3)
@@ -226,7 +231,9 @@ func test_colonist_hq_asks_for_less_workshop_material() -> void:
 	var beams: int = ResourceManager.Type.BEAMS
 	var gold: int = ResourceManager.Type.GOLD
 	assert_int(int(col[beams])).is_less(int(full[beams]))
-	assert_int(int(col[gold])).is_equal(int(full[gold]))
+	# Y tres cuartos de la bolsa (hq_resource_mult); Gobernador la entera.
+	assert_int(int(col[gold])).is_equal(roundi(float(full[gold]) * GameConfig.game_tier_rules["colonist"]["hq_resource_mult"]))
+	assert_int(int(full[gold])).is_equal(int(GameConfig.hq_upgrade_costs[3]["gold"]))
 
 # ── Los capitulos ────────────────────────────────────────────────────
 
@@ -291,3 +298,13 @@ func test_the_retry_ease_is_shown_as_a_percentage() -> void:
 	assert_int(want).is_greater(0)
 	CombatManager.load_campaigns_save_data({"seed": 3})
 	assert_int(CombatManager.campaign_retry_ease_pct("land")).is_equal(0)
+
+## Colono baja una oleada al asedio (3-4); Gobernador el de siempre (4-5).
+func test_colonist_siege_has_one_wave_less() -> void:
+	GameMode.tier = GameMode.Tier.COLONIST
+	var col: Vector2i = GameConfig.get_final_audit_waves()
+	GameMode.tier = GameMode.Tier.GOVERNOR
+	var gob: Vector2i = GameConfig.get_final_audit_waves()
+	assert_int(gob.x).is_equal(GameConfig.final_audit_waves.x)
+	assert_int(col.x).is_equal(gob.x - 1)
+	assert_int(col.y).is_equal(gob.y - 1)

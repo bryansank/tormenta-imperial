@@ -41,6 +41,8 @@ func before_test() -> void:
 		"tech": TechTreeManager.get_save_data(),
 		"tutorial": TutorialManager.get_save_data(),
 		"campaigns": CombatManager.get_campaigns_save_data(),
+		# Las misiones ganadas aqui dan XP de rango: se devuelve al acabar.
+		"rank": RankManager.get_save_data(),
 	}
 	TechTreeManager.reset()
 	# Ninguna campana empezada (feat/ritmo-colono: sus piezas cierran capitulos).
@@ -100,6 +102,7 @@ func after_test() -> void:
 	PopulationManager.load_save_data(_saved["population"])
 	TutorialManager.load_save_data(_saved["tutorial"])
 	CombatManager.load_campaigns_save_data(_saved["campaigns"])
+	RankManager.load_save_data(_saved["rank"])
 
 # ── Utilleria ────────────────────────────────────────────────────────
 
@@ -273,7 +276,8 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 		"build:warehouse", "build:foundry", "train:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
 		# feat/ritmo-colono: los tanques del final, antes de las campanas (y del CG 2).
-		"train:vehicle", "campaign:land", "upgrade:headquarters", "upgrade:headquarters"]
+		"build:shipyard", "build:aerodrome", "train:vehicle", "campaign:land", "upgrade:headquarters",
+		"upgrade:headquarters"]
 	var cursor := 0
 	for entry in visited:
 		if cursor < expected.size() and entry == expected[cursor]:
@@ -364,7 +368,7 @@ func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
 func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
 	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
-			"refinery", "tower", "tower", "headquarters"]:
+			"refinery", "tower", "tower", "headquarters", "shipyard", "aerodrome"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")
@@ -514,10 +518,15 @@ func _panel_says(node: Node, text: String) -> bool:
 ## cinco almacenes en pie, el panel manda al arbol a por holgura en vez de dejar al
 ## jugador cuadrando los cuatro recursos al centimo.
 func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
+	# Es la cuenta de Gobernador: en Colono (feat/ritmo-colono) el CG pide tres
+	# cuartos de la bolsa y no hace falta holgura.
+	var saved_tier: int = GameMode.tier
+	GameMode.tier = GameMode.Tier.GOVERNOR
+	_with_all_pieces()
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
 	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
 			"warehouse", "warehouse", "warehouse", "warehouse", "warehouse", "foundry", "barracks",
-			"refinery", "tower", "tower", "headquarters"]:
+			"refinery", "tower", "tower", "headquarters", "shipyard", "aerodrome"]:
 		_build(id)
 	_first("headquarters").set_meta("level", 2)
 	for i in range(Objectives.SIEGE_VEHICLES):
@@ -547,12 +556,14 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	assert_int(int(step.get("level", 0))).override_failure_message(str(seen) + str(step)).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
+	GameMode.tier = saved_tier
 
 # ── Los modos ────────────────────────────────────────────────────────
 
 ## En Constructor no hay Diezmo ni asedio: el panel no pide guarnicion ni
 ## blindados, y el nivel 3 del Cuartel General es la meta. En Sandbox no hay
 ## objetivo. docs/20-modos-de-juego.md.
+
 func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 	var saved_mode: int = GameMode.current
 	var saved_result: String = GameMode.run_result
@@ -749,7 +760,7 @@ func test_with_the_hq_standing_the_panel_asks_for_the_pieces() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
 	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house",
-			"warehouse", "foundry", "barracks", "refinery", "tower", "tower", "headquarters"]:
+			"warehouse", "foundry", "barracks", "refinery", "tower", "tower", "headquarters", "shipyard", "aerodrome"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")

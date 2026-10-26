@@ -422,11 +422,11 @@ func _decide() -> void:
 		"make":
 			_try_make(step)
 		"campaign":
-			# Las piezas del CG (feat/ritmo-colono): la linea las pide. Como
-			# cualquier salida, en calma y lejos del Aviso: la columna fuera no
-			# defiende el Impuesto (sin esto la tropa salia en plena Tormenta y
-			# se pagaba un Impuesto tras otro).
-			if _campaign_window_open():
+			# Las piezas del CG (feat/ritmo-colono): la linea las pide. En calma
+			# (sin esto la tropa salia en plena Tormenta y se pagaba un Impuesto
+			# tras otro); sin el margen de 5 min de las de la segunda linea: con
+			# la Visita, un Impuesto con la columna fuera lo pelean los de casa.
+			if StormManager.get_phase() == StormCycle.Phase.CALM:
 				_launch_campaign(String(step["id"]), true)
 		"sortie":
 			# La primera escaramuza: la columna que propone el panel. El tablero

@@ -62,8 +62,9 @@ the three pieces on top of its cost (`GameConfig.hq_needs_pieces()`,
 HQ level 3 summons the siege, as in the 1.0: `final_audit_ready()` is `hq_max`.
 `final_audit_missing()` / `final_audit_gate_text()` list the missing pieces and HQ 3;
 ¿QUÉ HACER? says "Para el CG 3 te faltan: pieza de Mar, pieza de Aire"
-(`CombatManager.hq_pieces_text()`) and the pieces are steps of its line (the three
-campaigns with the HQ standing, before its level 2; Land first). Rule `audit_needs_campaigns`
+(`CombatManager.hq_pieces_text()`) and the pieces are steps of its line (with the HQ
+standing: Shipyard, Aerodrome, the six tanks, then the three campaigns, Land first,
+before HQ level 2). Rule `audit_needs_campaigns`
 (`GameMode.audit_needs_campaigns()`), global switch
 `GameConfig.final_audit_needs_campaigns`. Old saves: a piece is a boss already beaten;
 an old save with HQ 3 done and campaigns unfinished can call the siege (it paid its
@@ -118,10 +119,11 @@ pantalla corta.
   `Main.tscn`). Espera a que no haya tablero abierto ni otro parte a la vista. El
   capítulo III no saca tarjeta: lo cierra la pantalla de victoria.
 - **El ritmo de Colono** (regla de nivel, `GameConfig.game_tier_rules`):
-  `campaign_missions` (Tierra 4, Mar 2, Aire 2; Gobernador las 16), `hq_resource_mult` 0,75 (lo de la bolsa del CG; Gobernador 1) y
-  `hq_material_mult` 0,5 (vigas, lingotes y combustible de los niveles 2 y 3 del CG;
-  Gobernador 1). La bolsa del CG no cambia (el nivel 3 sigue pidiendo la bolsa
-  entera). Medido en [22-linea-jugable.md](22-linea-jugable.md) §17.
+  `campaign_missions` (Tierra 4, Mar 2, Aire 2; Gobernador las 16), `hq_resource_mult` 0,6 (lo de la bolsa del CG; Gobernador 1) y
+  `hq_material_mult` 0,3 (vigas, lingotes y combustible de los niveles 2 y 3 del CG;
+  Gobernador 1). En Gobernador el nivel 3 sigue pidiendo la bolsa entera (3.500);
+  en Colono, 2.100 (`hq_resource_mult` 0,6, material ×0,3), y su asedio trae una
+  oleada menos (3-4, `final_audit_waves_delta` −1). Medido en [22-linea-jugable.md](22-linea-jugable.md) §17.
 
 ## Orden de la Regencia (2026-10-14, 1.1)
 

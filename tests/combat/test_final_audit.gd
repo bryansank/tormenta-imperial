@@ -36,7 +36,7 @@ func test_the_capstone_summons_instead_of_winning() -> void:
 	assert_int(audit.summons).is_equal(1)
 
 func test_the_siege_brings_the_number_of_waves_the_balance_allows() -> void:
-	var cfg: Vector2i = GameConfig.final_audit_waves
+	var cfg: Vector2i = GameConfig.get_final_audit_waves()
 	for seed_value in [1, 7, 99, 1234, 65535]:
 		var audit := _audit(seed_value)
 		assert_int(audit.wave_count()).is_between(mini(cfg.x, cfg.y), maxi(cfg.x, cfg.y))

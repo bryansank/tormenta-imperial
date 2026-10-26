@@ -9,8 +9,14 @@ extends GdUnitTestSuite
 var _saved: Dictionary = {}
 var _tips: Array = []
 
+## El rango que traigan otras suites: una unidad entrenada da XP y, si el rango
+## anterior iba justo, sube y saca sus consejos (rank, flag), que aqui no se miran.
+var _saved_rank: Dictionary = {}
+
 func before_test() -> void:
 	_saved = TutorialManager.get_save_data()
+	_saved_rank = RankManager.get_save_data()
+	RankManager.load_save_data({})
 	TutorialManager.reset()
 	_tips.clear()
 	EventBus.tutorial_tip_requested.connect(_collect)
@@ -18,6 +24,7 @@ func before_test() -> void:
 func after_test() -> void:
 	EventBus.tutorial_tip_requested.disconnect(_collect)
 	TutorialManager.load_save_data(_saved)
+	RankManager.load_save_data(_saved_rank)
 
 func _collect(tip_id: String, _title: String, _body: String) -> void:
 	_tips.append(tip_id)

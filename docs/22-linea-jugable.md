@@ -1084,3 +1084,95 @@ Lectura: la Mina de oro ya no espera a que la Casa se llene (dos minutos antes) 
 era 2 llega igual o un minuto antes; la era 1 no se rompe. Más gente antes come antes:
 la semilla 1 tuvo 3 muertos de hambre (antes 0), que el goteo repone. El
 resto de la primera hora (era 3 en el 38-42) queda dentro del ruido de §14.
+
+## 17. Colono en 3-4 h y Gobernador en 6-8 h (2026-10-25/26, rama `feat/ritmo-colono`)
+
+Decisiones de Bryan tras la crítica (contexto 27): Colono en 3-4 h y tres capítulos
+(docs/06 §Capítulos), uno de cada tres Impuestos en el tablero (la Visita, docs/15
+§5), azar del daño (docs/15 §3) y una sola llave: las piezas de los jefes para el CG
+nivel 3 (docs/15 §13). Gobernador se queda en 6-8 h sin perder contenido (las 16
+misiones, el taller entero del CG, el asedio de 4-5 oleadas).
+
+`line_probe`, `--no-dev --seeds=1,2,3,4,5`, jugador de la línea (sin `--extras`),
+tope 8 h (9 h en Gobernador y en la base). Opción nueva: `--tier=governor`. La tabla
+de la sonda gana las columnas **cap I**, **cap II**, **tableros** e **impuestos
+tablero/auto**.
+
+### Antes: `origin/main` (4c02f6d), Colono
+
+| Semilla | CG nv3 | Tierra | Mar | Aire | victoria | minutos de tablero |
+|---|---|---|---|---|---|---|
+| 1 | — | — | — | — | **no (9 h)** | 192 |
+| 2 | 274 | 281 | 337 | 387 | **412** (6 h 52) | 205 |
+| 3 | 288 | 296 | 362 | 409 | **460** (7 h 40) | 224 |
+| 4 | 268 | 240 | 334 | 405 | **448** (7 h 28) | 237 |
+| 5 | — | 227 | — | — | **no (9 h)** | 201 |
+
+Todos los Impuestos en el tablero (23-28 por partida).
+
+### Lo que se probó por el camino (Colono, minutos de victoria)
+
+| Tanda | Qué tenía | Victoria |
+|---|---|---|
+| v1 | todo lo nuevo; Colono Tierra 4 / Mar 3 / Aire 3, material del CG ×0,5; las campañas como paso principal solo con el CG nv3 esperando sus piezas | 241-355 (5/5) |
+| v2 | la pieza de Tierra en la línea **antes del CG** (tras las torres) | 2/5 ganan (390, 419): el jefe de Tierra llegaba sin tanques ni economía, 18 derrotas y un Impuesto pagado tras otro |
+| v3 | las tres piezas tras el CG, sin tanques antes | 410-476 (4/5): Tierra 9 derrotas, 74 → 266 min |
+| v4 | **los 6 tanques del final antes de las campañas**; la sonda elige la columna más fuerte por la previsión | 295-320 (5/5), Tierra sin derrotas |
+| v5 | + Astillero y Aeródromo en la línea con el CG en pie; Colono Mar 2 / Aire 2; bolsa del CG ×0,75 | 303-304 (2 semillas) |
+| **v6** | + material del CG ×0,3, bolsa ×0,6, asedio de 3-4 oleadas en Colono; la sonda sale a la pieza en cuanto hay calma | ver abajo |
+
+Gobernador en v4: 424-510 (5/5); en v5: 432-489 (5/5).
+
+### Después (v6, la rama tal cual)
+
+**Colono:**
+
+| Semilla | cap I | cap II (Tierra) | Mar | Aire | CG nv3 | victoria | tableros | impuestos tablero/auto | min de tablero |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 17 | 139 | 175 | 198 | 246 | **268** (4 h 28) | 33 | 5/10 | 90 |
+| 2 | 18 | 118 | 151 | 179 | 218 | **239** (3 h 59) | 30 | 4/7 | 87 |
+| 3 | 15 | 116 | 155 | 178 | 195 | **216** (3 h 36) | 27 | 3/6 | 78 |
+| 4 | 17 | 120 | 137 | 162 | 183 | **204** (3 h 24) | 28 | 2/6 | 76 |
+| 5 | 19 | 128 | 157 | 177 | 218 | **239** (3 h 59) | 30 | 4/8 | 85 |
+
+**Gobernador:**
+
+| Semilla | cap I | cap II (Tierra) | Mar | Aire | CG nv3 | victoria | tableros | impuestos tablero/auto | min de tablero |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 17 | 138 | 204 | 264 | 370 | **392** (6 h 32) | 52 | 8/15 | 149 |
+| 2 | 18 | 148 | 198 | 276 | 377 | **404** (6 h 44) | 53 | 8/12 | 162 |
+| 3 | 16 | 134 | 184 | 236 | 348 | **376** (6 h 16) | 54 | 6/9 | 150 |
+| 4 | 14 | 144 | 219 | 315 | 451 | **474** (7 h 54) | 57 | 10/16 | 173 |
+| 5 | 15 | 142 | 208 | 258 | 350 | **373** (6 h 13) | 46 | 5/15 | 138 |
+
+Lectura:
+
+- **Colono: 5 de 5 ganan, en 3 h 24 - 4 h 28**; cuatro dentro de 3-4 h (la semilla 1,
+  la más lenta en todas las tandas, 28 min por encima). Antes: 3 de 5, en 6 h 52 -
+  7 h 40. **Gobernador: 5 de 5 en 6 h 13 - 7 h 54** (antes del ritmo nuevo no ganaba
+  ninguna con las piezas en la línea, v3).
+- **Capítulos (Colono):** I dura 15-19 min (el tutorial y la era 1), II hasta el
+  minuto 116-139 (unos 100 min: era 2, Refinería, CG, tanques y la Campaña de
+  Tierra), III unos 85-130 min (Mar, Aire, CG 2 y 3, asedio).
+- **Tableros:** 27-33 por partida en Colono (antes ~60) y 76-90 minutos de tablero
+  (antes 192-237). Impuestos en el tablero: 2-5 de 8-15; los demás, parte automático.
+- **Huecos sin decidir de más de 3 min:** 1-5 por partida, el mayor 4-6 min.
+- **El asedio** en Colono (3-4 oleadas, `final_audit_waves_delta` −1) se gana a la
+  primera en las cinco; con 5 blindados y 4 torres, el 99 % en `siege_probe`. La
+  referencia de ~80 % (docs/17) es la de 4-5 oleadas: Gobernador y la tabla base.
+- **Ruido:** la misma semilla no repite partida entre corridas (§14 "Ruido"); con 5
+  semillas, las cifras son orientativas.
+- **Ojo (2026-10-26):** medido sobre `main` sin la rama `fix/tutorial-flujo`, que
+  sube los colonos iniciales de 5 a 10 y cambia la línea de la era 1. Con ella, el
+  capítulo I (y quizá todo) llegará antes: hay que volver a medir tras integrarla.
+
+Palancas, por orden, si hay que mover Colono: `game_tier_rules.colonist`
+(`hq_material_mult`, `hq_resource_mult`, `campaign_missions`,
+`final_audit_waves_delta`); el orden de `Objectives.LINE` (tanques, Astillero y
+Aeródromo antes de las piezas).
+
+Repetir (con `override.cfg` propio; para correr dos a la vez, cada una con su
+carpeta: se cambia el `override.cfg` entre los dos arranques):
+
+    godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5
+    godot --headless --path . -s tools/line_probe.gd -- --no-dev --seeds=1,2,3,4,5 --hours=9 --tier=governor

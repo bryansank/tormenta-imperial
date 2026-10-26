@@ -88,7 +88,7 @@ func test_a_campaign_ready_to_launch_still_comes_first() -> void:
 	_placer.counts = {"barracks": 1, "shipyard": 1}
 	ArmyManager.load_save_data({"units": {"gunboat": 4, "torpedo_boat": 2}})
 	CombatManager.load_campaigns_save_data({"seed": 7,
-		"progress": {"land": GameConfig.campaign_base_count("land"), "sea": 1, "air": 0}})
+		"progress": {"land": GameConfig.campaign_base_count("land"), "sea": 0, "air": 0}})
 	var gate: Dictionary = Objectives.campaign_gate_step_for(CombatManager.missing_campaign_pieces())
 	assert_str(String(gate.get("kind", ""))).is_equal("campaign")
 	assert_str(String(gate.get("id", ""))).is_equal("sea")

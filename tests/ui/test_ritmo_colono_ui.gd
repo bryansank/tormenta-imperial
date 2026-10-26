@@ -9,12 +9,16 @@ var _storm_saved: Dictionary = {}
 var _progression_saved: Dictionary = {}
 var _campaigns_saved: Dictionary = {}
 var _army_saved: Dictionary = {}
+## El rango: estas pruebas ganan peleas y piezas (XP); sin devolverlo, otra suite
+## veria subir de rango y sus consejos.
+var _rank_saved: Dictionary = {}
 
 func before_test() -> void:
 	_storm_saved = StormManager.get_save_data()
 	_progression_saved = ProgressionManager.get_save_data()
 	_campaigns_saved = CombatManager.get_campaigns_save_data()
 	_army_saved = ArmyManager.get_save_data()
+	_rank_saved = RankManager.get_save_data()
 	StormManager.reset()
 	CombatManager.reset()
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN, GameMode.tier)
@@ -25,6 +29,7 @@ func after_test() -> void:
 	CombatManager.load_campaigns_save_data(_campaigns_saved)
 	StormManager.load_save_data(_storm_saved)
 	ArmyManager.load_save_data(_army_saved)
+	RankManager.load_save_data(_rank_saved)
 
 func test_the_chapter_card_shows_once_the_chapter_closes() -> void:
 	var screen: CanvasLayer = auto_free(ChapterScreenScript.new())

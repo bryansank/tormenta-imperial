@@ -500,3 +500,9 @@ Las guarniciones flojas y las de dos torres suben algo (la suerte también ayuda
 que va justo), y la de referencia queda en la franja.
 
 Repetir: `godot --headless --path . -s tools/siege_probe.gd -- --seeds=200 --towers=4 [--spread=0] [--last=F] [--tier=governor] [--morale=75]`.
+
+**Colono: una oleada menos** (`game_tier_rules.colonist.final_audit_waves_delta` = −1,
+`GameConfig.get_final_audit_waves()`): su asedio es de 3-4 oleadas. Con 4 torres, 5
+blindados ganan el 99 % (200 semillas): en Colono el final se gana casi siempre a la
+primera, como pide "se puede caer, no se puede perder" y el ritmo de 3-4 h (docs/22
+§17). La referencia del ~80 % es la de 4-5 oleadas (Gobernador, y la tabla de arriba).

@@ -1082,7 +1082,7 @@ func test_the_capstone_summons_the_audit_and_surviving_it_wins_the_game() -> voi
 
 	# ── Que bajen ──
 	var waves: int = ProgressionManager.final_audit.wave_count()
-	assert_int(waves).is_greater_equal(GameConfig.final_audit_waves.x)
+	assert_int(waves).is_greater_equal(GameConfig.get_final_audit_waves().x)
 	assert_bool(ProgressionManager.begin_final_audit()).is_true()
 	assert_bool(ProgressionManager.is_final_audit_active()).is_true()
 	assert_bool(CombatManager.is_in_encounter()).override_failure_message(

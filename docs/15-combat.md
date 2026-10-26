@@ -1892,8 +1892,9 @@ como en la 1.0.
   (docs/06 §Capítulos).
 - **¿QUÉ HACER? y MISIONES.** Las piezas van en la línea (`Objectives.LINE`,
   entradas `kind: "campaign"`, `needs: "pieces"`), **con el CG ya en pie y antes de
-  su nivel 2**: Tierra, Mar y Aire (Tierra primero; mientras una descansa se prepara
-  o se juega otra). Se juegan mientras el CG junta lo de sus niveles 2 y 3, no
+  su nivel 2**, detrás del Astillero, el Aeródromo y los seis tanques del final
+  (que ganan Tierra de corrido): Tierra, Mar y Aire (Tierra primero; mientras una
+  descansa se prepara o se juega otra). Se juegan mientras el CG junta lo de sus niveles 2 y 3, no
   después. Medido (docs/22 §17): con la de Tierra antes del CG, tras las torres, el
   jefe de Tierra llegaba sin tanques ni economía y se perdía una y otra vez.
   `Objectives.gate_domains()` / `campaign_gate_step()` dan su edificio, su tropa o

@@ -3436,6 +3436,13 @@ func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
 ## 4-5 desde 2026-10-12 (antes 3-5): un final mas exigente (docs/17, "2026-10-12").
 var final_audit_waves := Vector2i(4, 5)
 
+## Las oleadas del asedio en este nivel: las de `final_audit_waves` mas la regla
+## `final_audit_waves_delta` de game_tier_rules (feat/ritmo-colono: Colono -1,
+## es decir 3-4; Gobernador 0). Nunca menos de 1.
+func get_final_audit_waves() -> Vector2i:
+	var delta: int = int(GameMode.tier_rule("final_audit_waves_delta")) if GameMode.tier_rule("final_audit_waves_delta") != null else 0
+	return Vector2i(maxi(1, final_audit_waves.x + delta), maxi(1, final_audit_waves.y + delta))
+
 ## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
 ## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
 var final_audit_base_slots := 3
@@ -3633,6 +3640,8 @@ var game_mode_rules := {
 ##                           piden los niveles 2 y 3 del Cuartel General
 ##   hq_resource_mult        (feat/ritmo-colono) lo de la bolsa que piden esos
 ##                           niveles (oro, acero, petroleo, madera)
+##   final_audit_waves_delta (feat/ritmo-colono) oleadas de mas o de menos en el
+##                           asedio (get_final_audit_waves)
 var game_tier_rules := {
 	"colonist": {
 		"spoilage": false,
@@ -3646,8 +3655,9 @@ var game_tier_rules := {
 		# jefe). Medido: con Mar 3 y Aire 3 la linea ganaba en 5 h. Gobernador
 		# juega las 16.
 		"campaign_missions": {"land": [0, 2, 4, 5], "sea": [0, 4], "air": [0, 4]},
-		"hq_material_mult": 0.5,
-		"hq_resource_mult": 0.75,
+		"hq_material_mult": 0.3,
+		"hq_resource_mult": 0.6,
+		"final_audit_waves_delta": -1,
 	},
 	"governor": {
 		"spoilage": true,
@@ -3666,6 +3676,7 @@ var game_tier_rules := {
 		"campaign_missions": {},
 		"hq_material_mult": 1.0,
 		"hq_resource_mult": 1.0,
+		"final_audit_waves_delta": 0,
 	},
 }
 

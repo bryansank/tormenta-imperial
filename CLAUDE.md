@@ -216,7 +216,7 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
   by era (600 / 800 / 1000) + 500 per warehouse (max 5 in every era: the warehouse cap does not rise, see below).
   Era 1 is 600 so the opening fits: 580 starting resources, plus sawmill + gold mine (330).
   Era 3 ceiling without techs = 1000 + 5x500 = **3500**, exactly the price of the HQ
-  level 3 upgrade. On top of that, `GameConfig.tech_storage_bonus` adds the storage
+  level 3 upgrade in Gobernador (Colono pays 60 % of it, `hq_resource_mult`). On top of that, `GameConfig.tech_storage_bonus` adds the storage
   techs: `ind_2` +200, `log_2` +300, `log_5` +500 — **+1000**, so the absolute ceiling
   is **4500** (`GameConfig.get_storage_cap()`). Sandbox ignores all of it
   (`sandbox_storage_cap`).
@@ -556,7 +556,7 @@ the SURVIVAL phase (first Warehouse), never in Sandbox, and Constructor gets onl
 | General | Build Headquarters |
 | `hq_max` | **HQ Level 3 — the single key of the Final Audit** (it asks for the three campaign pieces) |
 
-HQ upgrade costs: `hq_upgrade_costs` (L2 1300g/900s/500o/300w + 350 beams, 140 ingots, 200 fuel; L3 1500g/800s/500o/700w + 700 beams, 280 ingots, 400 fuel); Colono pays half the workshop materials and three quarters of the bag (`hq_material_mult` 0.5, `hq_resource_mult` 0.75 in `game_tier_rules`), Gobernador all of it. L3 also asks for the three pieces.
+HQ upgrade costs: `hq_upgrade_costs` (L2 1300g/900s/500o/300w + 350 beams, 140 ingots, 200 fuel; L3 1500g/800s/500o/700w + 700 beams, 280 ingots, 400 fuel); Colono pays 30 % of the workshop materials and 60 % of the bag (`hq_material_mult` 0.3, `hq_resource_mult` 0.6 in `game_tier_rules`), Gobernador all of it. L3 also asks for the three pieces.
 
 **In Campaña, HQ level 3 does not win the game.** Since 2026-10-25 (`feat/ritmo-colono`,
 docs/15 §13) the Final Audit has **one key**: HQ level 3. Each campaign boss hands over
@@ -568,8 +568,8 @@ the HQ level 3 upgrade asks for the three on top of its cost
 `ProductionManager.start_upgrade()` refuses without them).
 `ProgressionManager.final_audit_ready()` is `hq_max`; `final_audit_missing()` lists the
 missing pieces and HQ 3. The pieces are steps of ¿QUÉ HACER?'s line
-(`Objectives.LINE` entries `kind: "campaign"`, after the HQ is built and before its
-level 2). `GameMode.audit_needs_campaigns()` (rule `audit_needs_campaigns`: Campaña
+(`Objectives.LINE` entries `kind: "campaign"`, with the HQ standing — after the
+Shipyard, the Aerodrome and the six siege tanks — and before HQ level 2). `GameMode.audit_needs_campaigns()` (rule `audit_needs_campaigns`: Campaña
 and Supervivencia yes; Constructor/Sandbox no) and the global switch
 `GameConfig.final_audit_needs_campaigns` (tests of the 1.0 path turn it off) decide
 whether HQ 3 asks for pieces. Old saves: a piece is a boss already beaten; one with
@@ -685,7 +685,7 @@ keeps `chapters_closed` (save `progression.chapters`) and emits
 `scripts/ui/ChapterScreen.gd` (created by ObjectivePanel) shows the short closing card
 (chapter III closes with the victory screen). Colono's pace comes from
 `game_tier_rules`: `campaign_missions` (Land 4, Sea 2, Air 2 of the table's 6/5/5;
-Gobernador plays all 16), `hq_material_mult` (0.5) and `hq_resource_mult` (0.75; Gobernador 1 and 1).
+Gobernador plays all 16), `hq_material_mult` (0.3), `hq_resource_mult` (0.6) and `final_audit_waves_delta` (−1: a 3-4 wave siege); Gobernador 1, 1 and 0. Measured: Colono 3 h 24-4 h 28, Gobernador 6 h 13-7 h 54 (docs/22 §17).
 
 ### Army & Units (management -> combat bridge)
 

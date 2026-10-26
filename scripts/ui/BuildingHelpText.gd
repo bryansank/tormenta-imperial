@@ -224,11 +224,14 @@ static func upgrade_block_lines(data: BuildingData, node: Node) -> Array:
 
 ## Lo que cuesta subir el Cuartel General a `level` en la bolsa compartida (oro,
 ## acero, petroleo y madera; los materiales van aparte).
+## Lo de la bolsa del nivel `level` del CG, con la rebaja del nivel de la
+## Campana (hq_resource_mult, feat/ritmo-colono): el mismo coste que se cobra.
 static func hq_bag_cost(level: int) -> int:
-	var raw: Dictionary = GameConfig.hq_upgrade_costs.get(level, {})
+	var hq: BuildingData = load("res://data/buildings/headquarters.tres")
+	var cost: Dictionary = GameConfig.get_upgrade_cost(hq, level) if hq != null else {}
 	var total := 0
 	for res_id in ["gold", "steel", "oil", "wood"]:
-		total += int(raw.get(res_id, 0))
+		total += int(cost.get(ResourceManager.name_to_type(res_id), 0))
 	return total
 
 ## Cambia las marcas {HQ2_COST} y {HQ3_COST} de un texto por el coste real del
