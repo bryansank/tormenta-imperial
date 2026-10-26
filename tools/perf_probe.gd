@@ -25,6 +25,8 @@ extends SceneTree
 ##   --quality=    auto | high | low | minima  (auto). `minima` es la propuesta de
 ##                 docs/26 emulada por la sonda: baja + sin sombras, glow ni humo,
 ##                 scaling_3d 0.6 y pocos caminantes. No es un ajuste del juego.
+##                 `minimal` es la Minima de verdad del juego (Ajustes, WorldLook +
+##                 GraphicsQuality.apply_runtime), la que pone la deteccion.
 ##   --view=       3d | 2d (3d; grande_2d fuerza 2d)
 ##   --size=WxH    tamano de ventana (1280x720)
 ##   --seed=N      semilla del mapa y de los yacimientos sueltos (1)
@@ -126,7 +128,7 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 			"seconds", "warmup", "profile":
 				out[key] = maxf(0.0, float(value))
 			"quality":
-				out["quality"] = value if value in ["auto", "high", "low", "minima"] else "auto"
+				out["quality"] = value if value in ["auto", "high", "low", "minimal", "minima"] else "auto"
 			"view":
 				out["view"] = "2d" if value == "2d" else "3d"
 			"size":

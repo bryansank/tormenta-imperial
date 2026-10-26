@@ -58,6 +58,12 @@ func _run() -> void:
 	DisplayServer.window_set_size(options.get("size", Vector2i(1280, 720)))
 	if not bool(options.get("vsync", false)):
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		# Sin tope tampoco al perder el foco ni en pausa: en una maquina compartida
+		# otra ventana roba el foco y DeviceProfile bajaria a fps_background (10),
+		# que es lo que salio en el combate de la tanda de tablet del 2026-10-25.
+		GameConfig.ui_fps_cap = "unlimited"
+		GameConfig.fps_background = 0
+		GameConfig.fps_paused = 0
 		Engine.max_fps = 0
 	await _frames(5)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
@@ -80,6 +86,14 @@ func _run() -> void:
 		await _frames(30)
 	if quality == "minima":
 		_apply_minima(view)
+	elif quality == "minimal":
+		# La Minima de verdad del juego (Ajustes): WorldLook ya la leyo al cargar la
+		# escena; lo que va fuera de el (humo, rejilla, caminantes) se aplica aqui
+		# como lo haria DeviceProfile al cambiarla.
+		preload("res://scripts/services/GraphicsQuality.gd").apply_runtime(get_tree())
+		var walkers := _walkers()
+		if walkers and walkers.has_method("reconcile"):
+			walkers.reconcile()
 	await _apply_v12(String(options.get("v12", "on")))
 	_set_camera(scenario, view)
 	var rid := get_viewport().get_viewport_rid()
