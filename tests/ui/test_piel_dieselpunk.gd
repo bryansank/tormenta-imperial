@@ -160,3 +160,20 @@ func test_the_window_draws_a_double_brass_edge() -> void:
 	var ribbon: PanelContainer = w["ribbon"]
 	var l := ribbon.get_child(0) as Label
 	assert_object(l.get_theme_color("font_color")).is_equal(CartoonTheme.c("window", "TEXT"))
+
+# ── Recetas (feat/recetas-tarjetas) ──────────────────────────────────
+
+func test_recipe_cards_follow_the_skin() -> void:
+	var active := CartoonTheme.recipe_card_style("active")
+	assert_object(active.border_color).is_equal(CartoonTheme.c("window", "TRIM"))
+	assert_int(active.border_width_top).is_greater(active.border_width_left)
+	var locked := CartoonTheme.recipe_card_style("locked")
+	assert_object(locked.bg_color).is_equal(CartoonTheme.c("window", "OFF"))
+	assert_int(locked.corner_radius_top_left).is_less_equal(4)
+	# El verbo (texto puesto despues) es la accion principal: luz piloto.
+	var verb: Button = auto_free(CartoonTheme.text_pill("", "primary", CartoonTheme.h("big")))
+	assert_object(verb.get_node_or_null("PilotLight")).is_not_null()
+	# Las cantidades, en la letra de las cifras.
+	var amount: PanelContainer = auto_free(CartoonTheme.recipe_amount("wood", 20))
+	var l: Label = amount.find_child("Amount_wood", true, false)
+	assert_object(l.get_theme_font("font")).is_equal(CartoonTheme.number_font())

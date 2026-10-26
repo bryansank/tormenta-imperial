@@ -1296,6 +1296,14 @@ contraste, en las tres paletas y los dos temas.
 El borde a trazos de la maqueta no existe en `StyleBoxFlat`: lo no disponible
 se distingue por apagado + candado + porqué.
 
+### Recetas (FABRICAR, rama `feat/recetas-tarjetas`)
+
+La sección RECETAS de `CartoonTheme` lleva la piel: la tarjeta en marcha con
+filo de latón (el de arriba más grueso), la cerrada apagada como "no
+disponible" (`OFF`, filo tenue), el verbo como acción principal (`text_pill`
+"primary": latón con luz piloto, también cuando su texto se pone después) y
+las cantidades en Plex Condensed Bold al tamaño de título.
+
 ### Préstamos
 
 - **Luz piloto** (de la dirección A): ver arriba.
