@@ -81,6 +81,30 @@ func _ready() -> void:
 	_hide_old_skirmish_button.call_deferred()
 	refresh.call_deferred()
 	_fit_gap.call_deferred()
+	_watch_covers.call_deferred()
+
+## Tapada por el combate (BattleScreen: tablero, mapa de la expedicion, parte),
+## la barra se esconde: seguia recibiendo el raton por debajo y su tooltip
+## ("Elegir un edificio y colocarlo en el mapa") salia encima del tablero (QA
+## de escritorio, 2026-10-26). Al cerrarse el combate vuelve.
+func _watch_covers() -> void:
+	if not is_inside_tree():
+		return
+	for n in get_tree().get_nodes_in_group("battle_screen"):
+		if not n.visibility_changed.is_connected(_sync_covered):
+			n.visibility_changed.connect(_sync_covered)
+	_sync_covered()
+
+func is_covered() -> bool:
+	if not is_inside_tree():
+		return false
+	for n in get_tree().get_nodes_in_group("battle_screen"):
+		if n.visible:
+			return true
+	return false
+
+func _sync_covered() -> void:
+	visible = not is_covered()
 
 func _setup_ui() -> void:
 	var root := Control.new()

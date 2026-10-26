@@ -1227,9 +1227,11 @@ func _layout_combat(delta: float) -> void:
 	elif has_point:
 		focus = Rect2(Vector2(anchor["point"]) - Vector2(40, 40), Vector2(80, 80))
 	var avoid := _combat_avoid_rects(bs)
+	var lay: Dictionary = bs.coach_layout() if bs != null and bs.has_method("coach_layout") else {}
+	# La cabecera, la franja de turnos y los botones tampoco se tapan.
+	avoid.append_array(lay.get("keep", []))
 	# Fuera del tablero si hay sitio (a un lado, encima o debajo, mas estrecha
 	# si hace falta); si no, junto a lo senalado sin tapar las piezas.
-	var lay: Dictionary = bs.coach_layout() if bs != null and bs.has_method("coach_layout") else {}
 	var spot := _combat_spot(vp, lay, focus, avoid, key)
 	if not spot.is_empty():
 		w = float(spot["w"])
