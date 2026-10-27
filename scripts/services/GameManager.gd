@@ -71,6 +71,8 @@ var _run_sealed := false
 ## Hay otra copia del juego abierta y se esta preguntando (o avisando): no se
 ## arranca partida hasta que se resuelva. Lo levanta _check_single_instance().
 var _instance_hold := false
+## La tarea del hilo que mira si hay otra copia (WorkerThreadPool), o -1.
+var _instance_task := -1
 ## Los PID que se cierran si el jugador dice SI.
 var _instance_targets: Array = []
 
@@ -115,6 +117,10 @@ func _autosave_triggers() -> Array:
 		[EventBus.storm_phase_changed, 2],
 		[EventBus.production_collected, 2],
 		[EventBus.crop_planted, 2],
+		# Volverse el Imperio: una mision o una isla ganada, y cada cobro.
+		[EventBus.conquest_mission_won, 3],
+		[EventBus.empire_tribute_paid, 1],
+		[EventBus.empire_phase_started, 0],
 	]
 
 func _ready() -> void:
@@ -203,18 +209,34 @@ func _exit_tree() -> void:
 ## el bloqueo y se sigue como siempre. Con una, se retiene el arranque y se avisa
 ## (misma version) o se pregunta (otra version). En el editor, sin ventana, con
 ## --no-title / --multi y en movil no se mira nada.
+##
+## Preguntar a tasklist cuesta 200-350 ms en Windows (docs/19 §14): se hace en un
+## hilo mientras la pantalla de carga carga la escena, con el arranque retenido
+## hasta saber la respuesta (que casi siempre es "no hay otra").
 func _check_single_instance() -> void:
 	if not InstanceGuard.applies_here():
 		return
-	var my_pid: int = OS.get_process_id()
+	_instance_hold = true
+	_instance_task = WorkerThreadPool.add_task(_probe_instances, false, "InstanceGuard")
+
+## En el hilo: solo lee (el bloqueo y tasklist). La decision vuelve al principal.
+func _probe_instances() -> void:
 	var lock: Dictionary = InstanceGuard.read_lock()
 	var alive: bool = _lock_is_other_alive(lock)
 	var strays: Array = [] if alive else InstanceGuard.stray_pids()
+	_on_instances_probed.call_deferred(lock, alive, strays)
+
+func _on_instances_probed(lock: Dictionary, alive: bool, strays: Array) -> void:
+	if _instance_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_instance_task)
+		_instance_task = -1
+	var my_pid: int = OS.get_process_id()
 	var action: int = InstanceGuard.decide(lock, alive, strays, my_pid, InstanceGuard.my_version())
 	if action == InstanceGuard.Action.RUN:
 		InstanceGuard.write_lock()
+		_instance_hold = false
+		_try_start()
 		return
-	_instance_hold = true
 	if alive:
 		_open_instance_dialog.call_deferred(action, lock, true, [])
 		return
@@ -434,6 +456,11 @@ func register_map_generator(map_gen: Node) -> void:
 func register_camera(camera: Node) -> void:
 	_camera = camera
 
+## El arranque espera a saber si hay otra copia abierta (o a que el jugador lo
+## decida en su dialogo). La pantalla de carga lo mira para no darlo por fallo.
+func is_instance_held() -> bool:
+	return _instance_hold
+
 ## ViewRouter: esta escena se abandona por la otra vista antes de empezar.
 func hold_start() -> void:
 	_hold_start = true
@@ -508,6 +535,7 @@ func _begin() -> void:
 	# La vista 2D ya registro su camara (register_camera); la 3D se busca.
 	if _camera == null or not is_instance_valid(_camera):
 		_camera = get_viewport().get_camera_3d()
+	BootTrace.mark("GameManager: empieza la partida")
 	_resolve_active_slot()
 	_active_deleted = false
 	var chosen: bool = _chosen_new
@@ -527,6 +555,7 @@ func _begin() -> void:
 		EventBus.building_renamed.connect(_on_building_renamed)
 	if not EventBus.building_demolished.is_connected(_on_building_demolished):
 		EventBus.building_demolished.connect(_on_building_demolished)
+	BootTrace.finish("partida lista (menu principal detras)")
 
 func _new_game() -> void:
 	# El modo ya lo eligio quien pidio la partida (start_new_game); aqui solo se
@@ -548,12 +577,17 @@ func _new_game() -> void:
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	EconomyManager.reset()
+	ThreatManager.reset()
+	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
+	EmpireManager.reset()
 	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
 	# una partida nueva (la carga lo pisa con el del guardado).
 	GridManager.roll_new_map()
 	# Place nucleo at center (no build time for core)
+	EventBus.game_load_progress.emit(0, 2)
 	var nucleo_data := _load_building_data("nucleo")
 	if nucleo_data:
 		var center := Vector2i(GridManager.grid_width / 2, GridManager.grid_height / 2)
@@ -564,8 +598,12 @@ func _new_game() -> void:
 	# Sandbox: el arbol entero investigado desde el primer minuto.
 	if GameMode.all_unlocked():
 		TechTreeManager.unlock_all()
+	BootTrace.mark("partida nueva: Nucleo y acera")
+	EventBus.game_load_progress.emit(1, 2)
 	# Generate random deposits
 	_map_gen.generate_new_map()
+	BootTrace.mark("partida nueva: vetas sorteadas")
+	EventBus.game_load_progress.emit(2, 2)
 	save_game()
 	EventBus.game_new_started.emit()
 
@@ -627,7 +665,13 @@ func _load_game() -> void:
 
 	# Restore buildings
 	if data.has("buildings"):
-		for entry in data["buildings"]:
+		var entries: Array = data["buildings"] if data["buildings"] is Array else []
+		var placed := 0
+		EventBus.game_load_progress.emit(0, entries.size())
+		for entry in entries:
+			placed += 1
+			# La pantalla de carga mueve su barra con esto (barato: una senal).
+			EventBus.game_load_progress.emit(placed, entries.size())
 			var building_data := _load_building_data(entry["id"])
 			if building_data:
 				var rot_steps: int = entry.get("rotation", 0)
@@ -636,6 +680,8 @@ func _load_game() -> void:
 					continue
 				if bool(entry.get("workers_off", false)):
 					node.set_meta("workers_off", true)
+				if bool(entry.get("tutorial_free", false)):
+					node.set_meta("tutorial_free", true)
 				# Restore custom name
 				if entry.has("custom_name") and entry["custom_name"] != "":
 					node.set_meta("custom_name", entry["custom_name"])
@@ -668,6 +714,7 @@ func _load_game() -> void:
 
 	ResourceManager.set_warehouse_count(_warehouse_count)
 	_warehouse_count = 0
+	BootTrace.mark("edificios del guardado colocados (%d)" % (data.get("buildings", []) as Array).size())
 
 	# Restore deposits
 	if data.has("deposits"):
@@ -680,6 +727,7 @@ func _load_game() -> void:
 		# Una partida de antes del Muelle de pesca no trae bancos de peces: se
 		# sortean ahora, con la semilla de su isla (feat/muelle-pesca).
 		_map_gen.ensure_shore_deposits()
+	BootTrace.mark("vetas colocadas")
 
 	# Restore camera
 	if data.has("camera") and _camera and _camera.has_method("set_state"):
@@ -763,6 +811,21 @@ func _load_game() -> void:
 	var contracts_data: Variant = data.get("contracts", {})
 	ContractManager.load_save_data(contracts_data if contracts_data is Dictionary else {})
 
+	# Economia (feat/edificios-economia): el barco del contrabandista, los planos
+	# menores comprados y los relojes de las Centrales y del interes. Sin la
+	# clave (partida anterior) es un barco nuevo y sin planos.
+	var economy_data: Variant = data.get("economy", {})
+	EconomyManager.load_save_data(economy_data if economy_data is Dictionary else {})
+	# Amenazas de costa (feat/amenazas-costa). Sin la clave (partida anterior a
+	# ellas) la orilla esta vacia y la primera sale sola tras su plazo.
+	var threats_data: Variant = data.get("threats", {})
+	ThreatManager.load_save_data(threats_data if threats_data is Dictionary else {})
+	# Volverse el Imperio (feat/volverse-imperio). Sin la clave (partida anterior
+	# a la fase) nada empezado; si esa partida ya habia ganado el Ataque Final,
+	# la fase empieza al terminar la carga (EmpireManager, game_load_completed).
+	var empire_data: Variant = data.get("empire", {})
+	EmpireManager.load_save_data(empire_data if empire_data is Dictionary else {})
+
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
 	# eso el recorte va aqui y no junto a los recursos. Una partida guardada cuando el
@@ -770,6 +833,7 @@ func _load_game() -> void:
 	# antes de que la progresion offline anada nada encima.
 	ResourceManager.set_era(ProgressionManager.current_era)
 	ResourceManager.clamp_to_storage()
+	BootTrace.mark("servicios restaurados")
 
 	# Progresion offline (Supervivencia no tiene: cerrar el juego no produce). Lo
 	# producido espera en los edificios, que lo ensenan en el mapa: no hay parte
@@ -798,6 +862,11 @@ func _load_game() -> void:
 ## que guardar: los menus lo preguntan antes de llamar a save_game().
 func is_started() -> bool:
 	return _started and _placer != null and _map_gen != null
+
+## La partida ha arrancado (aunque aun no haya placer: pantallas sueltas).
+## TutorialManager.is_free_build lo mira: fuera de una partida nada es gratis.
+func has_begun() -> bool:
+	return _started
 
 ## Un guardado que no se puede leer no se pisa en silencio: _new_game() guarda
 ## encima, y eso era perder la partida sin enterarse. Se aparta una copia con
@@ -906,6 +975,9 @@ func _write_save() -> void:
 	data["game_mode"] = GameMode.get_save_data()
 	data["rank"] = RankManager.get_save_data()
 	data["contracts"] = ContractManager.get_save_data()
+	data["economy"] = EconomyManager.get_save_data()
+	data["threats"] = ThreatManager.get_save_data()
+	data["empire"] = EmpireManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -1019,6 +1091,10 @@ func clear_save() -> void:
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	EconomyManager.reset()
+	ThreatManager.reset()
+	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
+	EmpireManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -1065,6 +1141,10 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	ProductionManager.reset()
 	RankManager.reset()
 	ContractManager.reset()
+	EconomyManager.reset()
+	ThreatManager.reset()
+	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
+	EmpireManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

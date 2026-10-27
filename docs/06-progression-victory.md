@@ -44,29 +44,33 @@ What `hq_max` does depends on the game mode ([20-modos-de-juego.md](20-modos-de-
 
 | Mode | HQ level 3 | Victory |
 |------|-----------|---------|
-| Campaña | One of the two keys: with the three campaigns complete too, `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN" | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
-| Supervivencia | Same two keys, same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
+| Campaña | The single key (2026-10-25): `summon_final_audit()`: 3-5 defensive waves ([15-combat.md](15-combat.md) §6), entered with "QUE BAJEN". HQ level 3 itself asks for the three campaign pieces | Surviving the last wave. Losing is not a game over: the siege can be resummoned once 3 units stand |
+| Supervivencia | Same key, same siege, but only one (`resummon: false`) | Surviving it. Losing it ends the run (`run_ended`) and seals the save |
 | Constructor | No siege (`audit_on_capstone: false`) | `_trigger_victory()` right away (`capstone_wins: true`) |
 | Sandbox | Nothing (the siege is summoned only from the SANDBOX tab) | None (`victory: false`) |
 
 `_complete_milestone("hq_max")` asks `GameMode.audit_enabled()` first and
 `GameMode.capstone_wins()` second.
 
-**The two keys of the Final Audit (2026-10-18, `feat/tres-campanas`,
-[15-combat.md](15-combat.md) §13).** In Campaña and Supervivencia the siege needs HQ
-level 3 **and** the three mission campaigns complete (Land: Barracks, 5 missions +
-boss; Sea: Shipyard, 4 + boss; Air: Aerodrome, 4 + boss), in any order.
-`ProgressionManager.try_summon_final_audit()` runs on `hq_max` and on every
-`campaign_completed`; `final_audit_ready()` / `final_audit_missing()` /
-`final_audit_gate_text()` say what is missing ("Para llamar al Ataque Final falta:
-Campaña de Mar 2/5, Campaña de Aire sin empezar"). If HQ 3 lands first, a warning
-toast says it and the `final_gate` tip explains it; ¿QUÉ HACER? turns to the
-campaigns (`Objectives.campaign_gate_step()`). Rule `audit_needs_campaigns`
+**One key for the Final Audit (2026-10-25, `feat/ritmo-colono`,
+[15-combat.md](15-combat.md) §13 "La condición del Ataque Final").** Before it there
+were two keys (HQ level 3 and the three campaigns, `feat/tres-campanas`). Now each
+**campaign boss hands over a piece** of HQ level 3 — **Planos del Bastión** (Land),
+**Casco del Leviatán** (Sea), **Motor del Zepelín** (Air) — and HQ level 3 asks for
+the three pieces on top of its cost (`GameConfig.hq_needs_pieces()`,
+`CombatManager.hq_missing_pieces()`, refused in `ProductionManager.start_upgrade()`).
+HQ level 3 summons the siege, as in the 1.0: `final_audit_ready()` is `hq_max`.
+`final_audit_missing()` / `final_audit_gate_text()` list the missing pieces and HQ 3;
+¿QUÉ HACER? says "Para el CG 3 te faltan: pieza de Mar, pieza de Aire"
+(`CombatManager.hq_pieces_text()`) and the pieces are steps of its line (with the HQ
+standing: Shipyard, Aerodrome, the six tanks, then the three campaigns, Land first,
+before HQ level 2). Rule `audit_needs_campaigns`
 (`GameMode.audit_needs_campaigns()`), global switch
-`GameConfig.final_audit_needs_campaigns`. An old save with the Audit already
-summoned, lost or won keeps it; one without the `campaigns` key starts with none.
-Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In the siege modes, surviving the last wave emits
-`storm_halted_forever` and only then `_trigger_victory()`:
+`GameConfig.final_audit_needs_campaigns`. Old saves: a piece is a boss already beaten;
+an old save with HQ 3 done and campaigns unfinished can call the siege (it paid its
+key). Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In
+the siege modes, surviving the last wave emits `storm_halted_forever` and only then
+`_trigger_victory()`:
 
 1. Stats: `time_played` (**played seconds**, `ProgressionManager._played_seconds`,
    saved — not wall-clock time since creation), buildings built, trades, milestones,
@@ -76,7 +80,239 @@ Each mission won gives rank XP (`campaign_mission` 60, `campaign_boss` 250). In 
    line, "Keep playing" / "New game"
 
 "Keep playing" leaves a sandbox: the Storm is halted for good and the WHAT TO DO? panel
-(`Objectives.next_step()`) says so.
+(`Objectives.next_step()`) says so. **Since `feat/volverse-imperio` (below) that is only
+true in modes without the empire phase**: in Campaña and Supervivencia the victory
+leads to the Tax book (below, "Final con elección").
+
+## Final con elección (1.2, `integracion/v1.2b`, decisión de Bryan 2026-10-25)
+
+Ganar el Ataque Final deja **el libro del Impuesto en tu mesa**. El juego no decide por
+ti qué gobernante eres (`27_CRITICA_Y_PROPUESTAS.md` §3.5 E3 del contexto privado):
+mantiene la ironía del lore (`03_LORE.md` §8, *"Ahora firmas tú"*) sin convertirla en
+la única salida, y baja el tono bélico para quien no quiera conquistar.
+
+1. **Victoria** (`VictoryScreen`, paso `victory`): las cifras de siempre y la coda
+   "Los Cobradores se dejaron algo en tu mesa". El botón verde es **EL LIBRO** (no
+   SEGUIR); Nueva partida sigue.
+2. **La mesa** (paso `choice`): "Los Cobradores huyeron y dejaron el libro del
+   Impuesto. Quien lo tiene, cobra. ¿Qué haces con él?" y dos tarjetas, cada una con la
+   cara de su instructor (`InstructorFace`, quieta) y una frase:
+   - **FIRMAR** (latón) — Sargento Bombarda: «Fírmalo. Ahora cobramos nosotros. Que
+     paguen otros, para variar.» Debajo: "Las islas vecinas te pagarán a ti… si las
+     conquistas."
+   - **QUEMAR** (naranja, el fuego) — Capitana Remache: «Quémalo. Nadie debería pedir
+     permiso para respirar. Ni ellos ni nosotros.» Debajo: "Sin libro no hay Impuesto.
+     Nadie vuelve a cobrar, tampoco tú."
+3. **El final elegido** (paso `sign` / `burn`), con la última palabra del otro
+   instructor:
+   - **AHORA FIRMAS TÚ**: "Firmaste. La Tormenta no volverá y el Impuesto ahora lo
+     cobras tú. Seis islas a sotavento esperan tu bandera." Remache, preocupada: «Así
+     empezó la Regencia. Que no se nos olvide.» Botones VER EL ARCHIPIÉLAGO y Seguir
+     jugando. Empieza la fase de abajo.
+   - **LA ISLA ES LIBRE**: "El libro arde en la plaza. Sin libro no hay Impuesto: nadie
+     vuelve a cobrar en esta isla." Bombarda: «Buen fuego. Ahora trabajamos para
+     nosotros, no para el libro.» Premio: el **emblema Sol** para la bandera (antes de
+     su rango 16) y el título "Quemó el libro" junto al del rango. Coda: "Por primera
+     vez en tres generaciones, sale el sol. Sigue jugando: la isla es tuya." La
+     Tormenta ya paró al ganar; sin fase del archipiélago no hay cobros de nadie:
+     ¿QUÉ HACER? queda en mundo libre.
+
+**Cómo está hecho.** `EmpireManager` es el dueño de la elección (la clave `empire`
+del guardado ya era suya): `choice_pending()` (modo con la fase + Ataque Final ganado
++ sin elegir), `choose_ending("sign" | "burn")` (una vez; emite `ending_chosen`; firmar
+llama a `_maybe_start()`, quemar avisa `MSG_END_BURN`; guarda en el acto),
+`ending()`, `is_free()`, y `is_active()` pide ahora haber firmado. El premio de quemar
+entra por la misma puerta que los de las islas (`unlocks_piece` → `ColonyIdentity.empire_grants`)
+y el título por `title_key()` (`END_BURN_TITLE`). Guardado: `ending` dentro de
+`empire`; un guardado ganado sin elegir vuelve a la mesa al cargar
+(`VictoryScreen._offer_pending_choice`, tras `game_load_completed`); uno de la rama
+del imperio que ya había empezado la fase cuenta como firmado. ¿QUÉ HACER? dice
+`OBJ_WHY_BOOK` mientras el libro sigue en la mesa. Constructor (gana sin asedio) y
+Sandbox (sin victoria) no tienen libro. Textos: bloque `FINAL CON ELECCION` de `Tr.gd`
+(`END_*`, ES/EN). Pruebas: `tests/ui/test_final_choice.gd`. Capturas:
+`tools/v12_probe.gd` (`final_1_victoria` … `final_6_misiones_imperio`).
+
+## Volverse el Imperio (1.2, rama `feat/volverse-imperio`, sin medir)
+
+Decisión de Bryan (2026-10-18), y desde el 2026-10-25 **solo si se FIRMA el libro**
+(ver "Final con elección" arriba): tras **ganar** el Ataque Final la partida no se
+acaba. Es una **fase nueva en la misma isla**: la
+Tormenta para para siempre y ahora eres tú quien cobra el Impuesto a las **islas
+vecinas**. Es el final que ya contaba el lore (`03_LORE.md` §8): *"No has roto el
+sistema. Te has quedado con él. Ahora firmas tú."*
+
+### Qué ve el jugador
+
+1. **La victoria** (`VictoryScreen`): ver "Final con elección"; tras FIRMAR, la
+   pantalla "AHORA FIRMAS TÚ" lleva el botón **VER EL ARCHIPIÉLAGO**. Constructor y
+   Sandbox siguen como antes.
+2. **El archipiélago** (`ArchipelagoPanel`, ventana de CartoonTheme: mapa a la
+   izquierda, ficha de la isla a la derecha; desde la tarjeta de la colonia —tocar el
+   rango— → ARCHIPIÉLAGO, desde el final o desde MISIONES → IMPERIO → VER EL
+   ARCHIPIÉLAGO): un mapa dibujado
+   (mar, rutas punteadas, tu isla en el centro con tu bandera y seis vecinas con su
+   escudo; al conquistar una, **ondea tu bandera** en ella), arriba el Sargento
+   Bombarda (la primera vez cuenta de qué va; luego señala el siguiente objetivo; al
+   final avisa "que no se nos suba a la cabeza: así empezó la Regencia"), cuántas
+   islas son tuyas, tu título imperial, el tributo por cobro y la cuenta atrás. Al
+   tocar una isla: escudo, nombre, dificultad (★), una frase, su cadena de misiones
+   (✔ hechas, ▶ la que toca, ☠ el jefe, con medio y combates), lo que pagará, su
+   premio único, el candado si lo hay y **PREPARAR EL ASALTO**.
+3. **El asalto**: PREPARAR EL ASALTO abre MISIONES en la pestaña **IMPERIO** con esa
+   isla. Allí se eligen la isla (botones con N/M), se ve la ficha de la misión (mapa,
+   enemigos, botín, fuerzas) y se elige la tropa, **solo del medio de la misión** (como
+   las tres campañas: `CombatManager.campaign_unit_block()`). El mapa de la misión en
+   `BattleScreen` dice "Isla · Misión" y pinta el agua o el cielo; el parte final dice
+   "Misión 2 de 3 ganada" y "¡Isla de las Gaviotas es tuya!".
+4. **¿QUÉ HACER?** propone la siguiente conquista (`Objectives.empire_step()`): su
+   edificio si falta (Astillero/Aeródromo), tropa de su medio si no hay, o "Conquista
+   Isla Brasa: Limpiar el cielo". Con todas las islas tuyas: "Todo el archipiélago es
+   tuyo" y seguir mejorando la isla.
+5. **La isla propia sigue creciendo**: rangos hasta el 18 (cada misión de conquista da
+   80 XP y cada isla 300), decoraciones, edificios, tecnologías.
+
+### Las islas (`GameConfig.empire_islands`)
+
+| Isla | Nivel | Necesita | Misiones (medio, combates) | Tributo por cobro | Premio único |
+|---|---|---|---|---|---|
+| Isla de las Gaviotas | ★ | 0 | Romper el bloqueo (mar, 1) → El desembarco (tierra, 1) | 80 madera, 40 comida | Palmeras sin esperar al rango 13 |
+| Isla Brasa | ★ | 0 | Limpiar el cielo (aire, 1) → El desembarco (tierra, 1) | 70 oro, 30 madera | Colores de bandera Oro y Teja |
+| Puerto Niebla | ★★ | 1 | Bloqueo (mar, 1) → Tomar el puerto (mar, 2) → Desembarco (tierra, 2) | 45 acero, 40 oro, 4 tablones | Emblema Barco y fondo Olas |
+| Picos del Viento | ★★ | 1 | Limpiar el cielo (aire, 1) → Los hangares (aire, 2) → Asaltar el fuerte (tierra, 2) | 35 petróleo, 40 oro, 3 combustible | Emblema Dirigible |
+| Isla de Hierro | ★★★ | 3 | Tomar el puerto (mar, 2) → Los hangares (aire, 2) → Asaltar el fuerte (tierra, 2) | 70 acero, 3 vigas, 2 lingotes | Estatua sin esperar al rango 8 y fondo Cuadros |
+| Ciudadela de Ceniza | ★★★ | 5 | Los hangares (aire, 2) → Tomar el puerto (mar, 2) → **Jefe: el Gran Tasador** (tierra, 3) | 120 oro, 40 petróleo, 3 combustible | Título "Señor del Archipiélago" |
+
+Lógica de dominio: el mar o el aire primero (romper el bloqueo, limpiar el cielo) y
+la tierra al final (**el desembarco**: la isla se toma pisándola). La Ciudadela es el
+último fuerte de la Regencia, donde guardan el libro del Impuesto.
+
+**Títulos imperiales** (`empire_titles`, por islas conquistadas): 1 → Protector de
+Ultramar, 3 → Virrey de las Islas, 6 → Señor del Archipiélago. Se ven junto al título
+del rango en la insignia y en la tarjeta COLONIA (`RankPanel`).
+
+**Premios**: una isla conquistada abre su decoración antes de su rango
+(`RankManager.is_building_unlocked` → `EmpireManager.unlocks_building`) y sus piezas
+de bandera (`ColonyIdentity.is_piece_open` → `empire_grants`). Si el rango ya las
+había abierto, el premio no da nada nuevo (queda el título y el tributo).
+
+### Combates
+
+Cada misión es una oferta `{kind: "conquest", island, mission, domain, seed, era}`
+(`ConquestGenerator.offer`) y su mapa sale entero de ella (`mission_map`, también al
+cargar): la cadena corta de las campañas (`ExpeditionGenerator._chain_map`), **dominio
+puro** (mar abierto con islotes, aviones sobre la costa, o tierra), era mínima 3
+(`empire_min_era`). Dureza: profundidad `empire_tier_enemy[nivel].depth + misión +
+capa` en la curva enemiga de siempre (con el ×1,05 de Gobernador), por
+`empire_tier_enemy[nivel].mult`; el jefe de la Ciudadela usa el roster de jefe de
+campaña (`campaign_boss_roster`) y `empire_boss_extra_scale`. Entre combates la
+columna se cura `empire_heal_between` (30 %). **Solo paga el último combate** de cada
+misión (oro y madera de la curva × `empire_reward_mult`, y `empire_mission_parts`
+repuestos; el doble en la que toma la isla). Tras ganar una misión, la siguiente de
+esa isla espera `empire_mission_cooldown` (120 s, `get_duration`).
+
+**Sin medir.** Las cifras son una primera propuesta (niveles 4/6/8 de profundidad,
+×1,0). Medir en la ronda final con `tools/balance_probe.gd` igual que las campañas
+(docs/15 §13 "Medido") y retocar `empire_tier_enemy`.
+
+### Tributo
+
+Cada `empire_tribute_interval` (180 s de juego, `get_duration`) las islas
+conquistadas pagan juntas (`Archipelago.tribute_per_cycle()`), a la bolsa
+(`ResourceManager.add`; los materiales van al taller). El primer cobro llega un
+intervalo después de la primera isla. Una pausa larga no amontona cobros: uno por tic
+como mucho. Sin progresión offline (el reloj son segundos jugados). Aviso al registro
+("Tributo de las islas: +80 madera, +40 comida").
+
+### Por modo
+
+Regla `empire_phase` (`GameMode.empire_enabled()` = victoria + asedio + regla):
+
+| Modo | Fase |
+|---|---|
+| Campaña (Colono y Gobernador) | Sí, si firmas el libro |
+| Supervivencia | Sí, si ganas su único asedio y firmas |
+| Constructor | No: gana con el CG nv3, sin asedio que ganar |
+| Sandbox | No: no hay victoria |
+
+### Cómo está hecho
+
+- **Modelo puro** `scripts/empire/Archipelago.gd` (estado: semilla, `started`,
+  misiones ganadas por isla, descansos, conquistas, reloj y totales del tributo,
+  `intro_seen`; `finish()`, `tick()`, `start()` devuelven eventos) y
+  `scripts/empire/ConquestGenerator.gd` (estático: oferta, mapa, botín).
+- **Servicio** `EmpireManager` (autoload, el último): `is_active()` (modo + Ataque
+  Final ganado), `lock_reason()` / `lock_text()` (`EMP_LOCK_PHASE`, `EMP_DONE`,
+  `EMP_LOCK_NEEDS`, `CAMP_LOCK_BUILDING`, `EMP_LOCK_REST` y los de siempre),
+  `launch_conquest(isla, tropa)` → `CombatManager.launch_conquest_mission(oferta,
+  tropa)`. Al volver la columna, `CombatManager._resolve_expedition()` deja
+  `conquest_island` / `conquest_mission` en el parte y EmpireManager, al oír
+  `expedition_ended`, apunta el progreso. Un Timer de 1 s (se para con la pausa) cobra
+  el tributo; nada por fotograma.
+- **Señales**: `empire_phase_started`, `empire_changed`, `conquest_mission_won`,
+  `island_conquered`, `archipelago_conquered`, `empire_tribute_paid`
+  ([10-signals-reference.md](10-signals-reference.md)).
+- **Guardado**: clave `"empire"` (`get_save_data` / `load_save_data` idempotente,
+  `reset()` en `_new_game()`, `clear_save()` y `clear_save_and_reload_from()`).
+  **Un guardado viejo con la victoria ya conseguida** (Ataque Final `WON` en
+  `progression.final_audit`, sin clave `empire`) entra en la fase al terminar la carga
+  (`game_load_completed` → `_maybe_start()`), con el aviso y el consejo.
+- **ArchipelagoPanel** lo monta `VictoryScreen` como hermano al arrancar (las dos
+  vistas tienen VictoryScreen), así ☰ MENÚ lo encuentra por nombre sin tocar
+  `Main.tscn` ni `Main2D.tscn`. Se construye la primera vez que se abre; el mapa es un
+  `_draw` que se repinta solo al cambiar algo.
+- **Ayuda**: guía "El archipiélago" (`guide_empire`) y consejo `empire` al empezar la
+  fase. Sonido: `island_conquered` toca el `rank_up` (sin sonido nuevo).
+
+### Lo que queda (anotado)
+
+- Medir la dureza de las seis islas y el tributo con la línea (¿descuadra la bolsa?).
+- El "giro amargo" del lore (si cobras demasiado, tus islas te ven como tú veías a la
+  Regencia) es solo una frase del Sargento: no hay rebeliones.
+- Las islas no se ven desde la vista de la isla (3D/2D): solo en el mapa.
+- Multijugador asíncrono ("imperios de ultramar", doc de contexto 10 §3.3): fuera.
+
+## Capítulos (2026-10-25, rama `feat/ritmo-colono`)
+
+Decisión de Bryan tras la crítica (contexto 27, B1): **Colono dura 3-4 h en tres
+capítulos**, que son los tres actos del lore (contexto 03 §7); Gobernador se queda en
+6-8 h. Cada capítulo tiene un objetivo visible en ¿QUÉ HACER? y se cierra con una
+pantalla corta.
+
+| Capítulo | Acto del lore | Qué abre | Se cierra con |
+|---|---|---|---|
+| **I · Nadie nos mira** | Acto I (Era Frontera) | oro, madera, comida, casas; Cuartel, primer soldado y primera misión; la Tormenta de prueba; la Campaña de Tierra | la **Fundición** (era 2) |
+| **II · La cuenta** | Acto II (Era Industrial) | acero; la Tormenta de verdad y el Impuesto (la Visita); la guarnición, el Astillero y la Campaña de Mar; la Refinería, las torres y el Cuartel General | la **Refinería** (era 3) **y** los **Planos del Bastión** (jefe de Tierra) |
+| **III · El libro** | Acto III (Era Petrolera) | petróleo, torres, Cuartel General, Aeródromo; Mar y Aire | **Casco del Leviatán** y **Motor del Zepelín**, el **CG nivel 3** y **aguantar el Ataque Final** (la victoria) |
+
+- **Lógica.** `scripts/services/Chapters.gd` (estático, como `Objectives`, sin estado):
+  `current()` (1-3; 4 con la partida ganada), `is_done(n)`, `goals(n)` (metas con su
+  clave de Tr y si están hechas), `heading(n)` ("Capítulo II · La cuenta"),
+  `goal_text(n)`, `goal_lines(n)` ("✓ …", "· …"), `close_text(n)`. Solo hay
+  capítulos donde hay Ataque Final (`Chapters.enabled()`: Campaña, en los dos niveles,
+  y Supervivencia).
+- **Estado.** `ProgressionManager.chapters_closed` (los cerrados, para no repetir la
+  pantalla), en el guardado como `progression.chapters`; se limpia en `reset()`.
+  `check_chapters()` los cierra **en orden** y de uno en uno al cambiar de era, al
+  completar una campaña, con el CG nivel 3 y al ganar, y emite
+  `EventBus.chapter_completed(n)`. Al cargar (`game_load_completed`) los ya cumplidos
+  se dan por cerrados **sin pantalla**: un guardado de antes de los capítulos no ve
+  tres tarjetas seguidas.
+- **¿QUÉ HACER?** (`ObjectivePanel`): arriba, "CAPÍTULO II · LA CUENTA", el objetivo
+  del capítulo en una frase y sus metas con ✓ (`_paint_chapter()`, con el refresco de
+  siempre: nada por fotograma). La línea (`Objectives.LINE`) lleva las piezas donde
+  las pide su capítulo (docs/15 §13).
+- **El cierre** (`scripts/ui/ChapterScreen.gd`, capa 19, grupo `modal_screen`): una
+  tarjeta con la cinta "CAPÍTULO I COMPLETO", el nombre, una frase del lore
+  (`CHAPTER_n_CLOSE`), "Ahora: Capítulo II · La cuenta" con su objetivo y
+  **¡ADELANTE!**. La crea `ObjectivePanel` en las dos escenas (no es un nodo de
+  `Main.tscn`). Espera a que no haya tablero abierto ni otro parte a la vista. El
+  capítulo III no saca tarjeta: lo cierra la pantalla de victoria.
+- **El ritmo de Colono** (regla de nivel, `GameConfig.game_tier_rules`):
+  `campaign_missions` (Tierra 4, Mar 2, Aire 2; Gobernador las 16), `hq_resource_mult` 0,6 (lo de la bolsa del CG; Gobernador 1) y
+  `hq_material_mult` 0,3 (vigas, lingotes y combustible de los niveles 2 y 3 del CG;
+  Gobernador 1). En Gobernador el nivel 3 sigue pidiendo la bolsa entera (3.500);
+  en Colono, 2.100 (`hq_resource_mult` 0,6, material ×0,3), y su asedio trae una
+  oleada menos (3-4, `final_audit_waves_delta` −1). Medido en [22-linea-jugable.md](22-linea-jugable.md) §17.
 
 ## Orden de la Regencia (2026-10-14, 1.1)
 
@@ -196,21 +432,21 @@ Acero · 18 Archigobernador (keys `RANK_TITLE_<n>`, ES and EN).
 | 1 | flag basics: patterns `plain`, `bands_h`, `bands_v`, `halves_h`, `cross`; emblems `none`, `gear`, `anchor`, `wheat`, `hammer`; colours ivory, brass, crimson, steel, moss, soot; regiment paint `plain` |
 | 2 | Garden, Flower planter, Hay cart (decorations); emblem `tower` |
 | 3 | +1 % production; pattern `border`; colour sky; Bonfire; regiment paint `stripes` |
-| 4 | +2 % storage; emblem `star` |
-| 5 | Fountain, Flagpole |
-| 6 | +1 % production; patterns `diagonal`, `saltire`; regiment paint `spots` |
-| 7 | colours copper, red |
-| 8 | Statue; +2 % storage |
-| 9 | +1 % production; pattern `quartered`; emblem `wrench`; regiment paint `desert` |
-| 10 | +2 houses (limit) |
-| 11 | colours grass, slate; emblem `wheel` |
-| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle`; regiment paint `snow` |
-| 13 | Palm trees (decoration); emblem `ship` (the old +2 statues/fountains did nothing once decorations had no cap) |
-| 14 | colours terracotta, gold; emblem `cogs` |
+| 4 | +2 % storage; emblem `star`; Flower stall, Community garden |
+| 5 | Fountain, Flagpole, Small fountain |
+| 6 | +1 % production; patterns `diagonal`, `saltire`; regiment paint `spots`; Entrance arch, Bandstand |
+| 7 | colours copper, red; Beached boat (coast), Gear garden |
+| 8 | Statue; +2 % storage; Fair stage |
+| 9 | +1 % production; pattern `quartered`; emblem `wrench`; regiment paint `desert`; Fair tent |
+| 10 | +2 houses (limit); Pond with bridge, Water mill |
+| 11 | colours grass, slate; emblem `wheel`; Container mural |
+| 12 | +1 % production, +2 % storage; patterns `canton`, `hoist_triangle`; regiment paint `snow`; Clock tower |
+| 13 | Palm trees, Wreck monument (decorations, coast); emblem `ship` (the old +2 statues/fountains did nothing once decorations had no cap) |
+| 14 | colours terracotta, gold; emblem `cogs`; Moored airship |
 | 15 | +1 % production; pattern `stripes`; regiment paint `parade` |
 | 16 | +2 % storage; +1 tower (limit); emblem `sun` |
 | 17 | +2 houses (limit); pattern `waves` |
-| 18 | +2 % production; pattern `checks`; emblem `airship` |
+| 18 | +2 % production; pattern `checks`; emblem `airship`; Governor's plaza (3x3) |
 
 Totals at rank 18: +7 % production, +8 % storage. The basic buildings keep their era
 unlocks (the playable line in docs/22 does not move): the rank only opens
@@ -229,6 +465,11 @@ with `"buildings": [id]`. Sandbox has every rank unlock open.
   `RankManager` **assigns** the total of the current rank, never adds: loading twice
   gives the same bonuses. Note: production is truncated with `int()` per cycle, so a
   +1-3 % bonus only shows on bigger yields (upgraded buildings, techs).
+The new decoration rows are not written inside `rank_rewards`: `GameConfig._register_decorations_traffic()`
+adds them from `decor_rank_unlocks` (feat/decoraciones-y-trafico). Two decorations open by a deed, not a
+rank: the Museum cannon after 1 refused Tax and the Storm column after 5 (`decor_deed_unlocks`, read from
+`StormManager.tithes_repelled()`); the card says "Impuestos rechazados: 0/1" instead of "Rango N".
+
 - **Locks:** `PlacementRules.check_rank()` blocks the purchase ("Necesitas rango N");
   CONSTRUIR draws a padlock and "Rango N" on the card.
 - **The country (name and flag):** see "The player's country" below.

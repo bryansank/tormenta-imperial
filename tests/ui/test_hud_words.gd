@@ -5,11 +5,17 @@ extends GdUnitTestSuite
 
 const Badge := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 
-func _click() -> InputEventMouseButton:
+func _click(pressed := true) -> InputEventMouseButton:
 	var e := InputEventMouseButton.new()
 	e.button_index = MOUSE_BUTTON_LEFT
-	e.pressed = true
+	e.pressed = pressed
 	return e
+
+## Un toque entero: apoyar y soltar. La ficha se despliega al soltar
+## (mantener pulsado solo ensena el globo, docs/21 §9).
+func _tap(control: Control) -> void:
+	control.gui_input.emit(_click(true))
+	control.gui_input.emit(_click(false))
 
 func test_every_resource_number_says_what_it_is() -> void:
 	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
@@ -25,7 +31,7 @@ func test_a_tap_on_a_resource_unfolds_the_names() -> void:
 	add_child(hud)
 	var chip: Control = hud.find_child("Chip_gold", true, false)
 	assert_bool(hud.is_expanded()).is_false()
-	chip.gui_input.emit(_click())
+	_tap(chip)
 	assert_bool(hud.is_expanded()).is_true()
 
 ## Sin rotulo "ALMACEN COMPARTIDO" (2026-10): la barra y "usado/tope" en una
@@ -39,7 +45,7 @@ func test_the_storage_bar_explains_itself_without_a_fixed_title() -> void:
 	var labels: Array = row.find_children("*", "Label", true, false)
 	assert_int(labels.size()).is_equal(1)
 	assert_str((labels[0] as Label).text).contains("/")
-	row.gui_input.emit(_click())
+	_tap(row)
 	var legend: Label = hud.find_child("StorageLegend", true, false)
 	assert_bool(legend.is_visible_in_tree()).is_true()
 
@@ -91,3 +97,25 @@ func test_milestone_and_era_toasts_queue_up() -> void:
 	assert_int(progress.find_children("MilestoneToast*", "PanelContainer", true, false).size()).is_equal(0)
 	assert_int(notes.shown_toasts().size()).is_less_equal(notes.MAX_TOASTS)
 	assert_int(notes.shown_toasts().size() + notes.held_count()).is_equal(3)
+
+## QA de tablet (2026-10-26): mantener pulsada una ficha saca el globo, que
+## manda el soltar lejos (TouchTooltip.FAR_AWAY). Eso no despliega la tarjeta.
+func test_holding_a_chip_for_its_bubble_does_not_unfold_the_card() -> void:
+	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
+	add_child(hud)
+	var chip: Control = hud.find_child("Chip_gold", true, false)
+	chip.gui_input.emit(_click(true))
+	assert_bool(hud.is_expanded()).is_false()
+	var far := _click(false)
+	far.position = Vector2(-100000, -100000)
+	chip.gui_input.emit(far)
+	assert_bool(hud.is_expanded()).is_false()
+
+func test_starting_to_place_a_building_folds_the_card() -> void:
+	var hud: CanvasLayer = auto_free(load("res://scenes/ui/ResourceHUD.tscn").instantiate())
+	add_child(hud)
+	_tap(hud.find_child("Chip_gold", true, false))
+	assert_bool(hud.is_expanded()).is_true()
+	assert_bool(EventBus.building_selected_for_placement.is_connected(hud._on_placement_started)).is_true()
+	hud._on_placement_started(load("res://data/buildings/sawmill.tres"))
+	assert_bool(hud.is_expanded()).is_false()

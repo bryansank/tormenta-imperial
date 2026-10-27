@@ -25,13 +25,20 @@ extends SceneTree
 ##   --quality=    auto | high | low | minima  (auto). `minima` es la propuesta de
 ##                 docs/26 emulada por la sonda: baja + sin sombras, glow ni humo,
 ##                 scaling_3d 0.6 y pocos caminantes. No es un ajuste del juego.
+##                 `minimal` es la Minima de verdad del juego (Ajustes, WorldLook +
+##                 GraphicsQuality.apply_runtime), la que pone la deteccion.
 ##   --view=       3d | 2d (3d; grande_2d fuerza 2d)
 ##   --size=WxH    tamano de ventana (1280x720)
 ##   --seed=N      semilla del mapa y de los yacimientos sueltos (1)
 ##   --vsync=1     mide con vsync (por defecto sin vsync ni tope de FPS)
 ##   --profile=N   segundos de perfil por script tras la medida (4; 0 lo apaga)
+##   --device=     pc | tablet | phone: fuerza el perfil del dispositivo (escala de la
+##                 interfaz, tope de caminantes). Por defecto, el detectado
 ##   --tag=texto   prefijo de los ficheros de salida (por defecto renderer_calidad)
 ##   --shot=0      no guarda la captura de control
+##   --v12=on|off  lo que cuesta la 1.2 (on): dos amenazas de costa en la orilla
+##                 y el barco del contrabandista atracado; los camiones van solos.
+##                 off quita camiones, marcas y barco para comparar (docs/26).
 
 const SCENARIOS := ["inicio", "media", "grande", "tormenta", "combate", "grande_2d"]
 
@@ -110,7 +117,7 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 	var out := {
 		"scenario": "grande", "seconds": 15.0, "warmup": 6.0, "quality": "auto",
 		"view": "3d", "size": Vector2i(1280, 720), "seed": 1, "vsync": false,
-		"profile": 4.0, "tag": "", "shot": true,
+		"profile": 4.0, "tag": "", "shot": true, "v12": "on", "device": "",
 	}
 	for arg in user_args:
 		if not arg.begins_with("--") or not arg.contains("="):
@@ -123,7 +130,9 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 			"seconds", "warmup", "profile":
 				out[key] = maxf(0.0, float(value))
 			"quality":
-				out["quality"] = value if value in ["auto", "high", "low", "minima"] else "auto"
+				out["quality"] = value if value in ["auto", "high", "low", "minimal", "minima"] else "auto"
+			"device":
+				out["device"] = value if value in ["pc", "tablet", "phone"] else ""
 			"view":
 				out["view"] = "2d" if value == "2d" else "3d"
 			"size":
@@ -138,6 +147,8 @@ static func parse_args(user_args: PackedStringArray) -> Dictionary:
 				out["tag"] = value
 			"shot":
 				out["shot"] = value != "0"
+			"v12":
+				out["v12"] = "off" if value in ["off", "0"] else "on"
 	if out["scenario"] == "grande_2d":
 		out["view"] = "2d"
 	return out

@@ -75,8 +75,11 @@ func test_targets_carry_their_predicted_damage() -> void:
 		if u.side == Encounter.ENEMY:
 			enemy = u
 	var previews: Dictionary = screen.target_previews(active, [enemy.uid])
-	var expected := CombatRules.damage(active, enemy)
-	assert_str(String(previews[enemy.uid])).contains(str(expected))
+	# Con el azar del dano (feat/ritmo-colono) la vista previa ensena el rango:
+	# "8-11 de 75". Sin rango, el dano de siempre.
+	var p: Dictionary = CombatRules.preview_damage(active, enemy)
+	assert_str(String(previews[enemy.uid])).contains(str(int(p["damage_min"])))
+	assert_str(String(previews[enemy.uid])).contains(str(int(p["damage_max"])))
 
 func test_threat_button_paints_the_enemy_reach() -> void:
 	TutorialManager.combat_lessons_done.append("basics")

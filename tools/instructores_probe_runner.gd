@@ -7,6 +7,10 @@ extends Node
 ##   consejo_tormenta_escribiendo / consejo_tormenta    el Sargento (storm_incoming)
 ##   consejo_economia_escribiendo / consejo_economia    la Capitana (market)
 ##
+## Con `--only=tutorial`: la tarjeta del tutorial guiado (paso de la meta) con
+## cada cara de los dos, `tutorial_<quien>_<cara>` (el Sargento, en la misma
+## tarjeta, para ver el retrato junto al bocadillo).
+##
 ## Las tomas "_escribiendo" se sacan a media frase: la tarjeta tiene que medir
 ## lo mismo que la entera (el texto escrito poco a poco no la hace saltar); la
 ## sonda imprime los dos tamanos. Argumentos tras `--`: --shot-size=WxH,
@@ -61,6 +65,10 @@ func _run() -> void:
 		("_" + _arg("tag")) if _arg("tag") != "" else ""]
 
 	# â”€â”€ Partida sembrada â”€â”€
+	if _arg("only") == "tutorial":
+		await _tutorial_shots()
+		_finish()
+		return
 	(load("res://tools/view2d_probe_runner.gd").new() as Node)._write_seeded_save()
 	GameManager.title_dismissed = true
 	get_tree().change_scene_to_file("res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn")
@@ -121,6 +129,31 @@ func _run() -> void:
 				box.call("finish", "probe")
 			await _seconds(1.0)
 	_finish()
+
+## La tarjeta del tutorial con cada cara: partida nueva, paso de la meta.
+func _tutorial_shots() -> void:
+	GameManager.title_dismissed = true
+	get_tree().change_scene_to_file("res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn")
+	await _frames(60)
+	var main := get_tree().current_scene
+	_quiet(main)
+	await _seconds(1.0)
+	_quiet(main)
+	var tut: CanvasLayer = main.get_node_or_null("TutorialPanel")
+	if tut == null:
+		return
+	tut.visible = true
+	TutorialManager.intro_seen = true
+	TutorialManager.start_guide(false)
+	await _seconds(1.0)
+	var bust: Control = tut.call("instructor")
+	print("instructores_probe: paso=", TutorialManager.current_step(), " busto=", bust.get_rect() if bust else null)
+	for who in InstructorBust.WHO:
+		for e in InstructorBust.EXPRESSIONS:
+			bust.call("show_as", who, e, bust.get("facing"))
+			await _frames(4)
+			await _shot("tutorial_%s_%s" % [who, e])
+	TutorialManager.finish_guide()
 
 func _quiet(main: Node) -> void:
 	var tut: Node = main.get_node_or_null("TutorialPanel")

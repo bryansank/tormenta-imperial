@@ -62,10 +62,26 @@ const ENTRIES := {
 	# danos (la leccion de reparar). La de reparar solo donde hay Tormenta.
 	"guide_rotate": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_ROTATE", "body": "HELP_B_ROTATE", "target": "build_button"},
+	# Atajos de teclado de PC (2026-10-26, feat/atajos-pc).
+	"guide_keys": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_KEYS", "body": "HELP_B_KEYS", "target": ""},
 	"guide_move": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_MOVE", "body": "HELP_B_MOVE", "target": ""},
 	"guide_demolish": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
 		"title": "HELP_T_DEMOLISH", "body": "HELP_B_DEMOLISH", "target": ""},
+	# Lo que salio del tutorial corto (2026-10-24): consejos que salen cuando hacen
+	# falta y quedan aqui desde el principio.
+	"house": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "TIP_HOUSE_T", "body": "TIP_HOUSE_B", "target": "workers"},
+	"food_low": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "TIP_FOOD_T", "body": "TIP_FOOD_B", "target": "resources"},
+	"placing": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "TIP_PLACING_T", "body": "TIP_PLACING_B", "target": ""},
+	"building_actions": {"kind": "tip", "cat": CAT_BASICS, "basic": true,
+		"title": "TIP_BUILDING_T", "body": "TIP_BUILDING_B", "target": ""},
+	# Dejar de colocar (2026-10-24): Esc / clic derecho, o ✕ CANCELAR con el dedo.
+	"guide_cancel": {"kind": "guide", "cat": CAT_BASICS, "basic": true,
+		"title": "HELP_T_CANCEL", "body": "HELP_B_CANCEL", "target": ""},
 	"guide_repair": {"kind": "guide", "cat": CAT_STORM, "basic": true,
 		"title": "HELP_T_REPAIR", "body": "HELP_B_REPAIR", "target": "", "needs": "storm_started"},
 	# ── Guia rapida (2026-09-28): los cuatro bloques de la pantalla del inicio ──
@@ -147,6 +163,20 @@ const ENTRIES := {
 	# Muelle de pesca (feat/muelle-pesca): sale al terminar el primero.
 	"fishing_dock": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
 		"title": "HELP_T_FISHING_DOCK", "body": "HELP_B_FISHING_DOCK", "target": ""},
+	# Defensa (feat/edificios-defensa-vida): salen al terminar el primero de cada uno.
+	"bastion": {"kind": "tip", "cat": CAT_STORM, "basic": true,
+		"title": "HELP_T_BASTION", "body": "HELP_B_BASTION", "target": ""},
+	"scrapyard": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_SCRAPYARD", "body": "HELP_B_SCRAPYARD", "target": ""},
+	"telegraph": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_TELEGRAPH", "body": "HELP_B_TELEGRAPH", "target": ""},
+	# Economia (feat/edificios-economia): salen al terminar el primero de cada uno.
+	"trade_port": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_TRADE_PORT", "body": "HELP_B_TRADE_PORT", "target": ""},
+	"exchange": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_EXCHANGE", "body": "HELP_B_EXCHANGE", "target": ""},
+	"diesel_plant": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_DIESEL_PLANT", "body": "HELP_B_DIESEL_PLANT", "target": ""},
 	# ── Ensenar el combate (2026-10-14, rama feat/ensenar-combate, docs/23 §2.4) ──
 	# Guias basicas: siempre en el indice. Lo mismo que cuentan las marcas del
 	# combate guiado y la ficha de unidad, para leerlo con calma.
@@ -180,6 +210,13 @@ const ENTRIES := {
 		"title": "HELP_T_CAMPAIGNS", "body": "HELP_B_CAMPAIGNS", "target": ""},
 	"final_gate": {"kind": "tip", "cat": CAT_ARMY, "basic": true,
 		"title": "HELP_T_FINAL_GATE", "body": "HELP_B_FINAL_GATE", "target": "", "needs": "final_audit"},
+	# ── Volverse el Imperio (feat/volverse-imperio, docs/06) ──
+	# La pagina "El archipielago" esta en el indice (solo donde hay asedio); el
+	# consejo sale al empezar la fase (EmpireManager, al ganar el Ataque Final).
+	"guide_empire": {"kind": "guide", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_EMPIRE", "body": "HELP_B_EMPIRE", "target": "", "needs": "final_audit"},
+	"empire": {"kind": "tip", "cat": CAT_ARMY, "basic": true,
+		"title": "HELP_T_EMPIRE", "body": "HELP_B_EMPIRE", "target": "", "needs": "final_audit"},
 	# ── Topes y mejoras (2026-10-17, rama feat/topes-mejoras-ayuda) ──
 	# Paginas con numeros: `dyn` = el cuerpo lo escribe BuildingHelpText leyendo
 	# GameConfig (topes por era, multiplicadores de mejora, repuestos, torres,

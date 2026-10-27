@@ -26,13 +26,11 @@ func _run() -> void:
 	GameConfig.ui_layout = {}
 	GameConfig.ui_helper_visible = false
 	GameConfig.ui_touch_controls = "auto"
-	# --theme=dark: el tema oscuro de las ventanas (Ajustes > Pantalla > Tema).
-	GameConfig.ui_theme = "dark" if _arg("theme") == "dark" else "light"
 	DeviceProfile.apply_all()
 	await _frames(5)
 	var win := DisplayServer.window_get_size()
 	_tag = "%s_%s_%dx%d%s%s" % [_arg("view", "3d"), DeviceProfile.current(), win.x, win.y,
-		"_oscuro" if _arg("theme") == "dark" else "",
+		"",
 		("_" + _arg("tag")) if _arg("tag") != "" else ""]
 	var scene := "res://scenes/main/Main2D.tscn" if _arg("view") == "2d" else "res://scenes/main/Main.tscn"
 

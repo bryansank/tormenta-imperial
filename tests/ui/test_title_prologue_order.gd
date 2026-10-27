@@ -100,6 +100,12 @@ func test_dismissing_the_menu_brings_the_prologue_on_top() -> void:
 	_scan()
 	menu.close_menu()
 	_scan()
+	# Tutorial corto (2026-10-24): primero "De que va", encima de todo; al
+	# cerrarla, el lore.
+	var about: CanvasLayer = s["tutorial"].about()
+	assert_bool(about.is_open()).is_true()
+	assert_bool(about.layer > _top_visible_layer([about])).is_true()
+	about.close()
 	var prologue: CanvasLayer = s["tutorial"].prologue()
 	var open_now: bool = prologue.is_open()
 	var on_top: bool = prologue.layer > _top_visible_layer([prologue])

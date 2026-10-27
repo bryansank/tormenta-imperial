@@ -239,6 +239,29 @@ signal campaign_completed(domain: String)
 @warning_ignore("unused_signal")
 signal enemy_routed()
 
+# ── Amenazas de costa (feat/amenazas-costa, docs/15 §14) ──
+## Solo botin opcional: aparecen, se van solas sin dano, y atacarlas o explorar
+## el pecio da botin. Las emite solo ThreatManager (salvo threat_clicked).
+## Las marcas cambiaron (aparecio, se fue, atacada, explorada, vista, cargada):
+## las marcas 3D/2D, la tarjeta y MISIONES repintan con esto.
+@warning_ignore("unused_signal")
+signal threats_changed()
+## Una marca nueva en la costa (`threat_type`: raiders / vanguard / wreck).
+@warning_ignore("unused_signal")
+signal threat_appeared(threat_id: int, threat_type: String, water: bool)
+## Echada: la columna gano su combate (el botin ya lo cobro CombatManager).
+@warning_ignore("unused_signal")
+signal threat_cleared(threat_id: int, threat_type: String)
+## Se fue sola, sin hacer nada (se le acabo el tiempo).
+@warning_ignore("unused_signal")
+signal threat_left(threat_id: int, threat_type: String)
+## Los trabajadores volvieron del pecio con esto (ya en la colonia).
+@warning_ignore("unused_signal")
+signal wreck_explored(threat_id: int, rewards: Dictionary, loot: Dictionary)
+## El jugador toco una marca en el mapa (la emiten los dos BuildingPlacer).
+@warning_ignore("unused_signal")
+signal threat_clicked(threat_id: int)
+
 # ── Building Health ──
 ## Emitidas solo por BuildingHealth. Un edificio en ruinas sigue en su sitio y
 ## deja de producir hasta que se paga la reparacion; nunca se destruye solo.
@@ -308,6 +331,22 @@ signal defense_auto_resolved(victory: bool, rounds: int, summary: Dictionary)
 ## tienen que reaccionar a un ensayo. Lo pinta WarReportScreen.
 @warning_ignore("unused_signal")
 signal trial_tithe_resolved(repelled: bool, taken: Dictionary)
+## La Visita (feat/ritmo-colono): un Impuesto que se resuelve con parte
+## automatico ofrece ¡PELEAR! unos segundos (`open` = true) y la oferta se cierra
+## (false) al pulsarlo, al resolverse sola o al cargar. Solo StormManager; el
+## boton vive en StormHUD.
+@warning_ignore("unused_signal")
+signal tithe_choice_changed(open: bool)
+## Una sola llave (feat/ritmo-colono): el jefe de la campana `domain` entrego su
+## pieza del Cuartel General nivel 3. Solo CombatManager, justo despues de
+## `campaign_completed`.
+@warning_ignore("unused_signal")
+signal campaign_piece_won(domain: String)
+## Capitulos de Colono (feat/ritmo-colono): el capitulo `chapter` (1-3) se acaba
+## de cerrar. Solo ProgressionManager, una vez por capitulo y partida (nunca al
+## cargar). La pantalla corta de cierre la pinta ChapterScreen.
+@warning_ignore("unused_signal")
+signal chapter_completed(chapter: int)
 
 # ── The Final Audit ──
 ## Emitidas solo por ProgressionManager. El Cuartel General a nivel 3 ya no gana
@@ -363,6 +402,14 @@ signal graphics_quality_changed(quality: String)
 @warning_ignore("unused_signal")
 signal game_speed_changed(speed: float)
 
+## Un atajo de teclado de PC ya filtrado por InputService (sin LineEdit con foco,
+## sin menu principal, con el contexto bueno): "build", "missions", "help",
+## "end_turn", "defend" o "wait". Quien lo posee (BottomBar, BattleScreen) lo
+## ejecuta. La velocidad (1/2) la aplica el propio InputService, y la pausa
+## (Espacio) PauseMenu, que es el unico que oye con el arbol en pausa.
+@warning_ignore("unused_signal")
+signal shortcut_pressed(action: StringName)
+
 ## Emitted when the window switches to/from fullscreen (F11 or Settings).
 signal fullscreen_changed(enabled: bool)
 
@@ -408,6 +455,11 @@ signal locale_changed(locale: String)
 signal game_new_started()
 @warning_ignore("unused_signal")
 signal game_load_completed()
+## Mientras GameManager coloca la partida al arrancar: `done` de `total` piezas
+## (los edificios del guardado; en una partida nueva, sus pasos). La escucha la
+## pantalla de carga (LoadingScreen) para mover su barra.
+@warning_ignore("unused_signal")
+signal game_load_progress(done: int, total: int)
 
 # ── Tutorial ──
 ## Emitidas solo por TutorialManager. El manager decide QUE se ensena y CUANDO
@@ -511,3 +563,65 @@ signal contract_discarded(source: String, contract: Dictionary)
 ## El panel se repinta con esta.
 @warning_ignore("unused_signal")
 signal contract_board_changed()
+
+# ── Defensa y vida (feat/edificios-defensa-vida) ──
+## Tras la Tormenta, las brigadas de la Chatarreria despejaron ruinas: `steel`
+## de acero, `parts` repuestos y `lifted` edificios levantados.
+@warning_ignore("unused_signal")
+signal scrap_salvaged(steel: int, parts: int, lifted: int)
+# ── Economia (feat/edificios-economia) ──
+## EconomyManager publica el barco del contrabandista (Puerto comercial), el
+## combustible de las Centrales diesel y el interes de la Casa de cambio.
+## Atraco el barco del contrabandista junto al Puerto. `offers`: las ofertas
+## (ver scripts/economy/SmugglerShip.gd); `port`: el nodo del Puerto.
+@warning_ignore("unused_signal")
+signal smuggler_ship_arrived(offers: Array, port: Node)
+## El barco zarpo. `reason`: "time", "storm" (llego la Ceniza) o "no_port".
+@warning_ignore("unused_signal")
+signal smuggler_ship_departed(reason: String)
+## Se cerro un trato con el barco (la oferta `index`, ya cobrada y pagada).
+@warning_ignore("unused_signal")
+signal smuggler_offer_taken(index: int, offer: Dictionary)
+## Se compro un plano menor al barco: `building_id` ya se puede construir
+## aunque el rango aun no llegue.
+@warning_ignore("unused_signal")
+signal building_plan_bought(building_id: String)
+## Una Central diesel se quedo sin combustible (`running` false) o volvio a
+## arrancar (true).
+@warning_ignore("unused_signal")
+signal diesel_plant_fuel_changed(node: Node, running: bool)
+## La Casa de cambio pago interes (solo Gobernador).
+@warning_ignore("unused_signal")
+signal exchange_interest_paid(amount: int)
+## Algo de lo de arriba cambio (el panel del Puerto y la ficha se repintan).
+@warning_ignore("unused_signal")
+signal economy_changed()
+# ── Volverse el Imperio (feat/volverse-imperio, docs/06) ──
+## Empieza la fase: se gano el Ataque Final (o se cargo una partida ya ganada) y
+## el reloj del tributo se pone en marcha. Una vez por partida.
+@warning_ignore("unused_signal")
+signal empire_phase_started()
+## Algo cambio en el archipielago (mision, isla, tributo, carga). Los paneles se
+## repintan con esta.
+@warning_ignore("unused_signal")
+signal empire_changed()
+## Se gano la mision `mission` (desde 0) de `island_id`. `conquered`: era la
+## ultima y la isla ya es tuya.
+@warning_ignore("unused_signal")
+signal conquest_mission_won(island_id: String, mission: int, conquered: bool)
+## Tu bandera ondea en `island_id`: empieza a pagar tributo y da su recompensa.
+@warning_ignore("unused_signal")
+signal island_conquered(island_id: String)
+## Todas las islas del archipielago son tuyas.
+@warning_ignore("unused_signal")
+signal archipelago_conquered()
+## Las islas conquistadas pagaron (recurso -> cantidad, ya en la bolsa).
+@warning_ignore("unused_signal")
+signal empire_tribute_paid(amounts: Dictionary)
+
+# ── Final con eleccion (v1.2, decision de Bryan 2026-10-25) ──
+## El jugador decidio que hacer con el libro del Impuesto tras ganar el Ataque
+## Final: `choice` = "sign" (firma: la fase del archipielago) o "burn" (lo
+## quema: la isla queda libre). Una vez por partida (EmpireManager.choose_ending).
+@warning_ignore("unused_signal")
+signal ending_chosen(choice: String)

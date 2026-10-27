@@ -174,22 +174,19 @@ func test_campaign_capstone_summons_the_audit_and_does_not_win() -> void:
 	assert_object(ProgressionManager.final_audit).is_not_null()
 	assert_int(_victories.size()).is_equal(0)
 
-## Tres campanas (feat/tres-campanas): en Campana el CG nivel 3 no basta; el
-## Ataque Final llega cuando estan tambien las tres campanas, en cualquier orden.
-func test_campaign_capstone_waits_for_the_three_campaigns() -> void:
+## Una sola llave (feat/ritmo-colono): las campanas ya no son una segunda llave
+## del Ataque Final. Sus jefes entregan las piezas que pide el CG nivel 3, y el
+## CG nivel 3 convoca el asedio. Mientras falten, el aviso dice que piezas.
+func test_campaign_capstone_is_the_single_key() -> void:
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
 	ProgressionManager.reset()
-	ProgressionManager._complete_milestone("hq_max")
-	assert_object(ProgressionManager.final_audit).is_null()
-	assert_int(_victories.size()).is_equal(0)
+	CombatManager.load_campaigns_save_data({"seed": 5})
+	assert_array(CombatManager.hq_missing_pieces(GameConfig.max_building_level)).is_equal(["land", "sea", "air"])
 	assert_str(ProgressionManager.final_audit_gate_text()).is_not_empty()
-	CombatManager.load_campaigns_save_data({"progress": {
-		"land": GameConfig.campaign_mission_count("land"),
-		"sea": GameConfig.campaign_mission_count("sea"),
-		"air": GameConfig.campaign_mission_count("air")}})
-	EventBus.campaign_completed.emit("air")
+	ProgressionManager._complete_milestone("hq_max")
 	assert_object(ProgressionManager.final_audit).is_not_null()
 	assert_bool(ProgressionManager.is_final_audit_pending()).is_true()
+	assert_int(_victories.size()).is_equal(0)
 	assert_str(ProgressionManager.final_audit_gate_text()).is_empty()
 
 func test_survival_also_needs_the_campaigns_and_builder_does_not() -> void:

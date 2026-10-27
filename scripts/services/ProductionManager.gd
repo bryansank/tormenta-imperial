@@ -1,5 +1,6 @@
 extends Node
 const UtilityEffects := preload("res://scripts/buildings/UtilityEffects.gd")
+const DefenseLifeEffects := preload("res://scripts/buildings/DefenseLifeEffects.gd")
 ## Manages passive resource production from buildings and construction timers.
 ## Buildings with build_time > 0 go through construction before producing.
 ## Spawns floating text when resources are awarded.
@@ -37,6 +38,10 @@ func _ready() -> void:
 	EventBus.building_ruined.connect(_mark_areas_dirty.unbind(1))
 	EventBus.building_repaired.connect(_mark_areas_dirty.unbind(1))
 	EventBus.game_load_completed.connect(_mark_areas_dirty)
+	# Defensa (feat/edificios-defensa-vida): la Chatarreria y el Telegrafo solo
+	# cuentan con obreros; mejorar un edificio puede cambiar su huella.
+	EventBus.building_upgrade_completed.connect(_mark_areas_dirty.unbind(2))
+	EventBus.workers_changed.connect(_mark_areas_dirty.unbind(2))
 
 ## Las areas de efecto de los edificios utiles (UtilityEffects): un solo
 ## recuento al final del frame, aunque se coloquen veinte tramos de carretera.
@@ -51,6 +56,13 @@ func _mark_areas_dirty() -> void:
 func _refresh_areas() -> void:
 	_areas_dirty = false
 	UtilityEffects.refresh()
+	DefenseLifeEffects.refresh()
+
+## Pide el recuento de areas (agrupado y diferido). Lo usa EconomyManager
+## cuando cambian los obreros: una Central, un Puerto o una Casa de cambio sin
+## gente deja de trabajar.
+func request_area_refresh() -> void:
+	_mark_areas_dirty()
 
 # ── Registration ──
 
@@ -106,7 +118,9 @@ func reset() -> void:
 	_crops.clear()
 	last_offline_spoiled = {}
 	_full_bag_notice_cooldown = 0.0
+	_tick_acc = 0.0
 	UtilityEffects.clear()
+	DefenseLifeEffects.clear()
 
 func _register_producer(node: Node, data: BuildingData) -> void:
 	if data.is_producer():
@@ -309,7 +323,11 @@ func _make_progress_bar() -> MeshInstance3D:
 func _refresh_construction_visual(node: Node) -> void:
 	var label: Node = node.get_node_or_null("ConstructionLabel")
 	if label:
-		label.text = construction_text(node)
+		# Solo si cambia (el porcentaje o los segundos): reasignar el mismo
+		# texto rehace la forma del Label3D igual.
+		var text := construction_text(node)
+		if label.text != text:
+			label.text = text
 	var bar := node.get_node_or_null("ConstructionBar") as MeshInstance3D
 	if bar and bar.material_override is ShaderMaterial:
 		(bar.material_override as ShaderMaterial).set_shader_parameter("progress", get_construction_progress(node))
@@ -361,15 +379,31 @@ func _complete_construction(stale_or_node) -> void:
 
 # ── Production ──
 
+## Rendimiento ("en una papa", 2026-10-26): obras, produccion y caducidad
+## avanzan por TIC de `TICK_SECONDS` de simulacion, no por fotograma. Con la
+## reserva por edificio, las granjas y el tope (1.0/1.1) recorrer los ~80
+## productores cada fotograma costaba ~780 us en la colonia grande. Los ciclos
+## duran 4-60 s y las obras segundos: una decima de segundo no se nota, y el
+## tiempo no se pierde (se suma lo acumulado entero). Un delta grande (pruebas,
+## sondas, line_probe) pasa de golpe, como antes.
+const TICK_SECONDS := 0.1
+var _tick_acc := 0.0
+
 func _process(delta: float) -> void:
 	# x2: construccion, produccion y caducidad al doble (GameConfig.sim_delta).
 	# El enfriamiento del aviso de saco lleno es de la interfaz: segundos reales.
-	var sim := GameConfig.sim_delta(delta)
-	_tick_construction(sim)
-	_tick_production(sim)
-	_tick_spoilage(sim)
 	if _full_bag_notice_cooldown > 0.0:
 		_full_bag_notice_cooldown -= delta
+	_tick_acc += GameConfig.sim_delta(delta)
+	if _tick_acc < TICK_SECONDS:
+		return
+	var sim := _tick_acc
+	_tick_acc = 0.0
+	if not _constructing.is_empty():
+		_tick_construction(sim)
+	if not _producing.is_empty():
+		_tick_production(sim)
+	_tick_spoilage(sim)
 
 func _tick_construction(delta: float) -> void:
 	var completed: Array = []
@@ -449,6 +483,9 @@ func get_cycle_yield(node: Node, data: BuildingData, include_events := true) -> 
 	# tech bonus would mix a passing squall with permanent research.
 	if include_events:
 		mult *= GameConfig.get_event_production_multiplier()
+		# Central diesel cerca (industriales, meta de UtilityEffects). Va con lo
+		# pasajero: offline no se quema combustible, asi que tampoco se cobra.
+		mult *= 1.0 + float(node.get_meta(UtilityEffects.DIESEL_META, 0.0))
 	var produced := {}
 	var base := base_cycle_production(node, data)
 	for res_name in base:
@@ -768,6 +805,10 @@ func start_upgrade(node: Node, data: BuildingData, new_level: int) -> void:
 	if node == null or not is_instance_valid(node) or _constructing.has(node):
 		return
 	if new_level <= int(node.get_meta("level", 1)) or new_level > GameConfig.max_building_level:
+		return
+	# Una sola llave (feat/ritmo-colono): el Cuartel General nivel 3 pide las tres
+	# piezas que entregan los jefes de campana, ademas de su coste.
+	if data.id == "headquarters" and not CombatManager.hq_missing_pieces(new_level).is_empty():
 		return
 	var cost := GameConfig.get_upgrade_cost(data, new_level)
 	if not ResourceManager.can_afford(cost):

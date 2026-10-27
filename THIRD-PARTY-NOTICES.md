@@ -177,15 +177,20 @@ repository and inside every release zip (folder `licenses/fonts/`).
 | Nunito (variable) | © 2014 The Nunito Project Authors | SIL Open Font License 1.1 | `assets/fonts/nunito/OFL.txt` |
 | Fredoka (variable) | © 2016 The Fredoka Project Authors | SIL Open Font License 1.1 | `assets/fonts/fredoka/OFL.txt` |
 | Inter (variable) | © 2020 The Inter Project Authors | SIL Open Font License 1.1 | `assets/fonts/inter/OFL.txt` |
+| Big Shoulders Display (variable; `BigShouldersDisplay-Variable.ttf`) | © 2019 The Big Shoulders Project Authors | SIL Open Font License 1.1 | `assets/fonts/big_shoulders_display/OFL.txt` |
+| IBM Plex Sans Condensed (Medium, Bold; `IBMPlexSansCondensed-*.ttf`) | © 2017 IBM Corp., Reserved Font Name "Plex" | SIL Open Font License 1.1 | `assets/fonts/ibm_plex_sans_condensed/OFL.txt` |
 
 The OFL permits embedding these fonts in this game. The font files themselves
 remain under the OFL and may not be sold on their own. All fonts are
 distributed unmodified. Source: Google Fonts (`github.com/google/fonts`, `ofl/`).
 
-The six fonts in subfolders come from the interface redesign (2026-10,
-`docs/28-guia-ui.md`): Baloo 2 + Nunito Sans is the chosen pair; Lilita One,
-Nunito, Fredoka and Inter were the other two candidate pairs and are to be
-removed from `assets/fonts/` (and from this table) when the redesign lands.
+The fonts in subfolders come from the interface redesign (2026-10,
+`docs/28-guia-ui.md`). Big Shoulders Display + IBM Plex Sans Condensed are the
+fonts of the dieselpunk skin ("D · Mezcla sobria", 2026-10-25,
+`docs/21-interfaz-y-dispositivos.md` §17): Art Deco headings, condensed text and
+figures. Baloo 2 + Nunito Sans (the previous cartoon pair), Lilita One, Nunito,
+Fredoka and Inter stay selectable as `CartoonTheme.COMBOS` and are to be removed
+from `assets/fonts/` (and from this table) once nothing uses them.
 
 ## 4. Audio (`assets/audio/`)
 
@@ -198,6 +203,7 @@ licence text ships in `licenses/CC0-KENNEY-*.txt`.
 |---|---|---|
 | `music/era_1_frontier`, `era_2_industrial`, `era_3_petroleum`, `victory` | [Dark Sci-Fi Audio Pack](https://opengameart.org/content/dark-sci-fi-audio-pack) by SRG774 (OpenGameArt) | CC0 1.0 |
 | `music/combat` | [Battle Theme A](https://opengameart.org/content/battle-theme-a) by cynicmusic (OpenGameArt), re-encoded to OGG at -4.5 dB | CC0 1.0 |
+| `music/audit` | [Basilisk Boss Battle Loop](https://opengameart.org/content/basilisk-boss-battle-loop) by beardalaxy (OpenGameArt), sin recodificar | CC0 1.0 |
 | `sfx/build_place`, `demolish`, `process_done`, `mining_done`, `combat_hit`, `audit_summoned`, `tithe_demanded` | [Kenney — Impact Sounds](https://kenney.nl/assets/impact-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-IMPACT-SOUNDS.txt`) |
 | `sfx/build_complete`, `unlock`, `event_positive`, `event_danger`, `insufficient`, `ui_click` | [Kenney — Interface Sounds](https://kenney.nl/assets/interface-sounds) | CC0 1.0 (`licenses/CC0-KENNEY-INTERFACE-SOUNDS.txt`) |
 | `sfx/upgrade_complete`, `era_up`, `milestone`, `combat_start`, `combat_victory`, `combat_defeat`, `expedition_start`, `expedition_return`, `storm_halted`, `tithe_repelled`, `rank_up` | [Kenney — Music Jingles](https://kenney.nl/assets/music-jingles) | CC0 1.0 (`licenses/CC0-KENNEY-MUSIC-JINGLES.txt`) |
@@ -233,9 +239,10 @@ The source folders carry a `.gdignore` and are not exported; only the baked mesh
 | `kaykit_city_builder_bits/` | [KayKit — City Builder Bits](https://kaylousberg.itch.io/city-builder-bits) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-CITY-BUILDER-BITS.txt`) |
 | `kaykit_medieval_hexagon/` | [KayKit — Medieval Hexagon Pack](https://kaylousberg.itch.io/kaykit-medieval-hexagon) (Kay Lousberg) | CC0 1.0 (`licenses/CC0-KAYKIT-MEDIEVAL-HEXAGON.txt`) |
 | `kenney_city_kit_industrial/` | [Kenney — City Kit (Industrial)](https://kenney.nl/assets/city-kit-industrial) | CC0 1.0 (`licenses/CC0-KENNEY-CITY-KIT-INDUSTRIAL.txt`) |
-| `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`, `windmill`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
-| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`, `bucket`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
-| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`, `tower-complete-small`, `barrel`, `boat-row-small`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+| `kenney_fantasy_town_kit/` (`lantern`, `hedge`, `hedge-large`, `tree-high-round`, `windmill`, `fountain-square`, `pillar-stone`, `banner-red`, `banner-green`, `roof-point`, `roof-high-point`) | [Kenney — Fantasy Town Kit](https://kenney.nl/assets/fantasy-town-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FANTASY-TOWN-KIT.txt`) |
+| `kenney_survival_kit/` (`signpost`, `campfire-stand`, `resource-wood`, `bucket`, `tent-canvas`, `rock-sand-a`) | [Kenney — Survival Kit](https://kenney.nl/assets/survival-kit) | CC0 1.0 (`licenses/CC0-KENNEY-SURVIVAL-KIT.txt`) |
+| `kenney_pirate_kit/` (`flag-high`, `palm-straight`, `patch-sand`, `tower-complete-small`, `barrel`, `boat-row-small`, `boat-row-large`, `cannon`) | [Kenney — Pirate Kit](https://kenney.nl/assets/pirate-kit) | CC0 1.0 (`licenses/CC0-KENNEY-PIRATE-KIT.txt`) |
+| `kenney_factory_kit/` (`cog-a`, `cog-c`) | [Kenney — Factory Kit](https://kenney.nl/assets/factory-kit) | CC0 1.0 (`licenses/CC0-KENNEY-FACTORY-KIT.txt`) |
 
 ## 6. Original content (not third-party)
 
@@ -503,7 +510,8 @@ Godot components marked Apache-2.0, whose notices are in `GODOT-COPYRIGHT.txt`).
 
 ## Appendix C — SIL Open Font License 1.1
 
-Applies to Caveat, Black Ops One and Rajdhani. Each font's copyright line is at
+Applies to Caveat, Black Ops One, Rajdhani, Big Shoulders Display, IBM Plex Sans
+Condensed and the fonts in the `assets/fonts/` subfolders. Each font's copyright line is at
 the top of its own licence file (§3).
 
 ```text

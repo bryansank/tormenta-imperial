@@ -62,7 +62,7 @@ static func C(slot: int, d := 0.0) -> Color:
 ## (BoardLayout3D.terrain_of; vacio = todo tierra). El agua es la misma lamina
 ## de mar de la playa, mas baja que las losetas y con espuma donde toca tierra;
 ## la orilla, arena. Todo dentro de la misma malla: ni una llamada de dibujo mas.
-static func build(board: Vector2i, seed_value: int, simple := false, scene := SCENE_LAND, front := false, terrain: Dictionary = {}) -> ArrayMesh:
+static func build(board: Vector2i, seed_value: int, simple := false, scene := SCENE_LAND, front := false, terrain: Dictionary = {}, cover: Array = []) -> ArrayMesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var mk := MeshKit.new()
@@ -82,6 +82,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 				_forest(mk, ext, rng, simple)
 		_far_trees(mk, ext, rng, simple, scene)
 		_divider(mk, ext, rng, simple, scene, board, terrain)
+		_cover_parapets(mk, board, cover)
 		return mk.commit()
 
 	# La mesa de guerra: madera oscura, muy grande, para que la maqueta no flote.
@@ -94,6 +95,7 @@ static func build(board: Vector2i, seed_value: int, simple := false, scene := SC
 	mk.box(Vector3(0, -0.13, 0), Vector3(ext.x + 0.16, 0.05, ext.y + 0.16), C(S.IRON, 0.1))
 
 	_tiles(mk, board, rng, simple, terrain)
+	_cover_parapets(mk, board, cover)
 	_edges(mk, board, ext, rng, simple, scene)
 	match scene:
 		SCENE_BEACH:
@@ -333,6 +335,21 @@ static func _edges(mk, board: Vector2i, ext: Vector2, rng: RandomNumberGenerator
 	mk.box(post + Vector3(0, 0.55, 0), Vector3(0.1, 1.1, 0.1), C(S.WOOD, -0.15))
 	mk.box(post + Vector3(0.18, 0.95, 0), Vector3(0.5, 0.18, 0.06), C(S.CREAM, -0.05))
 	mk.box(post + Vector3(0.22, 0.7, 0), Vector3(0.45, 0.16, 0.06), C(S.BRASS, -0.05))
+
+## El parapeto del Bastion (feat/edificios-defensa-vida): en cada casilla de
+## cobertura, un murete de sacos de dos hileras en su borde de delante (hacia el
+## enemigo, -Z) y una estaca de laton a cada lado. En la misma malla del
+## tablero: ni una llamada de dibujo mas. Sin casillas, nada.
+static func _cover_parapets(mk, board: Vector2i, cover: Array) -> void:
+	for cell in cover:
+		var c := Layout.cell_to_world(cell as Vector2i, board)
+		var half := Layout.CELL * 0.5 - 0.18
+		var front := -Layout.CELL * 0.5 + 0.22
+		_sandbags(mk, c + Vector3(-half, 0, front), c + Vector3(half, 0, front), 2)
+		for sx in [-1.0, 1.0]:
+			var p := c + Vector3(sx * (half + 0.06), 0, front)
+			mk.box(p + Vector3(0, 0.28, 0), Vector3(0.08, 0.56, 0.08), C(S.WOOD, -0.15))
+			mk.box(p + Vector3(0, 0.58, 0), Vector3(0.12, 0.05, 0.12), C(S.BRASS, -0.05))
 
 static func _sandbags(mk, a: Vector3, b: Vector3, rows: int) -> void:
 	var dvec := b - a

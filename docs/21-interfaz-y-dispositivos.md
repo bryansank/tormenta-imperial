@@ -241,7 +241,7 @@ mundo, vía `GameConfig.resource_colors`), casillas de mover y objetivo.
 
 | Paleta | Para | Aliado / bueno | Enemigo / malo | Aviso |
 |---|---|---|---|---|
-| Normal | — | verde militar | óxido | ámbar |
+| Normal | — | verde `#86C27A` | rojo `#C9503A` | ámbar `#E5AE3E` |
 | Rojo-verde | deuteranopía y protanopía | azul (Okabe-Ito) | bermellón | amarillo |
 | Azul-amarillo | tritanopía | turquesa | carmesí | rosa |
 
@@ -250,10 +250,11 @@ Oliveira y Fernandes 2009) y exige que aliado, enemigo y aviso queden separados
 para quien la tiene, y más que con la paleta normal. Los iconos de recurso y de
 fase ya tenían formas distintas: el color nunca es la única pista.
 
-**Alto contraste**: fondos opacos y más oscuros, cajas lisas en vez de la placa
-metálica ruidosa, bordes claros y más gruesos, velo más oscuro, texto
-secundario tan claro como el principal y contraste mínimo 7:1 (AAA) en todo el
-texto que pasa por `UITheme.readable`.
+**Alto contraste**: fondos opacos y casi negros, texto blanco, todos los filos
+en latón claro y más gruesos, velo más oscuro, texto secundario tan claro como
+el principal y contraste mínimo 7:1 (AAA) en todo el texto que pasa por
+`UITheme.readable`. Con la piel dieselpunk (§17) es la variante que más se
+cuida: Bryan eligió la piel viéndola así.
 
 **Opacidad de paneles** (40–100 %): transparenta tarjetas del HUD y placas de
 paneles, nunca los botones.
@@ -1214,3 +1215,180 @@ Piezas nuevas en `CartoonTheme` (sección `# --- CONSTRUIR (feat/ui2-construir)`
 Tests: `tests/ui/test_ui2_construir.gd`, y se ajustaron `test_tech_detalle`,
 `test_tech_tree_explained` y `test_blocked_reasons` (el porqué y el coste de una
 tecnología pasan de la tarjeta a su globo).
+
+## 17. Piel dieselpunk "D · Mezcla sobria" (2026-10-25, rama `feat/piel-dieselpunk`)
+
+**Decisión de Bryan**: la piel caricatura (crema, Baloo 2 / Nunito Sans,
+botones pastilla con labio) le parecía "de niño". Eligió, entre cuatro
+direcciones, la **D · Mezcla sobria**: base oscura de búnker, filos de latón,
+titulares Art Déco altos. **El mapa manda**: la interfaz es oscura, fina y
+casi recta para no competir con él. La vio con alto contraste activado.
+
+Se mantiene todo lo demás: la barra de botones grandes abajo con CONSTRUIR,
+el HUD de icono + número, sin animaciones, horizontal, de 640×360 a PC, el
+texto siempre sobre liso y sin texturas de metal bajo el texto
+(`UITheme.METAL_TEXTURES = false`).
+
+### Dónde vive
+
+En los **tokens y factorías** de `scripts/ui/CartoonTheme.gd` (el nombre de la
+clase es histórico) y en la paleta de `UITheme._BASE` (docs/24). Ningún panel
+cambió de código para la piel: `pill_button`, `window`, `card_style`,
+`hud_style`, `badge`, `notice`... la pintan con las mismas llamadas.
+
+### Fuentes
+
+| Uso | Fuente | Fichero |
+|---|---|---|
+| Titulares, placas de ventana, botones (`display`, `title`, `button`) | **Big Shoulders Display** 800 con 1 px entre letras; placas y botones (`display`, `button`) en mayúsculas (`Label.uppercase`, no cambia `text`; `title` no, porque a veces es una frase entera) | `assets/fonts/big_shoulders_display/BigShouldersDisplay-Variable.ttf` (un variable, eje `wght` a 800) |
+| Texto (`body`) | **IBM Plex Sans Condensed** Medium | `assets/fonts/ibm_plex_sans_condensed/IBMPlexSansCondensed-Medium.ttf` |
+| Cifras y rótulos pequeños (`number`, `small`) | **IBM Plex Sans Condensed** Bold | `.../IBMPlexSansCondensed-Bold.ttf` |
+
+Tres ficheros, todos SIL OFL 1.1 (su `OFL.txt` al lado; `THIRD-PARTY-NOTICES.md`
+§3). La pareja es `CartoonTheme.COMBOS["bigshoulders_plex"]` (`DEFAULT_COMBO`);
+las parejas viejas siguen en `COMBOS` (`-- --ui-font=baloo_nunitosans`) y solo
+se carga la elegida. El titular lleva a Plex Bold de respaldo para los signos
+que no trae (✓); ninguna de las dos trae ☰, que sale de la fuente del sistema
+como antes. `test_piel_dieselpunk.gd` comprueba ñ, tildes, ü, ¿ y ¡ en las
+cuatro fuentes.
+
+### Formas
+
+- **Paneles** (`window_style`): Pizarra, filo de latón de 1 px y **borde de
+  arriba de latón de 4 px**; `window()` dibuja una segunda línea fina de latón
+  2 px por debajo (`trim_line()`, en `draw` del propio panel: sin nodos): el
+  filo doble. Esquinas de 4 px, sombra corta.
+- **Tarjetas** (`card_style`): Placa con filo gris de 1 px, esquinas de 3 px; la
+  elegida, filo de latón de 2 px (fichas de pieza: 4 px).
+- **Placa del título** (`ribbon_style`): la cinta de colores pasa a ser una
+  placa de aparato sobre el filo: hueco oscuro con filo del color pedido
+  (latón; rojo en los partes) más grueso arriba y abajo, título en el claro de
+  la superficie (`ribbon_text()`), nunca sobre el color.
+- **HUD** (`hud_style`): Pizarra translúcida (92 %) con filo gris de 1 px (3 px
+  y opaca con alto contraste); los avisos llevan su color en el filo izquierdo
+  de 7 px.
+- **Botones**: esquinas de 3 px (`RADIUS_BTN`), filo de 2 px, sin labio
+  (`LIP = 0`); pulsado baja 1 px. Los "redondos" de la barra y la X son
+  cuadrados; la X es oscura (cerrar no es destruir). El foco es un marco del
+  color del texto, separado 3 px.
+- Huecos, barras, deslizadores, interruptores, insignias y globos de ayuda,
+  casi rectos (2-3 px). Los círculos que quedan son luces: la piloto, los
+  nodos de campaña y los discos de unidad (el punto rojo de "hay algo nuevo"
+  pasó a cuadrito de 3 px en el pulido).
+
+### Las cinco intenciones de botón (`kind_fill`, `pill_text`, `btn_edge`)
+
+| Intención | Clase | Relleno | Letra | Forma |
+|---|---|---|---|---|
+| Principal | `primary` | Latón | Tinta `#13171B` | **Luz piloto**: círculo verde de 11 px (9 en teléfono) con aro oscuro a la izquierda (`pilot_light()`); gris si el botón está desactivado |
+| Abrir / ver | `open`, `info` | Acero azul | Claro | Filo de acero aclarado |
+| Avisar | `warning`, `warn` | Ámbar | Tinta | — |
+| Destruir | `danger` | Rojo (más oscuro con alto contraste) | Claro | Quien lo usa pide confirmación (no lo impone la piel) |
+| No disponible | `disabled` (o `Button.disabled`) | Apagado (`OFF`, Placa) | Tenue (`OFF_INK`) | **Candado** delante si no trae icono; el porqué debajo (`why_label()`) |
+
+`accent` (mejorar / comprar) es latón sin luz piloto y `secondary` es Placa con
+filo gris. Un `pill_button` que se desactiva apaga su letra y su piloto al
+redibujarse (`_watch_disabled()`, enganchado a `draw`: sin `_process`); los
+botones de texto (`text_pill`, `style_pill`) usan `font_disabled_color`.
+`set_pill_kind()` pone o quita la luz piloto. Contraste de la letra: 3:1 de
+serie (palabra de botón = letra grande, 22 px, peso 800) y 4,5:1 con alto
+contraste, en las tres paletas y los dos temas.
+
+El borde a trazos de la maqueta no existe en `StyleBoxFlat`: lo no disponible
+se distingue por apagado + candado + porqué.
+
+### Recetas (FABRICAR, rama `feat/recetas-tarjetas`)
+
+La sección RECETAS de `CartoonTheme` lleva la piel: la tarjeta en marcha con
+filo de latón (el de arriba más grueso), la cerrada apagada como "no
+disponible" (`OFF`, filo tenue), el verbo como acción principal (`text_pill`
+"primary": latón con luz piloto, también cuando su texto se pone después) y
+las cantidades en Plex Condensed Bold al tamaño de título.
+
+### Préstamos
+
+- **Luz piloto** (de la dirección A): ver arriba.
+- **Sello oficial** (de la dirección C): `stamp()` (COBRADO / REPELIDO de los
+  partes de guerra) es un marco del color del sello sobre un velo del mismo
+  color, letras del sello, girado 6°. Barato (un `StyleBoxFlat`). Desde el
+  pulido también sale en la victoria y en el ascenso (abajo).
+
+### Tema de las ventanas
+
+Solo hay tema oscuro (búnker). El modo claro (papel) se quitó en la 0.9 beta
+(decisión del dueño): ya no existen `CartoonTheme.window_theme`, la fila
+"Tema" de Ajustes ni `GameConfig.ui_theme`. Las ventanas son siempre búnker
+(`CartoonTheme.kind("window")` devuelve `dark`). Una clave `window_theme` o
+`ui_theme` vieja en `settings.cfg [interfaz]` se ignora y se borra al guardar.
+
+Igual en la 0.9 beta: el selector de vista 2D/3D está oculto en Ajustes (la 2D
+no rinde en móvil) y una preferencia `view_mode=2d` guardada carga en 3D. El
+código 2D y `-- --view=2d` por línea de comandos siguen (desarrolladores y tests).
+
+### Rendimiento
+
+Nada de shaders ni texturas nuevas: todo es `StyleBoxFlat`. La segunda línea
+del filo es un `draw_line` en el `draw` del panel. Tres ficheros de fuente
+(220 + 111 + 112 KB), cargados una vez.
+
+### Pulido (2026-10-26, rama `feat/piel-dieselpunk-pulido`)
+
+- **Iconos de línea** (`CartoonIcon`): rehechos con el lenguaje de la maqueta
+  (caja de 24 × 24, trazo de 2,2 con puntas y codos redondos), mismos ids y
+  misma API (`make`, `draw_glyph`, `GLYPHS`, los cuatro `mat_*`). Uno o dos
+  tonos: el trazo en el claro del texto del sitio (`role` "window" u "hud";
+  en el tema claro, la tinta) y un detalle de latón; si quien lo pide da un
+  `tint`, todo va de ese color. Las pastillas, los botones de icono, las
+  pestañas y las insignias se lo dan: la letra del botón (tinta sobre latón).
+  El color de un recurso solo es acento pequeño (la veta de los tablones, el
+  brillo del lingote, la X del bidón). Coste: `draw_polyline` / `draw_arc`,
+  sin texturas ni shaders.
+- **Iconos de recurso** (PNG de `tools/gen_resource_icons.gd`, las cinco
+  medidas): el mismo lenguaje, trazo de hueso con el color del recurso dentro
+  (la cara de la moneda, el corte del tronco, el petróleo en la gota, los
+  granos de la espiga, el casco de latón del trabajador, el corazón pequeño de
+  la moral). Como salen también sobre el mapa (ficha de "listo para recoger",
+  números flotantes), llevan un halo de tinta y el cuerpo de las formas
+  cerradas relleno de Pizarra: se leen sobre la hierba y sobre el disco claro.
+- **El retrato de la Capitana Remache no se toca aquí**: Bryan quiere otra
+  dirección para el personaje y se decidirá aparte (sigue la caricatura).
+- **Cerrar no es destruir**: `UITheme.make_close_button` (la X de la Orden de
+  la Regencia) era roja; ahora es la X oscura de la piel con el icono de línea.
+- **La tarjeta del tutorial manda**: si se ve y cae sobre la Orden de la
+  Regencia (en teléfono o columna estrecha, siempre), la Orden se pliega al
+  icono de la Tormenta y espera, como un aviso en la cola de `AlertQueue`;
+  vuelve sola al irse la tarjeta (`StormHUD._tutorial_blocks`, mirado cada
+  0,25 s solo mientras hay Orden que enseñar). Tocar el icono la abre igual.
+  La tarjeta está en el grupo `tutorial_card`.
+- **Esquinas a la piel**: el foco del nombre (ficha y Regimiento), la placa
+  "Paso N" y el marco del tutorial, el señalador de la ayuda, la línea del
+  siguiente paso, los botones en pantalla y los puntos rojos (`red_dot` y el
+  de Misiones) usan `RADIUS_*` (2-4 px). El aro que señala un punto del mapa
+  sigue redondo.
+- **Botones en mayúsculas**: `Button` no tiene `uppercase`, así que
+  `CartoonTheme.caps_button()` le pone un dominio de traducción propio
+  (`scripts/ui/CapsTranslation.gd`) que solo sube el caso de lo que se pinta.
+  `Button.text` y las claves de Tr no cambian; la ayuda emergente tampoco; lo
+  que no tiene dos letras seguidas ("x2", "✕") se queda igual. Lo usan
+  `style_pill`, `style_text_pill` y `UITheme.style_button`; las pastillas con
+  etiqueta (`pill_button`) ponen `Label.uppercase` en cualquier tamaño.
+- **El sello en los momentos grandes**: la victoria lleva AUDITORÍA SUPERADA
+  (CAPITAL EN PIE en Constructor) bajo la bandera, y el ascenso estampa
+  ASCENDIDO sobre la insignia del rango 4 s (`stamp(..., compact = true)`,
+  velo casi opaco), además del aviso de siempre.
+
+Tests: `tests/ui/test_piel_pulido.gd`.
+
+### Lo que no cambió (y desentona algo)
+
+- La Capitana Remache y el Sargento Bombarda siguen en caricatura (el
+  personaje se decide aparte).
+- Los colores de recurso y el prólogo (docs/24 §6).
+
+### Tests
+
+`tests/ui/test_piel_dieselpunk.gd` (paleta, alto contraste a 7:1, letra de cada
+intención, fuentes con ñ y tildes, luz piloto, candado, esquinas, filo doble).
+Se ajustaron `test_cartoon_theme`, `test_ui3_tema`, `test_ui2_ronda_bryan` y
+`test_ui2_hud` (pareja de fuentes, la principal en latón, el búnker de serie y
+la clave `window_theme`).

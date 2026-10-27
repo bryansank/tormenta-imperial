@@ -593,6 +593,40 @@ enemigo aunque el botón esté apagado (`BattleScreen.threat_visible()`).
 **Simulacro (§4.4 del diseño): no hecho.** Pide un edificio nuevo y un `is_practice` en
 `CombatManager`, que es de la rama de escaramuzas: queda para cuando esa rama entre.
 
+### Cobertura del Bastión (1.2, rama `feat/edificios-defensa-vida`)
+
+El Bastión (docs/03, "Defensa y vida") pone **casillas de parapeto** en los
+tableros de defensa: el Impuesto (tablero y "resolver solo" / defensa a ciegas) y
+cada oleada del Ataque Final. Nunca en expediciones, incursiones ni campañas.
+
+- **Modelo puro.** `Encounter.cover` (casilla → defensa de más) con
+  `set_cover(cells, bonus)`, `cover_at(cell)`, `cover_for(unit)` (0 si vuela o no
+  está en el tablero: un avión no se esconde tras unos sacos) y
+  `damage_between(attacker, target)`, que es lo que usa `attack()`.
+  `CombatRules.damage(attacker, target, cover := 0)` resta la cobertura a la
+  defensa del objetivo antes de la ventaja por tipo; con 0 es la fórmula de
+  siempre, así que **un tablero sin bastión no cambia ni un punto**.
+  `CombatRules.cover_cells(board, terrain, count, row)` elige las casillas: solo
+  tierra, en la fila `row`, del centro hacia fuera; determinista.
+- **Quién la pone.** `CombatManager.apply_home_cover(encounter)` tras crear un
+  tablero de defensa (`_open_board` con `is_defense` y `auto_resolve_defense`):
+  `GameConfig.defense_cover_cells` casillas (1 por cada 3 bastiones en pie, tope
+  2; lo calcula `DefenseLifeEffects` al construir/derribar) en la fila de atrás
+  del jugador (`board_size.y - 1`), con `bastion_cover_defense` (+2). Las
+  dotaciones de torre forman en esa fila, así que suelen empezar a cubierto.
+- **La IA** cuenta la cobertura al decidir si un golpe remata
+  (`CombatAI._context` → `damage_between`); el resto de su valoración no cambia.
+- **Vista.** 2D: la casilla vacía con fondo de sacos y borde de latón, tooltip
+  `LBL_COVER_CELL_TIP`; una pieza de superficie encima, borde de latón. 3D (las dos
+  vistas): un murete de sacos de dos hileras con dos estacas en el borde de
+  delante de la casilla, dentro de la misma malla del tablero
+  (`BoardTerrain3D._cover_parapets`, `BoardLayout3D.cover_of`): ni una llamada de
+  dibujo más. El daño previsto (`target_previews`) ya la descuenta.
+- **No se guarda**: los tableros no se guardan; al reabrir, se vuelve a pedir.
+- **Medir en el pase final**: `siege_probe` y `balance_probe` con 0, 1 y 2
+  casillas (el asedio con 6 blindados + 4 torres ganaba el ~82 %; +2 de defensa
+  en dos casillas de atrás debería mover poco: anotarlo en docs/17).
+
 ### Turn flow
 
 1. `start()` → `_begin_round()`: every living unit gets `begin_turn()` (clears
@@ -609,7 +643,7 @@ enemigo aunque el botón esté apagado (`BattleScreen.threat_visible()`).
 | Method | Ends the turn? | Notes |
 |--------|----------------|-------|
 | `move_unit(uid, to)` | **No** | A unit may move then attack, never move twice. Occupied cells block the BFS, so units cannot walk through each other |
-| `attack(uid, target)` | Yes | Damage is `maxi(1, attacker.attack_power() - target.defense())` — deterministic on purpose, and never zero so a fight cannot stall |
+| `attack(uid, target)` | Yes | Damage centres on `maxi(1, attacker.attack_power() - target.defense())` (× type advantage) and rolls inside ±`combat_damage_spread` with the board's own seeded RNG (see "El daño y su azar"); never zero so a fight cannot stall |
 | `defend(uid)` | Yes | Doubles `defense()` until the unit's next `begin_turn()` |
 | `wait_unit(uid)` | Yes | |
 | `end_turn()` | Yes | Closes whoever is active |
@@ -617,6 +651,40 @@ enemigo aunque el botón esté apagado (`BattleScreen.threat_visible()`).
 `in_attack_range()` uses Manhattan distance and enforces both `min_range` and
 `range`. Artillery (`min_range` 2) cannot fire at an adjacent target: that single
 rule is what makes positioning matter.
+
+### El daño y su azar (2026-10-25, rama `feat/ritmo-colono`)
+
+Decisión de Bryan tras la crítica (contexto 27, P1-3): el combate sin dados iba a
+**escalones** (tierra m4 con la columna bien formada: ×1,30 95 %, ×1,32 29 %), y un
+niño que pierde cuatro veces el mismo combate exacto no aprende. Ahora cada golpe
+tira un poco de azar, **sembrado**:
+
+- `CombatRules.damage()` es el daño **esperado** (el centro): la IA planea con él.
+  `damage_range(a, t)` da `Vector2i(mínimo, máximo)` = esperado × (1 ∓
+  `combat_damage_spread`), redondeado, nunca por debajo de 1 (0,12 = ±12 %).
+  `rolled_damage(a, t, roll)` reparte por igual cada entero del rango con una
+  tirada `roll` en [0, 1) que llega de fuera. Siguen siendo funciones puras.
+- `Encounter` lleva su propio `RandomNumberGenerator` (`rng`, `rng_seed`).
+  `create()` lo siembra con `board_seed()` (índice, jefe, defensa y cada unidad:
+  tipo, bando, vida, escala, casilla): el mismo tablero da el mismo combate.
+  `seed_rng(s)` lo cambia antes de `start()`. **Misma semilla y mismas jugadas =
+  mismo combate**, golpe a golpe (`tests/combat/test_ritmo_colono.gd`). Nada de
+  `randf()` global.
+- `CombatManager.fight_seed()` mezcla la semilla del tablero con los segundos
+  jugados y el contador de tableros: un reintento de la misma misión, con la misma
+  columna, es otra noche. Lo usan `_open_board()` y `auto_resolve_defense()`.
+- Con `combat_damage_spread = 0` el rango es un número y no se tira nada: el
+  combate de antes. Las sondas lo pisan con `--spread=F`.
+- **Vista previa:** `preview_damage()` añade `damage_min`, `damage_max`, `kills`
+  (cae seguro, hasta con el mínimo) y `may_kill` (cae con un buen golpe). El
+  tablero escribe "8-11 de 75", "70-80 ¡Cae!" o "70-80 ¿Cae?"
+  (`BattleScreen.preview_text`, `LBL_PREVIEW_DAMAGE_RANGE` / `_KILL_RANGE` /
+  `_MAY_KILL`); un golpe sin rango (daño pequeño) sigue con "-18 de 75".
+- `AutoResolver` no cambia: juega el mismo `Encounter`, así que el parte
+  automático del Impuesto y las sondas tiran el mismo azar.
+
+Medido en [16-balance-combate.md](16-balance-combate.md) "Azar del daño" (misiones,
+reintentos) y [17-balance-asedio.md](17-balance-asedio.md) (asedio).
 
 ### Resolution
 
@@ -975,8 +1043,9 @@ is composed exactly as `start_defense()` composes it (garrison + tower crews, sa
 morale, same enemy scale), a private `Encounter` is built, and `AutoResolver` plays
 it with `CombatAI` on both sides. Same model, same numbers, no second arithmetic.
 
-`AutoResolver.resolve()` is pure and deterministic — neither `Encounter` nor
-`CombatAI` rolls dice — so the same board always produces the same result. It has
+`AutoResolver.resolve()` is pure and deterministic — `CombatAI` never rolls and
+`Encounter` rolls only with its own seeded RNG (2026-10-25, "El daño y su azar") —
+so the same board with the same seed always produces the same result. It has
 a step budget (`(turn_limit + 1) * units * 4 + 4`) purely as a hang guard against a
 future AI bug; a healthy board never reaches it. If the budget runs out, the
 defence counts as lost.
@@ -991,6 +1060,33 @@ Final Audit waves deliberately do **not** take this path: `can_launch()` blocks 
 expedition while the Regency is summoned or active, so there is never a board to
 dodge — and resolving the endgame blind would take away exactly what makes it the
 endgame.
+
+### La Visita: uno de cada tres Impuestos en el tablero (2026-10-25, `feat/ritmo-colono`)
+
+Decisión de Bryan tras la crítica (contexto 27, P1-2: 23-28 Impuestos en el tablero
+por partida, "veintiocho veces el mismo cobro"). Solo **uno de cada
+`storm_tithe_board_every` (3)** Impuestos se pelea en el tablero: **la Visita**. Los
+demás los resuelven las tropas de casa solas con **parte automático**: el mismo
+`auto_resolve_defense()` de arriba (AutoResolver, las mismas reglas, el mismo azar
+sembrado), con `reason = "auto_tithe"` en el parte.
+
+- **Cuál toca.** `StormManager.is_visit_due()`: `storms_survived % 3 == 0`, es decir
+  el **primero de verdad** (enseña), el 4.º, el 7.º... Cuenta los Impuestos ya
+  saldados (`StormCycle.storms_survived`), así que sale igual tras cargar. El
+  Impuesto de juguete de la prueba de la era 1 no cuenta y va siempre al tablero.
+- **¡PELEAR!** Antes de resolver uno automático, `StormManager` lo ofrece
+  `storm_tithe_choice_seconds` (12 s de juego): aviso `STORM_TITHE_AUTO_OFFER`,
+  señal `tithe_choice_changed(true)` y un botón **¡PELEAR!** bajo el indicador de la
+  Tormenta (`StormHUD`, `FightTitheButton`). Tocarlo (`fight_this_tithe()`) abre el
+  tablero de ese Impuesto; si no, al acabar el tiempo `resolve_tithe_auto()`. La
+  oferta es transitoria: un guardado en medio vuelve a pedir el Impuesto al cargar
+  y la abre otra vez. Con un tablero abierto (columna fuera) no hay oferta: se
+  resuelve a ciegas como siempre.
+- **El parte.** `WarReportScreen` pinta el automático como una sola tarjeta: la
+  pelea (bajas en discos), el Impuesto que llega detrás pegado a ella (sello
+  REPELIDO / COBRADO, lo que se llevaron) y "La próxima Visita, en el tablero:
+  dentro de N Impuestos" (`StormManager.tithes_before_visit()`).
+- `storm_tithe_board_every = 1` deja todos en el tablero, como antes.
 
 ---
 
@@ -1304,7 +1400,7 @@ had when the column marched out or the gate opened.
 | `final_audit_slots_per_wave` | `1` | Bodies added per wave (capped by `combat_deploy_cap`) | Once the cap is hit this does nothing; only `scale_per_wave` still bites |
 | `final_audit_scale_per_wave` | `0.22` | HP/ATK multiplier added per wave | The real curve after the board fills |
 | `final_audit_scale_per_era` | `0.25` | HP/ATK multiplier added per era past 1 | |
-| `final_audit_last_wave_multiplier` | `1.5` | Extra multiplier on the closing wave | It is the end of the game, not one more step |
+| `final_audit_last_wave_multiplier` | `1.06` | Extra multiplier on the closing wave | It is the end of the game, not one more step. 1.14 until the damage roll (2026-10-25, docs/17 "Azar del daño") |
 | `final_audit_artillery_share` | `3` | One gun per N bodies, from wave 1 | Lower = more guns = the garrison gets punished for bunching up. **Pendiente:** con la ventaja por tipo, 4 devuelve el asedio maximo al 83 % ([17](17-balance-asedio.md)); se decide al integrar con `balance/campana-4-6h` |
 | `final_audit_armour_wave` | `2` | First wave that can field a vehicle | |
 | `final_audit_extra_gun_chance` | `0.35` | The siege's one coin flip | Set to 0 and every siege of the same era looks identical |
@@ -1688,8 +1784,9 @@ sin correr; las sondas, en la ronda final).
 ### Qué son
 
 Tres cadenas de misiones **aparte**, cada una en su medio y con un **jefe** al
-final. Completarlas es una de las dos llaves del Ataque Final (la otra, el Cuartel
-General a nivel 3; §6 y "La condición del Ataque Final", abajo).
+final. Cada jefe entrega una **pieza** del Cuartel General nivel 3, y el CG nivel 3
+es la única llave del Ataque Final (desde 2026-10-25; "La condición del Ataque
+Final", abajo). Colono juega 8 de las 16 misiones ("Colono juega menos misiones").
 
 | Campaña | Se abre con | Misiones | Combates por misión | Era mínima por misión | Paga además |
 |---|---|---|---|---|---|
@@ -1798,29 +1895,78 @@ siempre el mismo mapa**, también al reintentar (la Regencia sigue en su sitio).
 - La expedición antigua de 6-8 nodos (`launch_expedition()` con semilla) sigue para
   tests y sondas.
 
-### La condición del Ataque Final
+### La condición del Ataque Final: una sola llave (2026-10-25, `feat/ritmo-colono`)
 
-Dos llaves, en el orden que sea: **el Cuartel General a nivel 3** (hito `hq_max`) y
-**las tres campañas completas**. `ProgressionManager.try_summon_final_audit()` mira
-las dos al cumplirse el hito y con cada `campaign_completed`; si falta algo, el aviso
-lo dice ("Para llamar al Ataque Final falta: Campaña de Mar 2/5, Campaña de Aire sin
-empezar", `final_audit_gate_text()`), y el consejo `final_gate` lo explica.
+Antes (feat/tres-campanas) había **dos llaves**: el CG nivel 3 y las tres campañas
+completas. Decisión de Bryan tras la crítica (contexto 27, B4): **una sola**. Cada
+**jefe de campaña entrega una pieza** del Cuartel General nivel 3, y el CG nivel 3
+pide esas tres piezas además de su coste. El Ataque Final llega con el CG nivel 3,
+como en la 1.0.
 
-| Modo | Llaves |
+| Campaña | Jefe | Pieza (`GameConfig.CAMPAIGN_PIECES`, `PIECE_<MEDIO>`) |
+|---|---|---|
+| Tierra | el Coronel de Hierro | **Planos del Bastión** (`bastion_plans`) |
+| Mar | el Leviatán | **Casco del Leviatán** (`leviathan_hull`) |
+| Aire | el Zepelín Almirante | **Motor del Zepelín** (`zeppelin_engine`) |
+
+- Tener la pieza es haber ganado al jefe: `CampaignBook.has_piece()` =
+  `is_complete()`; `missing_pieces()`, `pieces_count()`. Al ganarlo, el libro emite
+  `campaign_piece_won` (señal de EventBus del mismo nombre, aviso `MSG_PIECE_WON`,
+  línea `CAMP_REPORT_PIECE` en el parte final).
+- `GameConfig.hq_needs_pieces(to_level)`: el nivel 3, donde
+  `GameMode.audit_needs_campaigns()` (Campaña y Supervivencia; el interruptor global
+  `final_audit_needs_campaigns` lo apaga, p. ej. `test_full_campaign.gd`).
+  `CombatManager.hq_missing_pieces(level)` y `hq_pieces_text()` ("Para el CG 3 te
+  faltan: pieza de Mar, pieza de Aire"). `ProductionManager.start_upgrade()` no
+  sube el CG sin ellas; la ficha del edificio lo dice
+  (`BuildingHelpText.upgrade_block_lines`, con `HQ3_PIECES_HOW`) y apaga MEJORAR.
+- `ProgressionManager.final_audit_ready()` = `hq_max`. `final_audit_missing()` lista
+  las piezas que faltan ("Casco del Leviatán (jefe de la Campaña de Mar)") y el CG
+  nivel 3. Completar una campaña ya no convoca nada: cierra quizá un capítulo
+  (docs/06 §Capítulos).
+- **¿QUÉ HACER? y MISIONES.** Las piezas van en la línea (`Objectives.LINE`,
+  entradas `kind: "campaign"`, `needs: "pieces"`), **con el CG ya en pie y antes de
+  su nivel 2**, detrás del Astillero, el Aeródromo y los seis tanques del final
+  (que ganan Tierra de corrido): Tierra, Mar y Aire (Tierra primero; mientras una
+  descansa se prepara o se juega otra). Se juegan mientras el CG junta lo de sus niveles 2 y 3, no
+  después. Medido (docs/22 §17): con la de Tierra antes del CG, tras las torres, el
+  jefe de Tierra llegaba sin tanques ni economía y se perdía una y otra vez.
+  `Objectives.gate_domains()` / `campaign_gate_step()` dan su edificio, su tropa o
+  la misión; EL CAMINO lleva una fila por pieza ("Pieza: Planos del Bastión (jefe
+  de la Campaña de Tierra)"); `final_gate_text()` dice qué piezas faltan. En
+  MISIONES la lista del Ataque Final (`AuditGateLine`) son las tres piezas y el CG
+  nivel 3 con ✓ o candado, y cada campaña dice qué guarda su jefe
+  (`CampaignPiece`: "Su jefe guarda una pieza del Cuartel General: …").
+- Con el ejército al tope, un paso de tropa pasa a "Construye otro Cuartel"
+  (`Objectives.army_room_step`, `OBJ_WHY_ARMY_ROOM`): campañas y tanques del final
+  juntos no caben en un Cuartel.
+
+| Modo | Llave |
 |---|---|
-| Campaña (Colono y Gobernador) | CG nv3 + tres campañas |
-| Supervivencia | CG nv3 + tres campañas (es la Campaña más dura; sigue con un solo asedio) |
-| Constructor | sin asedio: gana con el CG nv3, como antes |
+| Campaña (Colono y Gobernador) | CG nv3, que pide las tres piezas |
+| Supervivencia | igual (un solo asedio) |
+| Constructor | sin asedio ni piezas: gana con el CG nv3, como antes |
 | Sandbox | se convoca a mano desde su pestaña, como antes |
 
-Regla `audit_needs_campaigns` en `game_mode_rules`, consulta
-`GameMode.audit_needs_campaigns()`, y el interruptor global
-`GameConfig.final_audit_needs_campaigns` (lo apagan los tests que fijan el camino de
-la 1.0, p. ej. `tests/integration/test_full_campaign.gd`). **Guardados viejos**: sin
-la clave `campaigns`, ninguna empezada; un Ataque Final ya convocado, en marcha,
-perdido o ganado sigue tal cual (vive en `progression.final_audit` y `try_summon` no
-convoca si ya hay uno). `migrate_legacy_capstone()` (guardados de antes del asedio) no
-cambia: respeta el CG nv3 que ya tenían.
+**Guardados viejos.** `progress` del libro siempre contó misiones de la tabla
+(`campaign_defs`), así que un guardado de antes carga tal cual y **su pieza sale de
+si ganó al jefe**; sin el jefe, la campaña sigue por la siguiente misión que juega su
+nivel. Un guardado con el CG ya a nivel 3 y campañas a medias puede llamar al Ataque
+Final (ya pagó su llave). Un Ataque Final ya convocado, en marcha, perdido o ganado
+sigue tal cual.
+
+### Colono juega menos misiones (2026-10-25, `feat/ritmo-colono`)
+
+Para que Colono dure 3-4 h sin quitarle nada a Gobernador, la regla
+`campaign_missions` de `game_tier_rules` dice qué misiones de la tabla juega cada
+nivel: Colono **Tierra 4** (m1, m3, m5 y el jefe), **Mar 2** (m1 y el jefe),
+**Aire 2** (m1 y el jefe) = 8 misiones y 16 combates; Gobernador las 16 y 30. (Primero se probó Mar 3 y Aire 3: la línea ganaba en unas 5 h, docs/22 §17.)
+`GameConfig.campaign_mission_list(domain)` (el jefe va siempre),
+`campaign_mission_count()` (las del nivel), `campaign_base_count()` (la tabla).
+Las misiones se nombran **siempre por su índice en la tabla**: oferta, mapa,
+nombre, era, escala y semilla son los de Gobernador, así que la calibración de abajo
+vale para los dos. Lo que se enseña ("Misión 2 de 4") cuenta las del nivel
+(`CampaignBook.won()` / `total()` / `number_of()`).
 
 Gobernador: los enemigos de campaña salen con `expedition_enemy_mult` (1,05), jefe
 incluido.
@@ -1944,3 +2090,156 @@ pasa, recortar misiones (`campaign_defs`) o combates por misión.
   de su medio en su era mínima (sobre todo el Leviatán en era 2 y el Zepelín con solo
   cazas).
 - `tools/siege_probe.gd`: el asedio no cambia.
+
+## 14. Amenazas de costa: solo botín opcional (1.2, rama `feat/amenazas-costa`, sin probar)
+
+Decisión de Bryan (2026-10-18): las amenazas del doc 21 §3.2 se quedan en **botín
+opcional**. Nada de "crecen si se ignoran": aparecen en la orilla cada cierto tiempo,
+se ven en el mapa 3D y 2D, duran un rato y **se van solas sin hacer ningún daño**. Si
+las atacas (o exploras el pecio) te llevas su botín; si no, no pasa nada.
+
+### Los tres tipos
+
+| Amenaza | Desde | Dónde | Cómo se gana | Botín (era 1, +25 % por era) |
+|---|---|---|---|---|
+| **Saqueadores** | Cuartel + primera escaramuza ganada | Playa (tierra que toca el agua). Con Astillero, un 40 % llegan en bote al agua | 1 combate de dominio puro: tropa de tierra en la playa, **solo barcos** si están en el agua | 40-70 oro, 20-40 madera, 1-2 repuestos (+1 en el agua); 30 % un material |
+| **Avanzadilla de la Regencia** | Era 2 | Playa | 1 combate de tierra, un poco más duro (como la incursión del tablón) | 60-100 oro, 20-40 acero, 2-3 repuestos; 60 % un material |
+| **Pecio** | Igual que los saqueadores | Playa | **Sin combate**: 2 trabajadores lo exploran 60 s (dejan su puesto, como al minar a mano) | 30-60 madera, 15-35 oro, 0-2 repuestos; 50 % un material; +20 de rango |
+
+"Material raro" = un material de taller de la era (`threat_rare_by_era`: tablones y
+lingotes en la era 1, más vigas en la 2, lingotes/vigas/combustible en la 3), 2-4
+unidades, fuera de la bolsa como los repuestos. Todo el botín sale de la **semilla de
+la marca** (`ExpeditionGenerator.threat_rewards` / `threat_loot`): la tarjeta enseña
+exactamente lo que se cobra.
+
+### Frecuencia
+
+- La primera, 90 s jugados después de que se abran (`threat_first_delay`).
+- Después, una cada 150-270 s (`threat_spawn_interval`), **como mucho 2 a la vez**
+  (`threat_max_active`), separadas 6 casillas entre sí y de la acera del Núcleo.
+- Vida en la orilla: saqueadores 240 s, avanzadilla 300 s, pecio 360 s
+  (`threat_lifetime`). Atacada o explorándose no se va hasta que vuelve la columna o
+  los trabajadores.
+- Peso por era (`threat_weights`): era 1 saqueadores 70 / pecio 30; era 2 45/30/25;
+  era 3 40/35/25.
+- Se cierran con el asedio final convocado, la partida terminada o sin edificio militar.
+- Todos los tiempos son segundos **jugados** (pasan por `get_duration`: en `dev_mode`
+  ×0,2).
+
+### El combate
+
+Un solo nodo (`ExpeditionGenerator.threat_map`), como la incursión: oferta
+`{kind: "threat", threat_id, threat_type, seed, era, domain}`, el mapa se rehace de la
+oferta al cargar. Enemigos del mismo medio (`domain_roster`): infantería/artillería/
+blindado en tierra; lanchas y cañoneras sobre mar abierto (`terrain_kind: "sea"`) en
+el agua. Escala: saqueadores profundidad 0 ×0,9, avanzadilla profundidad 1 ×1,0
+(`threat_fight`). **Dominio puro**: `CombatManager.can_launch_to` trata la oferta de
+amenaza como la de campaña (`campaign_unit_block`). Se puede **resolver solo** con
+fuerza doble (`Expedition.is_raid()` incluye las amenazas). Ganar paga lo de siempre:
+el oro/madera del nodo, y repuestos/material por `_apply_loot` (que ahora entiende
+`planks/ingots/beams/fuel`); la XP del combate ganado la da `RankManager` como
+siempre. Perder o abandonar deja la amenaza en la orilla con lo que le quedaba.
+
+### El modelo y el servicio
+
+- `scripts/combat/ThreatBoard.gd` (puro, `class_name ThreatBoard`): amenazas
+  `{id, type, cell, water, seed, era, born, ends, state, explore_ends, seen}`,
+  `refresh(now, ctx, spots, seed)`, `engage`, `finish_engagement`, `start_explore`,
+  `threat_at(cell)`, `offer_for(threat)` (id = `OFFER_ID_BASE` + id). Devuelve eventos
+  (`appeared`, `left`, `cleared`, `explore_started`, `explored`, `changed`).
+- `ThreatManager` (autoload, el último): Timer de 5 s reales (sin `_process`); solo
+  recorre la rejilla buscando costa libre cuando toca una marca nueva
+  (`free_spots()`: tierra que toca agua, agua que toca tierra). Lanza con
+  `CombatManager.launch_threat_offer()` (marca la amenaza ANTES, por "resolver solo")
+  y la cierra al oír `expedition_ended`. Paga el pecio. `busy_workers()` lo descuenta
+  `PopulationManager` como el minado a mano.
+- Guardado: clave `threats`; `reset()` en los tres sitios de `GameManager`; carga
+  idempotente; sin clave = orilla vacía; un tipo desconocido se ignora. Una marca de
+  tierra sobre la que se construye se va sin botín.
+- Señales: `threats_changed`, `threat_appeared`, `threat_cleared`, `threat_left`,
+  `wreck_explored`, `threat_clicked` (ThreatManager además emite
+  `sortie_offers_changed` para que MISIONES y ¿QUÉ HACER? repinten).
+
+### La vista y la interfaz
+
+- **Marcas:** `scripts/map/ThreatMarks3D.gd` (hijo de `MapGenerator`) y
+  `scripts/view2d/ThreatMarks2D.gd` (hijo de `MapGenerator2D`). Arte propio de juguete:
+  bote con bandera pirata (varado con hoguera y cajas, o a flote), tienda con el
+  estandarte morado de la Regencia y sacos terreros, casco roto con cuadernas y mástil
+  partido. En 3D una malla por tipo con color por vértice (cache estática, material
+  compartido, sin sombras): una llamada de dibujo por marca. En 2D un solo `_draw`.
+  Nada por fotograma.
+- **Tocar la marca** (los dos `BuildingPlacer`, solo si no hay edificio o yacimiento en
+  esa casilla; radio 1): `ThreatCard` (hija de `SkirmishPanel`, capa 12): nombre, una
+  frase, "Se va en m:ss", enemigos, Favorable/Igualada/Difícil con lo mejor de casa,
+  botín, **¡AL ATAQUE!** (abre MISIONES > ATAQUES RÁPIDOS con ella elegida para escoger
+  tropa) o **EXPLORAR** (pecio), con el motivo escrito si no se puede, y "si no haces
+  nada, se va sola sin hacer daño".
+- **MISIONES > ATAQUES RÁPIDOS:** las amenazas de pelea salen junto a las incursiones
+  del tablón (misma ficha, "Amenaza · 1 combate en tierra/mar", dónde y cuánto le
+  queda); los pecios, como filas con EXPLORAR. La pestaña cuenta las dos cosas.
+- **Avisos:** una noticia (`notice`) al aparecer cada marca —como mucho una cada 2,5
+  min—; irse y echarla van al registro (`info` / `success`). Cuando entre `AlertQueue`
+  (1.0) lo agrupa como el resto.
+- **¿QUÉ HACER? / punto rojo:** solo la segunda línea, la última de
+  `CombatManager.sortie_reason()` (`THREAT_WHY_EASY`): una marca **sin mirar** con
+  botín fácil (pecio con trabajadores libres, o pelea Favorable con lo mejor de casa
+  de su medio). Se apaga al abrir su tarjeta o MISIONES. La línea principal no cambia.
+
+### Qué probar en la ronda final
+
+- `tests/combat/test_threat_board.gd`, `tests/combat/test_threat_fights.gd`,
+  `tests/combat/test_threat_manager.gd`, `tests/view2d/test_threat_marks.gd` (nuevos,
+  sin correr), y `test_sortie_board`, `test_short_sorties`, `test_three_campaigns`,
+  `tests/ui/test_campaigns_ui.gd`, `test_objectives`, `test_view_mode`.
+- Jugar en 3D y 2D: que la marca se vea en la playa y en el agua (altura del bote,
+  que no quede bajo la arena de `IslandGenerator`), que el toque la abra y no robe el
+  toque a un edificio vecino, la tarjeta en tablet (no tapar CONSTRUIR), el pecio con
+  los trabajadores fuera (el HUD de trabajadores baja y vuelve).
+- `tools/balance_probe.gd` (si se le enseña): saqueadores ganables con 2-3 de tierra
+  en era 1, avanzadilla con 3-4 en era 2, bote con 2 lanchas.
+- `tools/line_probe.gd`: la línea no cambia (la sonda no ataca amenazas); vigilar que
+  el botín de los pecios no adelante la era 1 (≈ 40-90 recursos cada 3-4 min).
+## 14. Volverse el Imperio: las misiones de conquista (1.2, rama `feat/volverse-imperio`, sin medir)
+
+Tras **ganar** el Ataque Final (§6) la partida sigue: seis islas vecinas que conquistar
+y que luego pagan tributo. El diseño entero, las islas, los premios y el guardado están
+en [06-progression-victory.md](06-progression-victory.md) §Volverse el Imperio; aquí, lo
+que toca al combate.
+
+- **La oferta.** `{kind: "conquest", island, mission, domain, seed, era, id: -1}`
+  (`scripts/empire/ConquestGenerator.gd`, puro y estático). `ExpeditionGenerator`
+  conoce el tipo (`KIND_CONQUEST`): `sortie_map()` y `offer_name_key()` lo derivan a
+  `ConquestGenerator` (cargado con `load()` al usarse, para no tener un ciclo de
+  preload). `Expedition` lo sabe (`is_conquest()`, `conquest_island()`,
+  `conquest_mission()`, `conquest_domain()`, cura `empire_heal_between`) y rehace el
+  mapa igual al cargar.
+- **El mapa.** La cadena corta de las campañas (`_chain_map`), dominio puro: en mar,
+  `domain_roster("sea")` sobre mar abierto (`terrain_kind` sea); en aire, cazas y
+  dirigibles sobre la costa; en tierra, el roster de siempre. Profundidad
+  `empire_tier_enemy[nivel].depth + mision + capa`, era ≥ `empire_min_era` (3), escala
+  × `empire_tier_enemy[nivel].mult`. El jefe de la Ciudadela de Ceniza (última misión,
+  último nodo, `conquest_boss`) usa `campaign_boss_roster` y `empire_boss_extra_scale`.
+- **Botín.** Solo el último combate de cada misión (`conquest_final`): oro y madera de
+  la curva × `empire_reward_mult` y `empire_mission_parts` repuestos (el doble en la
+  misión que toma la isla). Lo grande es la isla: tributo periódico y premio único.
+- **Lanzar.** `EmpireManager.launch_conquest(isla, tropa)` mira el candado de la isla
+  (fase, ya conquistada, islas que pide antes, edificio del medio, descanso) y llama a
+  `CombatManager.launch_conquest_mission(oferta, tropa)`, que aplica las reglas de
+  siempre con `can_launch_to()` (dominio puro, como las campañas).
+- **Volver.** `CombatManager._resolve_expedition()` no toca el tablón de salidas con una
+  conquista y deja `conquest_island` / `conquest_mission` en `_last_result`;
+  `EmpireManager` los lee al oír `expedition_ended` y avanza la isla (o cuenta el
+  revés). Retirada enemiga sí; "resolver solo" no.
+- **La interfaz.** MISIONES tiene la pestaña **IMPERIO** (solo con la fase activa):
+  botones de las islas por tomar, la cadena de la elegida, su candado y VER EL
+  ARCHIPIÉLAGO; la selección de tropa se filtra por el medio de la misión
+  (`SkirmishPanel._picker_domain()`). En `BattleScreen`, el título del mapa dice
+  "Isla · Misión" y pinta agua o cielo; el parte dice "Misión N de M ganada" y "¡X es
+  tuya!".
+
+**Qué medir en la ronda final.** Con `tools/balance_probe.gd`, como las campañas: cada
+misión de cada isla con la columna de su medio en era 3 (6 cazas, 2 lanchas + 2
+cañoneras + 2 acorazados, 2 inf + 2 art + 2 tanques) y el jefe de la Ciudadela; el
+objetivo, ★ 90-100 %, ★★ 70-90 %, ★★★ 55-75 % y el jefe ~50 %. Retocar
+`empire_tier_enemy` y `empire_boss_extra_scale`.

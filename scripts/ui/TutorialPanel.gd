@@ -26,6 +26,7 @@ extends CanvasLayer
 ## repaso". Sin animaciones: el marco y el aro no laten y el texto sale entero.
 
 const PrologueScene := preload("res://scenes/ui/PrologueScreen.tscn")
+const AboutScript := preload("res://scripts/ui/AboutScreen.gd")
 const HelpTargets := preload("res://scripts/ui/HelpTargets.gd")
 const CoachArrow := preload("res://scripts/ui/CoachArrow.gd")
 const TypeCircleScript := preload("res://scripts/ui/TypeCircle.gd")
@@ -68,6 +69,8 @@ const REOPEN_SECONDS := 8.0
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 
 var _prologue: CanvasLayer
+## "De que va" (tutorial corto, 2026-10-24): sale antes del lore en una partida nueva.
+var _about: CanvasLayer
 var _coach: Control
 var _dim: Array[ColorRect] = []
 var _frame: Panel
@@ -82,7 +85,7 @@ var _detail: Label
 ## El piquito del bocadillo hacia el busto.
 var _tail: Control
 ## Las cifras del edificio del paso, con iconos (building_facts).
-var _facts: HBoxContainer
+var _facts: HFlowContainer
 var _facts_for := "-"
 var _end_replay_btn: Button
 var _ok_btn: Button
@@ -152,6 +155,10 @@ func _ready() -> void:
 	_prologue.name = "PrologueScreen"
 	add_child(_prologue)
 	_prologue.closed.connect(_on_prologue_closed)
+	_about = AboutScript.new()
+	_about.name = "AboutScreen"
+	add_child(_about)
+	_about.closed.connect(func(): _prologue.open(TutorialManager.requested_variant()))
 	# La guia rapida se crea al pedirla (AYUDA > COMO FUNCIONA), no al arrancar:
 	# ya no sale sola y casi nadie la abre (feat/topes-mejoras-ayuda).
 	_build_coach()
@@ -171,7 +178,15 @@ func _ready() -> void:
 # ══════════════════════════════════════════════════════════════════════
 
 func _open_intro() -> void:
+	# Partida nueva: primero "De que va" y, al cerrarla, el lore. "Historia" desde
+	# el menu va directa al lore.
+	if TutorialManager.take_about_first():
+		_about.open()
+		return
 	_prologue.open(TutorialManager.requested_variant())
+
+func about() -> CanvasLayer:
+	return _about
 
 func _on_prologue_closed() -> void:
 	EventBus.tutorial_intro_closed.emit()
@@ -198,10 +213,12 @@ func prologue() -> CanvasLayer:
 
 ## Nombres de la intro vieja, para quien ya los usaba (PauseMenu, sondas).
 func is_intro_open() -> bool:
-	return _prologue != null and _prologue.is_open()
+	return (_prologue != null and _prologue.is_open()) or (_about != null and _about.is_open())
 
 func _close() -> void:
-	if is_intro_open():
+	if _about != null and _about.is_open():
+		_about.close(true)
+	if _prologue != null and _prologue.is_open():
 		_prologue.close()
 
 func current_page() -> int:
@@ -238,7 +255,7 @@ func _build_coach() -> void:
 	fs.bg_color = Color(0, 0, 0, 0)
 	fs.border_color = CT.sem("ACCENT")
 	fs.set_border_width_all(4)
-	fs.set_corner_radius_all(12)
+	fs.set_corner_radius_all(CT.RADIUS_WINDOW)
 	fs.shadow_color = Color(CT.INK, 0.5)
 	fs.shadow_size = 2
 	_frame.add_theme_stylebox_override("panel", fs)
@@ -268,6 +285,8 @@ func _build_coach() -> void:
 	_card.name = "CoachCard"
 	# Los avisos (NotificationPanel) esperan si la tarjeta cae sobre su columna.
 	_card.add_to_group("alert_blocker")
+	# La Orden de la Regencia (StormHUD) se pliega y espera si la tarjeta cae encima.
+	_card.add_to_group("tutorial_card")
 	_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	_card.add_theme_stylebox_override("panel", CT.bubble_style())
 	_coach.add_child(_card)
@@ -278,7 +297,7 @@ func _build_coach() -> void:
 	# "Paso 3 de 9": una pastilla de laton pequena.
 	var pill := PanelContainer.new()
 	pill.name = "BadgePill"
-	var ps := CT.box(CT.sem("ACCENT"), CT.INK, 2, 12, 0)
+	var ps := CT.box(CT.sem("ACCENT"), CT.INK, 2, CT.RADIUS_CARD, 0)
 	ps.content_margin_left = 10
 	ps.content_margin_right = 10
 	ps.content_margin_top = 0
@@ -298,9 +317,11 @@ func _build_coach() -> void:
 	_detail.visible = false
 	col.add_child(_detail)
 	# Las cifras del edificio: [madera] +6 cada 12 s  [trabajadores] 2 trabajan.
-	_facts = HBoxContainer.new()
+	# En varias filas si no caben (los seis recursos de la tarjeta de RECURSOS).
+	_facts = HFlowContainer.new()
 	_facts.name = "Facts"
-	_facts.add_theme_constant_override("separation", 14)
+	_facts.add_theme_constant_override("h_separation", 14)
+	_facts.add_theme_constant_override("v_separation", 4)
 	_facts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_facts.visible = false
 	col.add_child(_facts)
@@ -400,15 +421,24 @@ static func is_waiting_step(step_id: String) -> bool:
 func is_waiting_now() -> bool:
 	if is_waiting_step(_step):
 		return true
-	return _step == "collect" and not _sawmill_has_wood()
+	# Recoger el oro de la Mina, igual que la madera (tutorial corto, 2026-10-24).
+	if _step == "collect":
+		return not _sawmill_has_wood()
+	if _step == "collect_gold":
+		return not _has_stock("gold_mine", "gold")
+	return false
 
 func _sawmill_has_wood() -> bool:
+	return _has_stock("sawmill", "wood")
+
+## Algun `building_id` tiene `res` esperando a que lo recojan.
+func _has_stock(building_id: String, res: String) -> bool:
 	for info in GridManager.buildings_view():
 		var d: Resource = info.get("data")
 		var node: Node = info.get("node")
-		if d == null or node == null or String(d.get("id")) != "sawmill":
+		if d == null or node == null or String(d.get("id")) != building_id:
 			continue
-		if int(ProductionManager.get_stock(node).get("wood", 0)) > 0:
+		if int(ProductionManager.get_stock(node).get(res, 0)) > 0:
 			return true
 	return false
 
@@ -450,15 +480,21 @@ func _reminder_line() -> String:
 		var what := "TUT3_READY_DO"
 		if _step == "collect":
 			what = "TUT3_READY_COLLECT"
+		elif _step == "collect_gold":
+			what = "TUT3_READY_COLLECT_GOLD"
+		elif _step == "battle":
+			what = "TUT3_READY_BATTLE"
 		elif TutorialManager.step_target(_step) == "build_button":
 			what = "TUT3_READY_BUILD"
 		return Tr.t("TUT3_CHIP_READY") % Tr.t(what)
 	if TutorialManager.is_need_step(_step):
-		var cur: Dictionary = TutorialManager.need_plan(TutorialManager.step_building(_step)).get("current", {})
+		var cur: Dictionary = TutorialManager.need_plan_for_step(_step).get("current", {})
 		var short := String(cur.get("short", cur.get("text", "")))
 		if short != "":
 			return short
 		return TutorialManager.step_text(_step)
+	if _step == "wait_unit":
+		return Tr.t("TUT3_CHIP_UNIT")
 	if _step.begins_with("wait_"):
 		var b := _step.substr(5)
 		var data := Rules.load_building_data(b)
@@ -472,6 +508,9 @@ func _reminder_line() -> String:
 	if _step == "collect":
 		var saw := Rules.load_building_data("sawmill")
 		return Tr.t("TUT3_CHIP_COLLECT_WAIT") % (saw.get_display_name() if saw != null else "sawmill")
+	if _step == "collect_gold":
+		var mine := Rules.load_building_data("gold_mine")
+		return Tr.t("TUT3_CHIP_GOLD_WAIT") % (mine.get_display_name() if mine != null else "gold_mine")
 	var main := _res_text.split("
 ", false)
 	return String(main[0]) if not main.is_empty() else ""
@@ -588,6 +627,9 @@ func _on_step_changed(step_id: String) -> void:
 	var facts_for := TutorialManager.step_building(step_id)
 	if step_id == TutorialManager.REPAIR_STEP:
 		facts_for = "__repair__"
+	elif step_id == "resources":
+		# Los recursos, cada uno con su icono (tutorial corto, 2026-10-24).
+		facts_for = "__resources__"
 	elif TutorialManager.is_need_step(step_id):
 		facts_for = ""
 	_render_facts(facts_for)
@@ -635,6 +677,7 @@ func _render_facts(building_id: String) -> void:
 		_facts.remove_child(c)
 		c.queue_free()
 	var facts: Array = TutorialManager.repair_facts() if _step == TutorialManager.REPAIR_STEP \
+		else TutorialManager.resource_facts() if building_id == "__resources__" \
 		else TutorialManager.building_facts(building_id)
 	for f in facts:
 		var chip := HBoxContainer.new()
@@ -686,6 +729,11 @@ func _should_hide() -> bool:
 		return true
 	if _quick_guide != null and _quick_guide.is_open():
 		return true
+	# El menu ☰ abierto manda: la tarjeta no tapa su lista (en telefono la
+	# lista llena el alto).
+	var pause: Node = get_tree().get_first_node_in_group("game_menu")
+	if pause != null and pause.has_method("is_open") and pause.is_open():
+		return true
 	# Otra ventana encima (Tecnologia, Mercado...): la marca del tutorial no la
 	# tapa. CONSTRUIR si deja verla: los pasos del tutorial ocurren ahi dentro.
 	# La ficha del edificio tambien, en los pasos que ocurren en ella (mover,
@@ -697,6 +745,9 @@ func _should_hide() -> bool:
 		if wname == "ConstructionMenu":
 			continue
 		if wname == "BuildingInfoPanel" and _step in TutorialManager.INFO_PANEL_STEPS:
+			continue
+		# La primera batalla: ¡A LA MISION! esta dentro de MISIONES (2026-10-24).
+		if wname == "SkirmishPanel" and _step == "battle_launch":
 			continue
 		return true
 	if CombatManager.is_board_open():
@@ -843,6 +894,12 @@ func _layout_step() -> void:
 	_set_card_text(text)
 
 	var has_rect := rect.size.x > 1.0 and rect.size.y > 1.0
+	# Derribar: la pregunta de confirmacion va con sus botones. El foco la
+	# incluye: ni la tarjeta ni el velo la tapan.
+	if has_rect and _step == "demolish":
+		var q := get_tree().get_first_node_in_group("hud_info_demolish_question") as Control
+		if q != null and is_instance_valid(q) and q.is_visible_in_tree():
+			rect = rect.merge(q.get_global_rect())
 	if has_rect:
 		rect = rect.grow(HOLE_PAD)
 	_place_dim(vp, rect if has_rect else Rect2())
@@ -1221,16 +1278,32 @@ func _layout_combat(delta: float) -> void:
 
 	var w: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
 	var key := "%s|%s|%d|%s|%s" % [_badge.text, _text.text, int(w), _combat_ok_btn.visible, _circle.visible]
-	_fit_card(w, key)
 	var focus := Rect2()
 	if has_rect:
 		focus = rect
 	elif has_point:
 		focus = Rect2(Vector2(anchor["point"]) - Vector2(40, 40), Vector2(80, 80))
 	var avoid := _combat_avoid_rects(bs)
-	_card.position = clear_of(combat_card_position(vp, Vector2(w, _card_h), focus),
-		Vector2(w, _card_h), avoid, vp, focus)
+	var lay: Dictionary = bs.coach_layout() if bs != null and bs.has_method("coach_layout") else {}
+	# La cabecera, la franja de turnos y los botones tampoco se tapan.
+	avoid.append_array(lay.get("keep", []))
+	# Fuera del tablero si hay sitio (a un lado, encima o debajo, mas estrecha
+	# si hace falta); si no, junto a lo senalado sin tapar las piezas.
+	var spot := _combat_spot(vp, lay, focus, avoid, key)
+	if not spot.is_empty():
+		w = float(spot["w"])
+		_fit_card(w, key + "|%d" % int(w))
+		_card.position = spot["pos"]
+	else:
+		_fit_card(w, key)
+		var keep_clear: Array = avoid.duplicate()
+		keep_clear.append_array(lay.get("units", []))
+		_card.position = clear_of(combat_card_position(vp, Vector2(w, _card_h), focus),
+			Vector2(w, _card_h), keep_clear, vp, focus)
 	avoid.append(focus)
+	if lay.has("board") and (lay["board"] as Rect2).size.x > 1.0 and not spot.is_empty():
+		# El busto tampoco se pone encima del tablero (si no cabe, no sale).
+		avoid.append(lay["board"])
 	_bust.dock_to(vp, Rect2(_card.position, Vector2(w, _card_h)), avoid)
 	CT.place_tail(_tail, Rect2(_card.position, Vector2(w, _card_h)), _bust)
 
@@ -1256,6 +1329,88 @@ func _layout_combat(delta: float) -> void:
 		_ring.position = pt - _ring.size * 0.5
 		_arrow.visible = true
 		_arrow.point_at(pt - Vector2(0, 44), Vector2.DOWN)
+
+## La tarjeta del combate guiado no tapa el tablero (QA de tablet, 2026-10-26:
+## a 1280x800 el Sargento cubria las filas 2-5, enemigos incluidos). Busca, en
+## este orden, un sitio fuera de `lay["board"]` y entre la fila de turnos y los
+## botones: a un lado (el del foco primero, con el ancho que quepa y no menos
+## de COMBAT_SIDE_MIN_W), encima o debajo del tablero (a lo ancho). Ninguno de
+## `avoid` (avisos, ficha de la unidad). {"pos", "w"}, o {} si no hay sitio
+## (vista Frente, tablero a toda pantalla): entonces se coloca junto al foco.
+## Se recuerda mientras no cambie nada (medir la tarjeta a otro ancho la
+## reordena: no se hace cada fotograma).
+const COMBAT_SIDE_MIN_W := 200.0
+var _spot_key := ""
+var _spot: Dictionary = {}
+
+func _combat_spot(vp: Vector2, lay: Dictionary, focus: Rect2, avoid: Array, text_key: String) -> Dictionary:
+	var board: Rect2 = lay.get("board", Rect2())
+	if board.size.x <= 1.0 or board.size.y <= 1.0:
+		return {}
+	var top: float = maxf(EDGE, float(lay.get("top", 0.0)) + AVOID_GAP + 1.0)
+	var bottom: float = minf(vp.y - EDGE, float(lay.get("bottom", vp.y)) - AVOID_GAP - 1.0)
+	var skey := "%s|%s|%s|%s|%d|%d|%s" % [text_key, str(vp.round()), str(board.position.round()), str(board.size.round()),
+		int(top), int(bottom), str(focus.get_center().round())]
+	for r in avoid:
+		skey += str((r as Rect2).position.round())
+	if skey == _spot_key:
+		return _spot
+	_spot_key = skey
+	_spot = combat_spot_off_board(vp, board, top, bottom, focus, avoid,
+		func(width: float) -> float: return _fit_card(width, text_key + "|%d" % int(width)))
+	return _spot
+
+## Pura salvo por `height_for` (ancho -> alto de la tarjeta a ese ancho), para
+## las pruebas. Ver _combat_spot.
+static func combat_spot_off_board(vp: Vector2, board: Rect2, top: float, bottom: float, focus: Rect2,
+		avoid: Array, height_for: Callable) -> Dictionary:
+	var grown: Array = []
+	for r in avoid:
+		if (r as Rect2).size.x > 1.0 and (r as Rect2).size.y > 1.0:
+			grown.append((r as Rect2).grow(AVOID_GAP))
+	var clear := func(card: Rect2) -> bool:
+		if card.position.x < EDGE - 0.5 or card.end.x > vp.x - EDGE + 0.5:
+			return false
+		if card.position.y < top - 0.5 or card.end.y > bottom + 0.5:
+			return false
+		if card.intersects(board.grow(AVOID_GAP - 0.5)):
+			return false
+		for g in grown:
+			if card.intersects(g):
+				return false
+		return true
+	var fy: float = focus.get_center().y if focus.size != Vector2.ZERO else (top + bottom) * 0.5
+	var fx: float = focus.get_center().x if focus.size != Vector2.ZERO else vp.x * 0.5
+	# A un lado: primero el mas cercano al foco.
+	var left_room: float = board.position.x - AVOID_GAP - EDGE
+	var right_room: float = vp.x - EDGE - board.end.x - AVOID_GAP
+	var sides := [["left", left_room], ["right", right_room]]
+	if fx > board.get_center().x:
+		sides.reverse()
+	for s in sides:
+		var w: float = minf(CARD_WIDTH, float(s[1]))
+		if w < COMBAT_SIDE_MIN_W:
+			continue
+		var h: float = float(height_for.call(w))
+		var x: float = board.position.x - AVOID_GAP - w if s[0] == "left" else board.end.x + AVOID_GAP
+		var y: float = clampf(fy - h * 0.5, top, maxf(top, bottom - h))
+		var card := Rect2(x, y, w, h)
+		if clear.call(card):
+			return {"pos": card.position, "w": w}
+		# La ficha de la unidad (o un aviso) en ese lado: arriba o abajo del hueco.
+		for yy in [top, bottom - h]:
+			card.position.y = yy
+			if clear.call(card):
+				return {"pos": card.position, "w": w}
+	# Encima o debajo, a lo ancho (centrada sobre el foco).
+	var wide: float = minf(CARD_WIDTH, vp.x - EDGE * 2.0)
+	var hw: float = float(height_for.call(wide))
+	var cx: float = clampf(fx - wide * 0.5, EDGE, maxf(EDGE, vp.x - wide - EDGE))
+	for y in [board.position.y - AVOID_GAP - hw, board.end.y + AVOID_GAP]:
+		var card := Rect2(cx, y, wide, hw)
+		if clear.call(card):
+			return {"pos": card.position, "w": wide}
+	return {}
 
 ## Lo que la tarjeta del combate guiado no debe tapar, a la izquierda del
 ## tablero: los avisos (NotificationPanel, capa 19 como esta) y la ficha de la

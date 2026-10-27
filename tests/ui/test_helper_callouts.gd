@@ -169,6 +169,10 @@ func test_nothing_shows_by_itself_during_the_guided_tutorial() -> void:
 	assert_int(helper.visible_help_count()).is_equal(0)
 
 func test_skipping_the_tutorial_brings_the_build_help_first() -> void:
+	# Otra suite pudo dejar la colonia con hambre (o sin manos, o sin Granja: los
+	# consejos del tutorial corto, 2026-10-24): esos no entran en esta prueba.
+	for tip in ["consumption", "food_low", "house"]:
+		TutorialManager.mark_help_seen(tip)
 	var helper := _helper()
 	await await_idle_frame()
 	if not _clear_stack():

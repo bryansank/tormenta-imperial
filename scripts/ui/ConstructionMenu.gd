@@ -69,7 +69,7 @@ var _detail_panel: VBoxContainer
 var _detail_name: Label
 var _detail_desc: Label
 ## El coste en fila de iconos con su cifra; en rojo lo que falta.
-var _detail_cost: HBoxContainer
+var _detail_cost: HFlowContainer
 ## Lo que produce: "+6 [madera] cada 12 s".
 var _detail_production: HBoxContainer
 ## Trabajadores que pide, alojamiento y moral que da, en fichas de cifra.
@@ -143,6 +143,12 @@ func _ready() -> void:
 	EventBus.game_load_completed.connect(_request_grid_refresh)
 	EventBus.game_new_started.connect(_request_grid_refresh)
 	# Con la lista abierta, el coste en rojo o no y el porque siguen a lo que hay.
+	# Volverse el Imperio: una isla conquistada puede abrir una decoracion antes
+	# de su rango (EmpireManager.unlocks_building).
+	EventBus.island_conquered.connect(func(_i):
+		_request_grid_refresh()
+		_refresh_block())
+	# Con la lista abierta, el coste en rojo o no y el aviso siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	EventBus.workers_changed.connect(func(_u, _t): _on_resources_changed())
 	# CONSTRUIR es la accion principal: siempre a la vista. Con la barra de
@@ -164,9 +170,10 @@ func _load_buildings() -> void:
 func _get_category(data: BuildingData) -> String:
 	if data.is_decoration:
 		return "decoration"
-	if data.id in ["house", "warehouse", "silo", "fuel_depot", "tavern", "well", "lighthouse"]:
+	if data.id in ["house", "warehouse", "silo", "fuel_depot", "tavern", "well", "lighthouse", "scrapyard", "telegraph",
+			"trade_port", "exchange"]:
 		return "support"
-	if data.id in ["barracks", "tower", "shipyard", "aerodrome"]:
+	if data.id in ["barracks", "tower", "shipyard", "aerodrome", "bastion"]:
 		return "military"
 	return "production"
 
@@ -387,7 +394,9 @@ func _build_detail(main: HBoxContainer) -> void:
 	_detail_block.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_detail_column.add_child(_detail_block)
 
-	_detail_cost = CT.cost_strip({})
+	# Las fichas del coste bajan de linea si no caben (el Cuartel General pide
+	# siete cosas y empujaba la ventana fuera por la derecha).
+	_detail_cost = CT.cost_flow()
 	_detail_cost.name = "DetailCost"
 	_detail_column.add_child(_detail_cost)
 
@@ -411,7 +420,7 @@ func _build_detail(main: HBoxContainer) -> void:
 var _strip: PanelContainer
 var _strip_name: Label
 var _strip_why: Label
-var _strip_cost: HBoxContainer
+var _strip_cost: HFlowContainer
 var _strip_build: Button
 var _strip_upgrade: Button
 
@@ -431,6 +440,9 @@ func _build_strip(parent: Control) -> void:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	col.add_theme_constant_override("separation", 0)
+	# Nunca a 1 px: el porque se partia letra a letra (franja de 900 de alto en
+	# un telefono en vertical).
+	col.custom_minimum_size.x = 100.0
 	row.add_child(col)
 	_strip_name = CT.name_label("", "button")
 	_strip_name.name = "StripName"
@@ -439,9 +451,11 @@ func _build_strip(parent: Control) -> void:
 	_strip_why.name = "StripWhy"
 	_strip_why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(_strip_why)
-	_strip_cost = CT.cost_strip({})
+	_strip_cost = CT.cost_flow({}, {}, "window", "", "number", Color(0, 0, 0, 0), true)
 	_strip_cost.name = "StripCost"
 	_strip_cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_strip_cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_strip_cost.size_flags_stretch_ratio = 1.5
 	row.add_child(_strip_cost)
 	_strip_upgrade = CT.pill_button("", "upgrade", "open", 48)
 	_strip_upgrade.name = "StripUpgradeOne"
@@ -449,8 +463,11 @@ func _build_strip(parent: Control) -> void:
 	_strip_upgrade.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_strip_upgrade.pressed.connect(_on_upgrade_one)
 	row.add_child(_strip_upgrade)
-	_strip_build = CT.pill_button(Tr.t("BTN_BUILD"), "build", "primary", 48)
+	# En vertical, solo el martillo (CONSTRUIR al mantener pulsado).
+	_strip_build = CT.pill_button("" if CT.portrait() else Tr.t("BTN_BUILD"), "build", "primary", 48)
 	_strip_build.name = "StripBuildButton"
+	if CT.portrait():
+		_strip_build.tooltip_text = Tr.t("BTN_BUILD")
 	_strip_build.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_strip_build.pressed.connect(_on_build_pressed)
 	row.add_child(_strip_build)
@@ -675,6 +692,20 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_label.custom_minimum_size.x = 96.0 if _phone else 150.0
 	row.add_child(name_label)
+	# Telefono en vertical: el coste (o el candado) baja bajo el nombre; en una
+	# fila la lista salia 50-130 px por la derecha en 400 de ancho.
+	var info_box: Container = row
+	if CT.portrait():
+		var stack := VBoxContainer.new()
+		stack.add_theme_constant_override("separation", 2)
+		stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stack.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.remove_child(name_label)
+		name_label.custom_minimum_size.x = 72.0
+		stack.add_child(name_label)
+		row.add_child(stack)
+		info_box = stack
 
 	if locked:
 		var lock := HBoxContainer.new()
@@ -691,19 +722,40 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 		why.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		why.name = "RankLockLabel" if lock.name == "RankLock" else "LockLabel"
 		lock.add_child(why)
-		row.add_child(lock)
+		info_box.add_child(lock)
 	else:
 		# El coste, con lo que falta en rojo (y los trabajadores, si faltan).
-		var cost := CT.cost_strip({}, {}, "window", "", "number")
+		# Las fichas bajan a otra linea antes que ensanchar la lista (Astillero,
+		# Refineria: cinco fichas con tablones y vigas sacaban la ventana por la
+		# derecha en 1280x720 y en telefono).
+		var cost := CT.cost_flow({}, {}, "window", "", "number", Color(0, 0, 0, 0), true)
 		cost.name = "CardCost"
 		cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(cost)
+		cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cost.size_flags_stretch_ratio = 1.6
+		info_box.add_child(cost)
 		# La primera a mitad de precio (GameConfig.first_building_discount, 2026-10-19).
 		var deal := CT.badge(Tr.t("LBL_FIRST_HALF_PRICE"), CT.sem("POSITIVE"))
 		deal.name = "CardDeal"
 		deal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		deal.visible = data.first_discount_factor() < 1.0
-		row.add_child(deal)
+		if _phone or _compact:
+			# A dos lineas en la lista estrecha (tablet, telefono): en una sola
+			# sacaba la ventana por la derecha.
+			for l in deal.find_children("*", "Label", true, false):
+				(l as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				(l as Label).custom_minimum_size.x = 84
+		info_box.add_child(deal)
+		# Gratis en el tutorial guiado (TutorialManager.is_free_build, 2026-10-24).
+		var free_tag := CT.badge(Tr.t("LBL_TUTORIAL_FREE"), CT.sem("POSITIVE"))
+		free_tag.name = "CardTutorialFree"
+		free_tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		free_tag.visible = data.is_tutorial_free()
+		if _phone or _compact:
+			for l in free_tag.find_children("*", "Label", true, false):
+				(l as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				(l as Label).custom_minimum_size.x = 84
+		info_box.add_child(free_tag)
 		# Lleno: una palabra en vez del coste, y el atajo para mejorar uno.
 		var full := CT.badge(Tr.t("TOPE_CARD_FULL"), CT.sem("WARNING"))
 		full.name = "CardFull"
@@ -728,7 +780,7 @@ func _create_grid_card(data: BuildingData) -> PanelContainer:
 			_select_building(data)
 			_on_build_pressed())
 		row.add_child(hammer)
-		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer, "deal": deal}
+		_row_parts[data.id] = {"cost": cost, "full": full, "up": up, "hammer": hammer, "deal": deal, "free": free_tag}
 
 	card.tooltip_text = row_tooltip(data)
 
@@ -789,6 +841,11 @@ static func lock_reason(data: BuildingData) -> String:
 	if data == null:
 		return ""
 	if not Rules.check_rank(data.id):
+		# Las decoraciones de hazana (Canon de museo, Columna de la Tormenta)
+		# dicen lo que falta de la hazana, no un rango.
+		var deed := Rules.deed_lock_text(data.id)
+		if deed != "":
+			return deed
 		return Tr.t("LBL_RANK_LOCK") % RankManager.building_rank(data.id)
 	if has_locked_resource_cost(data):
 		var era := HelpText.build_era(data)
@@ -820,7 +877,8 @@ static func _row_tooltip_of(data: BuildingData, block: String) -> String:
 
 ## Candado dibujado + "Rango N" (estilo viejo). Lo usan la Colonia y los
 ## Regimientos; las filas de CONSTRUIR llevan el candado de CartoonIcon.
-static func make_rank_lock_row(rank: int) -> HBoxContainer:
+## `text`: lo que se lee en vez de "Rango N" (una hazana: "Impuestos rechazados: 0/1").
+static func make_rank_lock_row(rank: int, text: String = "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "RankLock"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -831,7 +889,7 @@ static func make_rank_lock_row(rank: int) -> HBoxContainer:
 	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lock.draw.connect(func(): draw_lock(lock, Rect2(Vector2.ZERO, lock.custom_minimum_size), UITheme.WARNING))
 	row.add_child(lock)
-	var label := UITheme.make_label(Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
+	var label := UITheme.make_label(text if text != "" else Tr.t("LBL_RANK_LOCK") % rank, "small", UITheme.WARNING)
 	label.name = "RankLockLabel"
 	row.add_child(label)
 	return row
@@ -1116,7 +1174,8 @@ func _refresh_cost() -> void:
 	var cost := Rules.cost_by_name(_selected_data)
 	CT.fill_cost_strip(_detail_cost, cost, Rules.missing_cost(_selected_data))
 	if cost.is_empty() and _detail_cost.get_child_count() == 0:
-		var free := CT.label(Tr.t("LBL_FREE"), "button", CT.positive_text())
+		var free := CT.label(Tr.t("LBL_TUTORIAL_FREE") if _selected_data.is_tutorial_free() else Tr.t("LBL_FREE"),
+			"button", CT.positive_text())
 		_detail_cost.add_child(free)
 		_detail_cost.remove_meta("strip_sig")
 
@@ -1202,6 +1261,8 @@ func _update_card_costs() -> void:
 		(parts["full"] as Control).visible = full
 		if parts.has("deal"):
 			(parts["deal"] as Control).visible = not full and data.first_discount_factor() < 1.0
+		if parts.has("free"):
+			(parts["free"] as Control).visible = not full and data.is_tutorial_free()
 		(parts["up"] as Control).visible = full and Rules.upgrade_does_something(data) \
 			and HelpText.lowest_upgradable(data.id) != null
 		var hammer: Button = parts["hammer"]
@@ -1218,7 +1279,15 @@ func _data_by_id(id: String) -> BuildingData:
 
 func _on_build_pressed() -> void:
 	if _selected_data and Rules.purchase_block_detail(_selected_data) == "":
-		EventBus.building_selected_for_placement.emit(_selected_data)
+		var chosen := _selected_data
+		# La lista se abre la proxima vez sin nada elegido: si no, al volver a
+		# CONSTRUIR seguia elegido el edificio ya puesto (el Cuartel) con su boton
+		# CONSTRUIR, como si fuera otra vez el objetivo (queja de Bryan, 2026-10-24).
+		# Decoraciones y carretera se ponen en serie: esas se quedan elegidas.
+		if not Rules.keeps_placing(chosen):
+			_show_no_selection()
+			_mark_selected_card()
+		EventBus.building_selected_for_placement.emit(chosen)
 		_close()
 
 # ══════════════════════════════════════════════════════════════════════

@@ -102,6 +102,7 @@ func _ready() -> void:
 	layer = 10
 	_setup_ui()
 	EventBus.resource_changed.connect(_on_resource_changed)
+	EventBus.building_selected_for_placement.connect(_on_placement_started)
 	EventBus.resources_insufficient.connect(_on_insufficient)
 	EventBus.resource_unlocked.connect(_on_resource_unlocked)
 	EventBus.storage_overflow.connect(_on_overflow)
@@ -143,7 +144,7 @@ func _setup_ui() -> void:
 		_panel.add_theme_stylebox_override("panel", hs)
 		# Tocar la barra (en cualquier sitio) despliega el detalle.
 		_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-		_panel.gui_input.connect(_on_tap_expand)
+		_panel.gui_input.connect(_on_tap_expand.bind(_panel))
 		_panel.tooltip_text = Tr.t("HUD_RES_MORE_TIP")
 	else:
 		_panel.add_theme_stylebox_override("panel", UITheme.make_hud_card_style(UITheme.ACCENT))
@@ -171,7 +172,7 @@ func _setup_ui() -> void:
 		# dedo, un toque despliega la fila con nombres.
 		chip.name = "Chip_" + _resource_ids[i]
 		chip.mouse_filter = Control.MOUSE_FILTER_STOP
-		chip.gui_input.connect(_on_tap_expand)
+		chip.gui_input.connect(_on_tap_expand.bind(chip))
 		_add_cell(chip, _resource_ids[i], Tr.res_cap(_resource_ids[i]), chips_row)
 		_set_chip_shown(chip, ResourceManager.is_unlocked(type))
 		_chips[type] = chip
@@ -234,7 +235,7 @@ func _setup_ui() -> void:
 	storage_row.add_theme_constant_override("separation", 8)
 	storage_row.mouse_filter = Control.MOUSE_FILTER_STOP
 	storage_row.tooltip_text = Tr.t("HINT_HUD_STORAGE")
-	storage_row.gui_input.connect(_on_tap_expand)
+	storage_row.gui_input.connect(_on_tap_expand.bind(storage_row))
 	vbox.add_child(storage_row)
 
 	var colors: Array = []
@@ -305,7 +306,7 @@ func _add_cell(chip: HBoxContainer, word_id: String, word: String, row: Containe
 	# Tocar la palabra hace lo mismo que tocar la ficha: desplegar el detalle.
 	lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	lbl.tooltip_text = word
-	lbl.gui_input.connect(_on_tap_expand)
+	lbl.gui_input.connect(_on_tap_expand.bind(lbl))
 	lbl.visible = false
 	cell.add_child(lbl)
 	row.add_child(cell)
@@ -412,7 +413,7 @@ func _make_people_chip(icon_id: String, word: String, row: Container) -> HBoxCon
 	var chip := _make_chip(icon_id)
 	chip.name = "Chip_" + icon_id
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP
-	chip.gui_input.connect(_on_tap_expand)
+	chip.gui_input.connect(_on_tap_expand.bind(chip))
 	_add_cell(chip, icon_id, word, row)
 	return chip
 
@@ -425,10 +426,38 @@ func _make_detail_label(node_name: String) -> Label:
 	return lbl
 
 ## Un toque (o clic) en una ficha o en el almacen despliega el detalle.
-func _on_tap_expand(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_toggle_expanded()
+##
+## Al SOLTAR, no al apoyar (2026-10-26, QA de tablet): mantener pulsada una
+## ficha ensena su globo (TouchTooltip) y no debe desplegar nada (docs/21 §9,
+## "el boton no se pulsa"). Antes se desplegaba en la pulsacion, antes de que
+## el globo saliera. Ahora cuenta solo un soltar sobre el mismo control que
+## recibio la pulsacion; el globo manda el soltar lejos (FAR_AWAY) y se come el
+## de verdad, asi que mantener no despliega.
+var _press_on: Control = null
+## Holgura del soltar alrededor del control (un dedo se mueve un poco).
+const TAP_SLOP_PX := 16.0
+
+func _on_tap_expand(event: InputEvent, control: Control = null) -> void:
+	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if event.pressed:
+		_press_on = control
 		get_viewport().set_input_as_handled()
+		return
+	var was := _press_on
+	_press_on = null
+	if was != control:
+		return
+	if control != null and not Rect2(Vector2.ZERO, control.size).grow(TAP_SLOP_PX).has_point(event.position):
+		return
+	_toggle_expanded()
+	get_viewport().set_input_as_handled()
+
+## Al empezar a colocar un edificio, la tarjeta desplegada se pliega: tapaba el
+## mapa (un tercio de la pantalla en tablet) mientras se buscaba sitio.
+func _on_placement_started(_data: Resource) -> void:
+	if _is_expanded:
+		_toggle_expanded()
 
 func _toggle_expanded() -> void:
 	_is_expanded = not _is_expanded

@@ -20,6 +20,10 @@ const PointerMath := preload("res://scripts/services/InputService.gd")
 ## viven en PlacementRules y aqui solo se llaman.
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
+## El barco del contrabandista y su panel (feat/edificios-economia).
+const SmugglerShip3D := preload("res://scripts/map/SmugglerShip3D.gd")
+const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
+const RoadTraffic := preload("res://scripts/map/RoadTraffic.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
 ## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
@@ -102,6 +106,13 @@ func _ready() -> void:
 	var walkers: Node = WorkerWalkers.new()
 	walkers.setup(walkers_layer, false)
 	add_child(walkers)
+	# El barco del contrabandista (feat/edificios-economia): escondido hasta
+	# que atraca junto al Puerto comercial.
+	add_child(SmugglerShip3D.new())
+	# Los camiones de los extractores al almacen (solo vista, feat/decoraciones-y-trafico).
+	var traffic: Node = RoadTraffic.new()
+	traffic.setup(walkers_layer, false)
+	add_child(traffic)
 
 	# Cached ghost materials for preview
 	_ghost_valid = StandardMaterial3D.new()
@@ -509,6 +520,9 @@ func _on_building_selected(data: Resource) -> void:
 	_state = State.PLACING
 	_create_preview()
 	_assist.begin()
+	# Gratis en el tutorial (2026-10-24): se dice al cogerlo, junto al fantasma.
+	if _current_data != null and _current_data.id != Rules.ROAD_ID and _current_data.is_tutorial_free():
+		_show_feedback(Tr.t("LBL_TUTORIAL_FREE"))
 
 func _handle_left_click(screen_pos: Vector2) -> void:
 	if _state == State.IDLE:
@@ -534,9 +548,21 @@ func _try_select_building(screen_pos: Vector2) -> void:
 	if hit == null:
 		EventBus.building_deselected.emit()
 		return
+	# El barco del contrabandista atracado (en el agua, junto al Puerto): su
+	# panel. Va antes de la casilla: world_to_cell recorta el agua de fuera de
+	# la rejilla a la casilla del borde.
+	if EconomyManager.ship_hit(hit as Vector3):
+		SmugglerPanelScript.open_in(get_tree())
+		return
 	var cell := GridManager.world_to_cell(hit as Vector3)
 	var node := GridManager.get_building_at(cell)
 	if node == null:
+		# Una marca de amenaza en la costa (feat/amenazas-costa): su tarjeta.
+		var threat_id: int = ThreatManager.threat_at_cell(cell)
+		if threat_id > 0:
+			EventBus.building_deselected.emit()
+			EventBus.threat_clicked.emit(threat_id)
+			return
 		EventBus.building_deselected.emit()
 		return
 	# Check if it's a building (has info) or a deposit (has metadata)

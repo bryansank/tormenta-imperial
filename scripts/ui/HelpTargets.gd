@@ -19,8 +19,22 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 static func control(tree: SceneTree, target_name: String) -> Control:
 	var c := _find(tree, target_name)
 	if c != null and is_instance_valid(c) and c.is_visible_in_tree():
+		_scroll_into_view(c)
 		return c
 	return null
+
+## Un control dentro de un scroll (REPARAR en la ficha) y fuera de su recuadro
+## cae debajo del pie fijo o de otro boton: se baja el scroll hasta el y la
+## flecha senala el boton real, no lo que tenga encima.
+static func _scroll_into_view(c: Control) -> void:
+	var p := c.get_parent()
+	while p != null:
+		if p is ScrollContainer:
+			var sc := p as ScrollContainer
+			if not sc.get_global_rect().grow(1.0).encloses(c.get_global_rect()):
+				sc.ensure_control_visible(c)
+			return
+		p = p.get_parent()
 
 ## Rectangulo en coordenadas del lienzo (las de un CanvasLayer sin transformar),
 ## o un Rect2 vacio si no esta.
@@ -69,6 +83,11 @@ static func _find(tree: SceneTree, target_name: String) -> Control:
 			return _first_in_group(tree, "hud_info_move")
 		"info_train":
 			return _first_in_group(tree, "hud_train_button")
+		# La primera batalla del tutorial corto (2026-10-24).
+		"bar_missions":
+			return _first_in_group(tree, "hud_bar_missions")
+		"mission_launch":
+			return _first_in_group(tree, "hud_mission_launch")
 		"info_demolish":
 			return _first_in_group(tree, "hud_info_demolish")
 		"info_demolish_confirm":

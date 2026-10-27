@@ -271,7 +271,10 @@ func start_defense(enemy_roster: Dictionary, defenders: Array = [], enemy_scale:
 ## Devuelve {"fought": false, "victory": false, "reason": ...} cuando no hay
 ## nadie que defienda (igual que start_defense() devuelve false) o nadie de quien
 ## defenderse; si se pelea, {"fought": true, "victory", "rounds", "summary"}.
-func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -> Dictionary:
+##
+## `reason` viaja en el parte (summary["reason"]): "auto_tithe" es un Impuesto de
+## los que se resuelven solos (la Visita, feat/ritmo-colono), no una columna fuera.
+func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0, reason: String = "") -> Dictionary:
 	if enemy_roster.is_empty():
 		return {"fought": false, "victory": false, "reason": "no_attackers"}
 	var garrison: Dictionary = get_garrison()
@@ -294,10 +297,14 @@ func auto_resolve_defense(enemy_roster: Dictionary, enemy_scale: float = -1.0) -
 	_morale_snapshot = board_snapshot
 
 	var encounter: Encounter = EncounterScript.create(units, 0, false, true, crew_uids.keys(), false, home_terrain(units))
+	apply_home_cover(encounter)
+	encounter.seed_rng(fight_seed(encounter))
 	var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 	var victory: bool = bool(outcome["victory"])
 	var rounds: int = int(outcome["rounds"])
 	var summary: Dictionary = _apply_result_for(encounter, victory, rounds, crew_uids)
+	if reason != "":
+		summary["reason"] = reason
 	EventBus.defense_auto_resolved.emit(victory, rounds, summary)
 	return {"fought": true, "victory": victory, "rounds": rounds, "summary": summary}
 
@@ -509,11 +516,43 @@ func _open_board(units: Array, is_boss: bool, encounter_index: int, is_defense: 
 	# un nodo de expedicion o incursion la pide; el Diezmo y el asedio, no.
 	var board_terrain: Dictionary = home_terrain(units) if terrain == null else (terrain as Dictionary)
 	_encounter = EncounterScript.create(units, encounter_index, is_boss, is_defense, crew_uids, can_rout, board_terrain)
+	if is_defense:
+		apply_home_cover(_encounter)
+	_encounter.seed_rng(fight_seed(_encounter))
 	_board_generation += 1
 	_enemy_turn_running = false
 	_result_applied = false
 	EventBus.encounter_started.emit(encounter_index, is_boss)
 	_publish(_encounter.start())
+
+## La cobertura del Bastion en un tablero de defensa (Impuesto y asedio,
+## feat/edificios-defensa-vida): las casillas que dice
+## GameConfig.defense_cover_cells (DefenseLifeEffects, al construir/derribar),
+## en la fila de atras del jugador, con `bastion_cover_defense` de defensa de
+## mas. Sin bastiones en pie no hace nada: el tablero de siempre.
+func apply_home_cover(encounter: Encounter) -> void:
+	if encounter == null or not encounter.is_defense:
+		return
+	var count: int = GameConfig.defense_cover_cells
+	if count <= 0:
+		return
+	var row: int = encounter.board_size.y - 1
+	encounter.set_cover(Rules.cover_cells(encounter.board_size, encounter.terrain, count, row),
+		GameConfig.bastion_cover_defense)
+## La semilla del azar del dano de un tablero que se abre (feat/ritmo-colono,
+## docs/15 §3 "El dano y su azar"): la del propio tablero (Encounter.board_seed:
+## bandos, vida, casillas) mezclada con el momento de la partida (segundos jugados)
+## y el contador de tableros. Asi un reintento de la misma mision, con la misma
+## columna, es otra noche; y la misma semilla repite el combate golpe a golpe.
+func fight_seed(encounter: Encounter) -> int:
+	if forced_fight_seed != 0:
+		return forced_fight_seed
+	var value: int = hash([encounter.board_seed(), int(ProgressionManager.get_played_seconds() * 10.0), _board_generation])
+	return value if value != 0 else 1
+
+## Pruebas y sondas: con un valor distinto de 0, todo tablero que se abra usa esta
+## semilla (el mismo tablero, el mismo combate). 0 = la de fight_seed().
+var forced_fight_seed: int = 0
 
 ## El tablero de casa (Diezmo, Ataque Final, escaramuza de pruebas). Decision de
 ## aire y mar (2026-10-17): tiene agua SOLO si en el bando del jugador hay algun
@@ -1043,7 +1082,12 @@ func can_launch_to(party: Dictionary, offer: Dictionary) -> Dictionary:
 		return check
 	# Tres campanas: dominio puro. Solo tropa del medio de la campana, y de esa
 	# solo la que puede pegar a ese medio (el bombardero no va a la de aire).
-	if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN:
+	# Las amenazas de costa (feat/amenazas-costa), igual: tierra en la orilla,
+	# solo barcos si estan en el agua.
+	var offer_kind: String = String(offer.get("kind", ""))
+	# Volverse el Imperio: cada mision de conquista es de un solo medio, igual.
+	if offer_kind in [ExpeditionGeneratorScript.KIND_CAMPAIGN, ExpeditionGeneratorScript.KIND_THREAT,
+			ExpeditionGeneratorScript.KIND_CONQUEST]:
 		var domain: String = String(offer.get("domain", "land"))
 		for unit_id in party:
 			if int(party[unit_id]) <= 0:
@@ -1287,7 +1331,9 @@ func _resolve_expedition(result: int) -> void:
 	# intentar otra vez) o deja paso a la siguiente tras el enfriamiento. Con un
 	# combate ganado ya se cobro botin: si volviera entera, abandonar tras el
 	# primero y relanzar seria repetir botin gratis.
-	if not _expedition.offer.is_empty() and not _expedition.is_campaign():
+	# Las amenazas de costa no son del tablon: las cierra ThreatManager al oir
+	# expedition_ended.
+	if not _expedition.offer.is_empty() and not _expedition.is_campaign() and not _expedition.is_threat() 			and not _expedition.is_conquest():
 		var spent: bool = result == Expedition.RESULT_WON or int(summary.get("nodes_cleared", 0)) > 0
 		_publish_sortie_events(_sorties.finish(_expedition.offer, spent,
 			_now(), _sortie_cooldown(_expedition.kind)))
@@ -1330,6 +1376,11 @@ func _resolve_expedition(result: int) -> void:
 		_last_result["campaign_domain"] = campaign_domain
 		_last_result["campaign_mission"] = campaign_mission
 		_last_result["campaign_boss"] = ExpeditionGeneratorScript.campaign_is_boss_mission(campaign_domain, campaign_mission)
+	# Volverse el Imperio: de que isla y que mision volvia la columna. EmpireManager
+	# lo lee al oir expedition_ended y apunta el progreso (y la isla, si cae).
+	if _expedition.is_conquest():
+		_last_result["conquest_island"] = _expedition.conquest_island()
+		_last_result["conquest_mission"] = _expedition.conquest_mission()
 
 	_expedition = null
 	_clear_draft()
@@ -1393,10 +1444,17 @@ func sortie_preview(offer: Dictionary, party: Dictionary) -> Dictionary:
 		"coastal": ExpeditionGeneratorScript.map_has_water(map),
 		# Pre-lanzamiento: la incursion se puede resolver sola si la columna dobla
 		# al enemigo. La expedicion y la primera escaramuza, no.
-		"can_auto": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_RAID \
+		"can_auto": String(offer.get("kind", "")) in [ExpeditionGeneratorScript.KIND_RAID, ExpeditionGeneratorScript.KIND_THREAT] \
 			and Rules.can_auto_resolve(mine, enemy),
+		# Amenazas de costa: de que tipo y en que medio (tierra / agua).
+		"threat_type": String(offer.get("threat_type", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_THREAT else "",
+		"threat_domain": String(offer.get("domain", "land")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_THREAT else "",
 		# Tres campanas: de que campana es y si es la del jefe.
-		"campaign_domain": String(offer.get("domain", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN else "",
+		# (Tambien el medio de una mision de conquista: la ficha dice donde es.)
+		"campaign_domain": String(offer.get("domain", "")) if String(offer.get("kind", "")) in \
+			[ExpeditionGeneratorScript.KIND_CAMPAIGN, ExpeditionGeneratorScript.KIND_CONQUEST] else "",
+		# Volverse el Imperio: la isla, y si esta mision es la que la toma.
+		"conquest_island": String(offer.get("island", "")) if String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CONQUEST else "",
 		"campaign_boss": String(offer.get("kind", "")) == ExpeditionGeneratorScript.KIND_CAMPAIGN \
 			and ExpeditionGeneratorScript.campaign_is_boss_mission(String(offer.get("domain", "")), int(offer.get("mission", 0))),
 	}
@@ -1424,6 +1482,33 @@ func launch_sortie(offer_id: int, party: Dictionary, auto_resolve: bool = false)
 	_clear_draft()
 	_expedition_followups = []
 	EventBus.sortie_offers_changed.emit()
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	if auto_resolve and can_auto_resolve():
+		auto_resolve_current()
+	return true
+
+## Saca la columna contra una amenaza de costa (feat/amenazas-costa). La oferta
+## la da ThreatManager (ThreatBoard.offer_for); aqui solo las comprobaciones de
+## siempre, el dominio puro (can_launch_to) y el tablero. La amenaza no es del
+## tablon: si la columna pierde, ThreatManager la deja en la orilla.
+func launch_threat_offer(offer: Dictionary, party: Dictionary, auto_resolve: bool = false) -> bool:
+	if String(offer.get("kind", "")) != ExpeditionGeneratorScript.KIND_THREAT:
+		return false
+	if not bool(can_launch_to(party, offer).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	var run: Expedition = ExpeditionScript.create_sortie(_next_expedition_id, offer, committed, _read_morale())
+	if run.map.is_empty():
+		return false
+	_expedition = run
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
 	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
 	enter_current_node()
 	if auto_resolve and can_auto_resolve():
@@ -1513,6 +1598,10 @@ func sortie_reason() -> String:
 	# Tres campanas: una mision nueva que se puede lanzar ya, con tropa de su medio.
 	if campaign_waiting_unseen() != "":
 		return "SORTIE_WHY_CAMPAIGN"
+	# Amenazas de costa (feat/amenazas-costa): como mucho una sugerencia, y solo
+	# con botin facil sin mirar (lo ultimo: nunca tapa la linea principal).
+	if ThreatManager.has_easy_unseen():
+		return "THREAT_WHY_EASY"
 	return ""
 
 ## Repuestos que pide la mejora mas barata que ya se podria hacer (un productor
@@ -1588,6 +1677,15 @@ func _apply_loot(raw: Dictionary) -> Dictionary:
 		ResourceManager.unlock(ResourceManager.Type.PARTS)
 		ResourceManager.add(ResourceManager.Type.PARTS, parts)
 		applied["parts"] = parts
+	# Amenazas de costa (feat/amenazas-costa): a veces un material de taller.
+	# Como los repuestos, fuera de la bolsa.
+	for material in GameConfig.THREAT_LOOT_MATERIALS:
+		var amount: int = int(raw.get(material, 0))
+		var material_type: int = ResourceManager.name_to_type(String(material))
+		if amount > 0 and material_type >= 0:
+			ResourceManager.unlock(material_type)
+			ResourceManager.add(material_type, amount)
+			applied[String(material)] = amount
 	var colonists: int = int(raw.get("colonists", 0))
 	if colonists > 0:
 		var room: int = maxi(0, PopulationManager.get_max_population() - PopulationManager.get_population())
@@ -1657,6 +1755,59 @@ func campaigns_all_complete() -> bool:
 
 func campaigns_completed_count() -> int:
 	return _campaigns.completed_count()
+
+## Cuanto ha perdido el enemigo de la mision que toca en `domain` por las
+## derrotas en ella (campaign_retry_ease, con suelo), en puntos de %: 0 sin
+## derrotas. El panel de MISIONES lo ensena (feat/ritmo-colono: ya no es oculto).
+func campaign_retry_ease_pct(domain: String) -> int:
+	var fails: int = int(_campaigns.fails.get(domain, 0))
+	if fails <= 0 or _campaigns.is_complete(domain):
+		return 0
+	var ease: float = maxf(GameConfig.campaign_retry_floor, pow(GameConfig.campaign_retry_ease, float(fails)))
+	return roundi((1.0 - ease) * 100.0)
+
+## El numero que se ensena de la mision `mission` (indice de la tabla) en este
+## nivel: "Mision 2 de 4" en Colono puede ser la 3 de la tabla.
+func campaign_mission_number(domain: String, mission: int) -> int:
+	return CampaignBookScript.number_of(domain, mission)
+
+# ── Las piezas del Cuartel General (una sola llave, feat/ritmo-colono) ──
+
+## ¿Tiene ya la pieza que entrega el jefe de `domain`?
+func has_campaign_piece(domain: String) -> bool:
+	return _campaigns.has_piece(domain)
+
+## Las campanas cuya pieza falta, en orden (Tierra, Mar, Aire).
+func missing_campaign_pieces() -> Array:
+	return _campaigns.missing_pieces()
+
+func campaign_pieces_count() -> int:
+	return _campaigns.pieces_count()
+
+## Las piezas que le faltan al Cuartel General para subir a `to_level` (solo el
+## nivel 3, y solo donde el modo lo pida). [] = nada que esperar.
+func hq_missing_pieces(to_level: int) -> Array:
+	if not GameConfig.hq_needs_pieces(to_level):
+		return []
+	return _campaigns.missing_pieces()
+
+## "Planos del Bastion", "Casco del Leviatan", "Motor del Zepelin".
+static func piece_name(domain: String) -> String:
+	return Tr.t("PIECE_" + domain.to_upper())
+
+## "pieza de Mar": la forma corta, para "Para el CG 3 te faltan: ...".
+static func piece_short(domain: String) -> String:
+	return Tr.t("PIECE_SHORT_" + domain.to_upper())
+
+## "Para el CG 3 te faltan: pieza de Mar, pieza de Aire", o "" si no falta ninguna.
+func hq_pieces_text() -> String:
+	var missing: Array = hq_missing_pieces(GameConfig.max_building_level)
+	if missing.is_empty():
+		return ""
+	var names: Array = []
+	for d in missing:
+		names.append(piece_short(String(d)))
+	return Tr.t("HQ3_PIECES_MISSING") % ", ".join(names)
 
 ## La oferta de la mision que toca en `domain`, con la era de ahora (vacia si la
 ## campana esta completa). La del jefe lleva el plano que daria, si queda alguno.
@@ -1750,6 +1901,31 @@ func launch_campaign_mission(domain: String, party: Dictionary) -> bool:
 	enter_current_node()
 	return true
 
+## Volverse el Imperio (feat/volverse-imperio): saca la columna a una mision de
+## conquista. La oferta y su candado los da EmpireManager (quien llama); aqui
+## solo las reglas de siempre (can_launch_to: tropa en casa, tope, dominio puro).
+## Si la columna pierde o abandona, la mision sigue ahi con el mismo mapa.
+func launch_conquest_mission(offer: Dictionary, party: Dictionary) -> bool:
+	if String(offer.get("kind", "")) != ExpeditionGeneratorScript.KIND_CONQUEST:
+		return false
+	if not bool(can_launch_to(party, offer).get("ok", false)):
+		return false
+	var committed: Dictionary = {}
+	for unit_id in party:
+		if int(party[unit_id]) > 0:
+			committed[String(unit_id)] = int(party[unit_id])
+	_expedition = ExpeditionScript.create_sortie(_next_expedition_id, offer, committed, _read_morale())
+	if _expedition.map.is_empty():
+		_expedition = null
+		return false
+	_next_expedition_id += 1
+	_morale_snapshot = _expedition.morale_snapshot
+	_clear_draft()
+	_expedition_followups = []
+	EventBus.expedition_started.emit(_expedition.id, _expedition.map.size())
+	enter_current_node()
+	return true
+
 ## La primera campana con una mision nueva sin mirar que ya se podria lanzar y
 ## con tropa de su medio en casa, o "". Para el punto rojo y ¿QUE HACER?.
 func campaign_waiting_unseen() -> String:
@@ -1771,6 +1947,10 @@ func _publish_campaign_events(events: Array) -> void:
 				EventBus.campaign_mission_won.emit(String(event["domain"]), int(event["mission"]), bool(event["boss"]))
 			"campaign_completed":
 				EventBus.campaign_completed.emit(String(event["domain"]))
+			"campaign_piece_won":
+				EventBus.campaign_piece_won.emit(String(event["domain"]))
+				EventBus.notification_posted.emit(Tr.t("MSG_PIECE_WON") % piece_name(String(event["domain"])),
+					"success", UITheme.POSITIVE)
 			"campaign_changed":
 				changed = true
 	if changed:

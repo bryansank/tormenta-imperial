@@ -78,9 +78,34 @@ func _ready() -> void:
 	# Una obra que acaba (el Mercado, el Laboratorio) cambia el candado.
 	EventBus.construction_completed.connect(func(_n): refresh())
 	UILayoutManager.layout_changed.connect(_fit_gap.call_deferred)
+	EventBus.shortcut_pressed.connect(_on_shortcut)
 	_hide_old_skirmish_button.call_deferred()
 	refresh.call_deferred()
 	_fit_gap.call_deferred()
+	_watch_covers.call_deferred()
+
+## Tapada por el combate (BattleScreen: tablero, mapa de la expedicion, parte),
+## la barra se esconde: seguia recibiendo el raton por debajo y su tooltip
+## ("Elegir un edificio y colocarlo en el mapa") salia encima del tablero (QA
+## de escritorio, 2026-10-26). Al cerrarse el combate vuelve.
+func _watch_covers() -> void:
+	if not is_inside_tree():
+		return
+	for n in get_tree().get_nodes_in_group("battle_screen"):
+		if not n.visibility_changed.is_connected(_sync_covered):
+			n.visibility_changed.connect(_sync_covered)
+	_sync_covered()
+
+func is_covered() -> bool:
+	if not is_inside_tree():
+		return false
+	for n in get_tree().get_nodes_in_group("battle_screen"):
+		if n.visible:
+			return true
+	return false
+
+func _sync_covered() -> void:
+	visible = not is_covered()
 
 func _setup_ui() -> void:
 	var root := Control.new()
@@ -111,7 +136,7 @@ func _setup_ui() -> void:
 		"hud", "title")
 	_build_btn.name = "BarBuild"
 	_build_btn.add_to_group("hud_build_button")
-	_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
+	_build_btn.tooltip_text = InputService.hint(Tr.t("BTN_BUILD_HINT"), "build")
 	_build_btn.focus_mode = Control.FOCUS_NONE
 	_build_btn.pressed.connect(_on_build_pressed)
 	_build_cell.add_child(_build_btn)
@@ -197,7 +222,7 @@ func _fit_gap() -> void:
 		_build_btn = CartoonTheme.pill_button(want, "build", "primary", CartoonTheme.bar_build_h(), "hud", "title")
 		_build_btn.name = "BarBuild"
 		_build_btn.add_to_group("hud_build_button")
-		_build_btn.tooltip_text = Tr.t("BTN_BUILD_HINT")
+		_build_btn.tooltip_text = InputService.hint(Tr.t("BTN_BUILD_HINT"), "build")
 		_build_btn.focus_mode = Control.FOCUS_NONE
 		_build_btn.pressed.connect(_on_build_pressed)
 		_build_btn.set_meta("narrow", narrow)
@@ -215,6 +240,16 @@ func _caption_h() -> float:
 		if is_instance_valid(cell) and cell != btn:
 			return maxf(0.0, cell.get_combined_minimum_size().y - btn.get_combined_minimum_size().y)
 	return 0.0
+
+## Atajos de PC (InputService): B construir, M misiones, H ayuda.
+func _on_shortcut(action: StringName) -> void:
+	match action:
+		&"build":
+			_on_build_pressed()
+		&"missions":
+			_on_pressed("missions")
+		&"help":
+			_on_pressed("help")
 
 func _on_build_pressed() -> void:
 	var cm := _sibling("ConstructionMenu")
@@ -254,7 +289,7 @@ func refresh() -> void:
 	_dot.visible = reason != ""
 	var mbtn: Button = _buttons["missions"]
 	if military:
-		mbtn.tooltip_text = Tr.t(reason) if reason != "" else Tr.t("HUD_BAR_MISSIONS")
+		mbtn.tooltip_text = Tr.t(reason) if reason != "" else InputService.hint(Tr.t("HUD_BAR_MISSIONS"), "missions")
 		(_buttons["army"] as Button).tooltip_text = "%s · %s" % [Tr.t("HUD_BAR_ARMY"), Tr.t("HUD_BAR_ARMY_GO")]
 
 func _set_reason(id: String, why: String) -> void:
@@ -263,7 +298,7 @@ func _set_reason(id: String, why: String) -> void:
 	btn.disabled = why != ""
 	(_locks[id] as Control).visible = why != ""
 	var caption := Tr.t(String(_item(id)[2]))
-	btn.tooltip_text = caption if why == "" else "%s: %s" % [caption, why]
+	btn.tooltip_text = InputService.hint(caption, id) if why == "" else "%s: %s" % [caption, why]
 
 func _item(id: String) -> Array:
 	for it in LEFT_ITEMS + RIGHT_ITEMS:

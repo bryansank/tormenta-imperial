@@ -132,7 +132,25 @@ func heal_between_pct() -> float:
 		return maxf(0.0, GameConfig.combat_expedition_heal_between)
 	if kind == Generator.KIND_CAMPAIGN:
 		return maxf(0.0, GameConfig.campaign_heal_between)
+	if kind == Generator.KIND_CONQUEST:
+		return maxf(0.0, GameConfig.empire_heal_between)
 	return 0.0
+
+## Volverse el Imperio (feat/volverse-imperio): mision de conquista de una isla.
+func is_conquest() -> bool:
+	return kind == Generator.KIND_CONQUEST
+
+## La isla que se conquista ("" si no es de conquista).
+func conquest_island() -> String:
+	return String(offer.get("island", "")) if is_conquest() else ""
+
+## El numero de la mision de conquista (desde 0), o -1.
+func conquest_mission() -> int:
+	return int(offer.get("mission", -1)) if is_conquest() else -1
+
+## El medio de la mision de conquista ("land" / "sea" / "air"), o "".
+func conquest_domain() -> String:
+	return String(offer.get("domain", "")) if is_conquest() else ""
 
 ## Es una mision de una de las tres campanas (feat/tres-campanas).
 func is_campaign() -> bool:
@@ -147,8 +165,13 @@ func campaign_mission() -> int:
 	return int(offer.get("mission", -1)) if is_campaign() else -1
 
 ## Es una incursion: un solo combate (lo que permite "resolver solo").
+## Las amenazas de costa (feat/amenazas-costa) tambien: un combate, botin fijo.
 func is_raid() -> bool:
-	return kind == Generator.KIND_RAID
+	return kind == Generator.KIND_RAID or kind == Generator.KIND_THREAT
+
+## Es el ataque a una amenaza de costa (feat/amenazas-costa).
+func is_threat() -> bool:
+	return kind == Generator.KIND_THREAT
 
 func next_uid() -> int:
 	var uid: int = _next_uid

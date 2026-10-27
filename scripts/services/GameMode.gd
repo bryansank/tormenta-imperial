@@ -177,6 +177,12 @@ static func audit_enabled() -> bool:
 static func audit_needs_campaigns() -> bool:
 	return audit_enabled() and _flag("audit_needs_campaigns") and GameConfig.final_audit_needs_campaigns
 
+## Volverse el Imperio (feat/volverse-imperio): tras ganar el Ataque Final la
+## partida sigue con el archipielago (conquistas y tributo). Campana y
+## Supervivencia si; Constructor (gana sin asedio) y Sandbox (sin victoria) no.
+static func empire_enabled() -> bool:
+	return victory_enabled() and audit_enabled() and _flag("empire_phase")
+
 ## El Cuartel General a nivel 3 gana la partida sin asedio (Constructor).
 static func capstone_wins() -> bool:
 	return _flag("capstone_wins")
@@ -286,6 +292,16 @@ static func tithe_force_mult() -> float:
 ## Multiplicador de la escala de cada oleada de la Auditoria Final.
 static func audit_enemy_mult() -> float:
 	return _tier_num("audit_enemy_mult") if combat_hard() else 1.0
+
+## Los materiales del taller que piden los niveles 2 y 3 del Cuartel General,
+## por esto (feat/ritmo-colono: Colono 0,5, Gobernador 1).
+static func hq_material_mult() -> float:
+	return maxf(0.0, _tier_num("hq_material_mult"))
+
+## Lo de la bolsa (oro, acero, petroleo, madera) de los niveles 2 y 3 del CG, por
+## esto (feat/ritmo-colono: Colono 0,75, Gobernador 1).
+static func hq_resource_mult() -> float:
+	return maxf(0.0, _tier_num("hq_resource_mult"))
 
 # ── Textos ───────────────────────────────────────────────────────────
 

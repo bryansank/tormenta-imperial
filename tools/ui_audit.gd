@@ -51,6 +51,10 @@ func _ready() -> void:
 	if args.size() > 1 and String(args[1]) == "nooversampling":
 		w.oversampling = false
 		print("[ui_audit] oversampling desactivado a proposito")
+	# Desde Boot.tscn la escena llega cargada por hilos, despues de este _ready:
+	# se espera a que la partida arranque antes de contar SETTLE.
+	while not GameManager.is_started():
+		await get_tree().process_frame
 	await get_tree().create_timer(SETTLE).timeout
 	await _run()
 

@@ -23,8 +23,13 @@ var _campaign_line: Label
 var _gate_line: Label
 var _route_box: VBoxContainer
 var _refresh_left := 0.0
+## Capitulos (feat/ritmo-colono): "Capitulo II · La cuenta" y sus metas con ✓.
+var _chapter_head: Label
+var _chapter_goals: Label
 
 const Objectives := preload("res://scripts/services/Objectives.gd")
+const Chapters := preload("res://scripts/services/Chapters.gd")
+const ChapterScreenScript := preload("res://scripts/ui/ChapterScreen.gd")
 ## Cifras vivas en el porque ({HQ2_COST}, {HQ3_COST}: el coste real del Cuartel
 ## General, leido de GameConfig; feat/topes-mejoras-ayuda).
 const HelpText := preload("res://scripts/ui/BuildingHelpText.gd")
@@ -46,6 +51,9 @@ func _ready() -> void:
 	set_process(false)
 	if UITheme.is_cartoon():
 		_setup_line()
+	# La tarjeta de cierre de capitulo (feat/ritmo-colono): vive aqui, en las dos
+	# escenas, y no como un nodo mas de Main.tscn / Main2D.tscn.
+	add_child(ChapterScreenScript.new())
 
 # ══════════════════════════════════════════════════════════════════════
 # LA LINEA DEL SIGUIENTE PASO (rediseno 2026-10, docs/28 §12)
@@ -92,7 +100,7 @@ func _setup_line() -> void:
 	var st := CartoonTheme.hud_style(CartoonTheme.sem("ACCENT"))
 	st.set_content_margin_all(3)
 	st.content_margin_right = 12
-	st.set_corner_radius_all(30)
+	st.set_corner_radius_all(CartoonTheme.RADIUS_WINDOW)
 	_line.add_theme_stylebox_override("panel", st)
 	_line.mouse_filter = Control.MOUSE_FILTER_STOP
 	_line.gui_input.connect(_on_line_input)
@@ -110,7 +118,9 @@ func _setup_line() -> void:
 	row.add_child(_line_face)
 	_line_text = CartoonTheme.label("", "button", CartoonTheme.text("hud"))
 	_line_text.name = "StepText"
-	_line_text.clip_text = true
+	# Dos lineas como mucho (en 640x360 una sola se cortaba casi siempre).
+	_line_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_line_text.max_lines_visible = 2
 	_line_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_line_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_line_text)
@@ -172,10 +182,21 @@ func refresh_line() -> void:
 	_line.visible = not hide and title != "" and not HudRegistry.is_hidden("ObjectivePanel.line")
 	_line_text.text = title
 	var max_w := LINE_TEXT_MAX_PHONE if CartoonTheme.phone else LINE_TEXT_MAX
+	# Nunca mas ancha que el lienzo (cara, flecha y margenes aparte): en un
+	# telefono en vertical (400 de ancho) la linea salia 16 px por la derecha.
+	if is_inside_tree():
+		var room: float = get_viewport().get_visible_rect().size.x - _line.get_global_rect().position.x \
+			- float(_line_face.custom_minimum_size.x) - 18.0 - 12.0 - 15.0 - 10.0
+		max_w = minf(max_w, maxf(room, 80.0))
 	var font := _line_text.get_theme_font("font")
 	var fsize := _line_text.get_theme_font_size("font_size")
 	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x if font != null else max_w
-	_line_text.custom_minimum_size.x = minf(w + 2.0, max_w)
+	# Si no cabe en una linea, se parte en dos: el ancho se reparte (con un
+	# minimo) en vez de cortar con "...".
+	if w + 2.0 <= max_w:
+		_line_text.custom_minimum_size.x = w + 2.0
+	else:
+		_line_text.custom_minimum_size.x = clampf(w * 0.62, max_w * 0.7, max_w)
 	var why := HelpText.live_text(String(text.get("why", "")))
 	var tip := String(p["title"])
 	if why != "":
@@ -285,6 +306,15 @@ func _setup_ui() -> void:
 	content.add_theme_constant_override("separation", 8 if tight else 20)
 	scroll.add_child(content)
 
+	# ── EL CAPITULO (feat/ritmo-colono): los tres actos del lore ──
+	_chapter_head = UITheme.section_header("")
+	_chapter_head.name = "ChapterHead"
+	_chapter_head.mouse_filter = Control.MOUSE_FILTER_PASS
+	content.add_child(_chapter_head)
+	_chapter_goals = UITheme.make_label("", "body", UITheme.TEXT)
+	_chapter_goals.name = "ChapterGoals"
+	_chapter_goals.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(_chapter_goals)
 	# ── AHORA: el siguiente paso, calculado desde la partida (Objectives) ──
 	# Antes esto eran cinco pasos fijos, y tres eran falsos: construir un Nucleo
 	# (ya lo tienes y no se construye), "conectar" con almacenes (no se conecta
@@ -358,6 +388,25 @@ func _setup_ui() -> void:
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)
 
+## El capitulo en curso arriba del panel, con sus metas (✓ hecho, · por hacer).
+## Oculto en los modos sin capitulos y con la partida ganada.
+func _paint_chapter() -> void:
+	if _chapter_head == null:
+		return
+	var n: int = Chapters.current()
+	var on: bool = Chapters.enabled() and n <= Chapters.COUNT
+	_chapter_head.visible = on
+	_chapter_goals.visible = on
+	if not on:
+		return
+	_chapter_head.text = Chapters.heading(n).to_upper()
+	_chapter_head.tooltip_text = Chapters.goal_text(n)
+	_chapter_goals.text = "%s: %s\n%s" % [Tr.t("CHAPTER_OBJ"), Chapters.goal_text(n), "\n".join(Chapters.goal_lines(n))]
+
+## Lo que dice el capitulo en el panel (pruebas).
+func chapter_text() -> String:
+	return "%s\n%s" % [_chapter_head.text, _chapter_goals.text] if _chapter_head != null and _chapter_head.visible else ""
+
 func toggle() -> void:
 	_is_open = not _is_open
 	if _is_open:
@@ -384,6 +433,7 @@ func _process(delta: float) -> void:
 ## Vuelve a preguntar el paso y repinta. Publico para los tests.
 func refresh() -> void:
 	_refresh_left = REFRESH_EVERY
+	_paint_chapter()
 	var p: Dictionary = Objectives.plan()
 	var step: Dictionary = p["action"]
 	var text: Dictionary = Objectives.describe(p["goal"])

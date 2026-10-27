@@ -256,12 +256,26 @@ func capacity() -> int:
 	var room := floor_y - _toast_container.global_position.y
 	return MAX_TOASTS if room >= TOAST_H * 2.0 + 8.0 else MAX_TOASTS_NARROW
 
+## El aviso pequeno de abajo (con algo abierto encima) no se mete en la fila de
+## botones del combate (QA de telefono y de escritorio, 2026-10-26: "Hambre:
+## muere 1 trabajador" tapaba el primer boton). Con el tablero abierto, el
+## suelo es el que diga BattleScreen.toast_floor(); si no, el borde.
+func _fit_edge_floor() -> void:
+	var bottom := -10.0
+	if holds_toasts() and is_inside_tree():
+		var bs := get_tree().get_first_node_in_group("battle_screen")
+		if bs != null and bs.has_method("toast_floor"):
+			var vp := get_viewport().get_visible_rect().size
+			bottom = minf(-10.0, float(bs.toast_floor()) - vp.y)
+	_edge_container.offset_bottom = bottom
+
 ## Coloca la cola y repinta si cambio algo.
 func _pump() -> void:
 	if _toast_container == null or not is_inside_tree():
 		return
 	var busy := is_busy()
 	_alerts.arrange(capacity(), busy)
+	_fit_edge_floor()
 	_redraw(busy)
 	set_process(not _alerts.shown.is_empty() or not _alerts.waiting.is_empty())
 
@@ -338,6 +352,7 @@ func _redraw(busy: bool = false) -> void:
 			box.remove_child(child)
 			child.queue_free()
 	var target: VBoxContainer = _edge_container if busy else _toast_container
+	_fit_edge_floor()
 	for e in _alerts.shown:
 		var toast := _make_toast(e, compact)
 		toast.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -387,7 +402,7 @@ func _make_toast(e: Dictionary, compact: bool) -> PanelContainer:
 	close.text = "✕"
 	close.flat = true
 	close.focus_mode = Control.FOCUS_NONE
-	var side := UITheme.touch_px(22.0 if compact else 26.0)
+	var side := maxf(UITheme.touch_px(22.0 if compact else 26.0), 48.0) if UITheme.is_touch_ui() else UITheme.touch_px(22.0 if compact else 26.0)
 	close.custom_minimum_size = Vector2(side, side)
 	close.add_theme_font_size_override("font_size", UITheme.FONT_SMALL)
 	close.add_theme_color_override("font_color", UITheme.TEXT_DIM)

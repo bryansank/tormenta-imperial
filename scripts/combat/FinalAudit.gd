@@ -105,7 +105,7 @@ func next_uid() -> int:
 ## matter how the composition below evolves.
 func _build_waves() -> void:
 	var rng := make_rng(seed_value)
-	var cfg: Vector2i = GameConfig.final_audit_waves
+	var cfg: Vector2i = GameConfig.get_final_audit_waves()
 	var low: int = maxi(1, mini(cfg.x, cfg.y))
 	var high: int = maxi(low, maxi(cfg.x, cfg.y))
 	var total: int = rng.randi_range(low, high)

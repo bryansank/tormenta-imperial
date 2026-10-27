@@ -86,7 +86,14 @@ func _translated(key: String, fallback: String) -> String:
 ## de un edificio con rebaja de estreno (GameConfig.first_building_discount: la
 ## primera Mina de oro a mitad de precio, 2026-10-19). Es el unico coste de obra:
 ## CONSTRUIR, el fantasma, el cobro, ¿QUE HACER? y el tutorial leen este.
+##
+## Gratis en el tutorial (2026-10-24, queja de Bryan: "cuando me pides la Casa
+## ya me pides oro que no tengo"): mientras dura el tutorial guiado de verdad, el
+## primero de cada edificio que pide (y las carreteras) no cuesta nada.
+## TutorialManager.is_free_build decide; al acabar el tutorial vuelven los precios.
 func get_cost() -> Dictionary:
+	if is_tutorial_free():
+		return {}
 	var cost := get_base_cost()
 	var factor: float = first_discount_factor()
 	if factor < 1.0:
@@ -94,8 +101,15 @@ func get_cost() -> Dictionary:
 			cost[type] = maxi(1, int(ceil(float(cost[type]) * factor)))
 	return cost
 
+## Este edificio sale gratis ahora por el tutorial guiado (TutorialManager).
+func is_tutorial_free() -> bool:
+	return TutorialManager.is_free_build(id)
+
 ## La rebaja del primero (0,5 = mitad) si aun no hay ninguno en pie; 1,0 si no.
+## Gratis en el tutorial gana a la rebaja: entonces no hay rebaja que ensenar.
 func first_discount_factor() -> float:
+	if is_tutorial_free():
+		return 1.0
 	var factor: float = float(GameConfig.first_building_discount.get(id, 1.0))
 	if factor >= 1.0:
 		return 1.0

@@ -198,11 +198,25 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 
 | | Edificio | Tamaño | Coste | Gente | Qué hace |
 |---|---|---|---|---|---|
-| <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 5 trabajadores. No se puede demoler |
+| <img src="media/guia/nucleo.png" width="110"> | **Núcleo** | 3×3 | — | 0 | Tu punto de partida. Sitio para 10 trabajadores (y empiezas con 10). No se puede demoler |
 | <img src="media/guia/house.png" width="110"> | **Casa** | 2×2 | 50 oro · 30 madera | 0 | Sitio para 6 trabajadores (9 y 12 mejorada). Máximo 10 / 15 / 20 según la era |
 | <img src="media/guia/warehouse.png" width="110"> | **Almacén** | 2×2 | 60 oro · 40 madera | 1 | +500 a la bolsa compartida (+250 por nivel mejorado). Máximo 5 |
 | | **Mercado** | 2×2 | 100 oro · 60 madera | 1 | Abre la Bolsa Imperial: tócalo y pulsa **ABRIR MERCADO**. Pide una Mina de oro. Solo uno |
 | | **Laboratorio** | 2×2 | 150 oro · 100 madera | 2 | Abre el árbol tecnológico: tócalo y pulsa **INVESTIGAR**. Pide una Casa. Solo uno |
+| | **Chatarrería** (1.2) | 2×2 | 160 oro · 40 acero · 90 madera · 6 tablones | 2 | Reparar lo que tiene a 4 casillas cuesta un 40 % menos. Al acabar la Tormenta, sus brigadas recogen las ruinas de su zona: 12 de acero por ruina, 1 repuesto por cada 2 (hasta 3) y levantan una ruina al 35 % para que vuelva a funcionar. Pide la Fundición (y su plano) |
+| | **Telégrafo** (1.2) | 2×2 | 200 oro · 60 acero · 80 madera · 4 vigas | 1 | Un hueco más en el tablón de ENCARGOS («El telégrafo», encargos de cualquiera) y los encargos nuevos duran un 50 % más. Pide Fundición y Almacén. Solo uno |
+
+### Comercio y combustible (1.2)
+
+| | Edificio | Tamaño | Coste | Gente | Qué hace |
+|---|---|---|---|---|---|
+| | **Puerto comercial** | 2×2 | 300 oro · 100 acero · 160 madera · 12 tablones · 6 vigas | 2 | Va **en la costa** y se gira solo hacia el agua. Cada 6-10 minutos llega el **barco del contrabandista** y se queda 90 segundos con tres ofertas: repuestos o un plano, material de taller y un trato de recursos (te vende barato o te compra caro). Tócalo, o pulsa **VER EL BARCO** en el Puerto. Con Ceniza o Tormenta no viene. Pide Mercado y Fundición. Solo uno |
+| | **Casa de cambio** | 2×2 | 350 oro · 120 acero · 100 madera · 8 lingotes · 4 vigas | 2 | El Mercado se queda menos al comprar y vender (pierdes un 20 % en vez de un 30 %). En Gobernador, cada minuto te da el 1 % del oro guardado (hasta 20). Pide Mercado y Fundición. Solo una |
+| | **Central diésel** | 2×2 | 320 oro · 160 acero · 80 petróleo · 60 madera · 6 vigas · 4 combustible | 2 | Quema 1 de combustible cada 45 s y hace que los aserraderos, minas, fundiciones y refinerías a 5 casillas rindan **+15 %**. Sin combustible se para. Pide Refinería. Máximo 2 |
+
+> **Los planos del barco.** El contrabandista a veces vende el plano de un edificio que
+> se abre con el rango (palmeras, estatua, fuente...): comprado, puedes construirlo ya.
+> Nunca vende los planos que solo se ganan en las misiones.
 
 ### Militares
 
@@ -211,6 +225,7 @@ Da algo menos que una Granja con trigo, pero no hay que esperar a que crezca nad
 | <img src="media/guia/barracks.png" width="110"> | **Cuartel** | 2×2 | 120 oro · 80 madera · 10 tablones | 1 | Entrena unidades, **desde la era 1** (sin acero; desde el 17-10-2026). En la era 1 solo Infantería; la Artillería llega con el acero y el Tanque con el petróleo. Cada cuartel es una plaza de entrenamiento en paralelo (hasta 5). **Sin tope**: levanta los que quieras; cada uno lleva la bandera de tu país |
 | <img src="media/guia/tower.png" width="110"> | **Torre** | 2×2 | 150 oro · 60 acero · 20 petróleo · 30 madera · 4 vigas | 1 | **Reduce un 15% el daño de la tormenta** (tope 60% entre todas) y **baja 1 dotación de artillería al tablero defensivo** (tope 2 entre todas), fuera del límite de despliegue. Solo cuenta mientras esté operativa: una torre en ruinas ni mitiga ni tripula |
 | <img src="media/guia/headquarters.png" width="110"> | **Cuartel General** | 2×2 | 500 oro · 300 acero · 200 petróleo · 200 madera · 20 vigas · 10 lingotes · 10 combustible | 5 | 10 oro / 20s. **Subirlo a nivel 3 convoca el Ataque Final**, que es la última prueba de la partida — no la gana por sí solo. Solo uno |
+| | **Bastión** (1.2) | **2×1** | 60 oro · 25 acero · 30 madera | 0 | Tramo de muro (gíralo con el botón de girar). Lo que queda **detrás** (hacia el centro de la isla) a 3 casillas o menos recibe un 30 % menos de daño de la Tormenta (se suma al Pozo multiplicando). En el Impuesto y el Ataque Final pone **una casilla de parapeto** en tu fila de atrás (dos con 4 o más bastiones): quien esté encima defiende +2. Pide Fundición y Cuartel. Máximo 6 / 10 / 14 |
 
 ### Decoraciones (suben la moral)
 
@@ -322,6 +337,10 @@ Los precios flotan. Base: madera 3, acero 8, petróleo 12 oro por unidad, con un
 Comprar sube el precio, vender lo baja, y con el tiempo vuelve a su sitio. Se mueve
 entre ×0,5 y ×2,5 del precio base.
 
+Con una **Casa de cambio** (1.2) esa diferencia baja al 20 %. Y el **Puerto comercial**
+trae cada pocos minutos al contrabandista, que vende más barato que el Mercado o te
+compra lo que sobra más caro (§5, "Comercio y combustible").
+
 **Hacer 10 operaciones desbloquea el hito Mercader.**
 
 ---
@@ -341,15 +360,17 @@ construcción más rápida.
 
 ## 9. El ejército y el combate
 
-El Cuartel entrena tres tipos de unidad. **Cada cuartel entrena una unidad a la vez**;
+El Cuartel entrena tres tipos de unidad. **Para entrenar, toca tu Cuartel y pulsa
+ENTRENAR en su ficha** (los barcos, en el Astillero; los aviones, en el Aeródromo):
+no se entrena desde ningún menú. **Cada cuartel entrena una unidad a la vez**;
 si quieres dos en paralelo, necesitas dos cuarteles (hasta **5 a la vez**: un sexto
 cuartel ya no entrena más rápido). Puedes levantar **tantos cuarteles como quieras**
 (desde el 18-10-2026 no tienen tope), y cada uno lleva en el tejado la bandera de tu
 país. El Cuartel se levanta **ya en la
 era 1** (justo después del primer Aserradero): entonces solo entrena Infantería. La
 Artillería se abre con el acero (Fundición, era 2) y el Tanque con el petróleo
-(Refinería, era 3); el panel EJÉRCITO (☰ MENÚ > COLONIA > EJÉRCITO) lo dice en cada fila
-apagada.
+(Refinería, era 3); la ficha del Cuartel lo dice en cada fila apagada. El panel
+EJÉRCITO (☰ MENÚ > COLONIA > EJÉRCITO) solo enseña lo que tienes, el tope y el sueldo.
 
 | Unidad | Era | Coste | Tarda | Sueldo | Poder |
 |---|---|---|---|---|---|
@@ -642,6 +663,21 @@ la partida no sirve para buscar uno más fácil.
 ciclo de la tormenta para siempre**: el cielo se despeja, dejan de caer cenizas y no
 vuelve a haber Impuesto. Primero se calla el mundo y después sale la pantalla de
 victoria. Esa es la Victoria Imperial.
+
+**Y entonces, el libro (1.2).** Los Cobradores huyen y dejan en tu mesa el **libro del
+Impuesto**: quien lo tiene, cobra. Tú decides qué haces con él (pulsa **EL LIBRO**):
+
+- **FIRMAR** — lo que pide el Sargento Bombarda: ahora cobras tú. Se abre el
+  **ARCHIPIÉLAGO** (en la tarjeta de tu colonia, tocando tu rango, y en MISIONES →
+  IMPERIO): seis islas vecinas que conquistar con misiones de tierra, mar y aire, y
+  que luego te pagan tributo. La Capitana Remache te recuerda que así empezó la
+  Regencia.
+- **QUEMAR** — lo que pide la Capitana Remache: sin libro no hay Impuesto, ni para
+  ellos ni para ti. La isla queda libre, sigues jugando sin que nadie cobre, y tu
+  bandera gana el emblema del **Sol** (por primera vez en tres generaciones, sale el
+  sol).
+
+Solo se elige una vez. Si sales sin elegir, la mesa te espera al volver.
 
 > **Esto es la Campaña**, el único modo que ofrece hoy la Nueva partida. En los otros
 > modos (apartados, pero vivos en el código y en las partidas viejas) cambia el final

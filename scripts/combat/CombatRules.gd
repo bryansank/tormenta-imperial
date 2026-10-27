@@ -1,22 +1,51 @@
 extends RefCounted
 class_name CombatRules
-## Pure combat maths. No nodes, no global state, no randomness: every function
-## here is deterministic and unit-testable in headless mode.
+## Pure combat maths. No nodes, no global state, no global randomness: every
+## function here is deterministic and unit-testable in headless mode. El azar del
+## dano (rolled_damage) recibe la tirada de fuera: la saca el generador sembrado
+## de cada Encounter, nunca randf().
 ##
 ## All tunable numbers come from GameConfig.combat_* (constitution, principle III).
 
-## Damage is deterministic on purpose: variance at this scale adds frustration,
-## not depth. Always at least 1 so a fight can never stall.
+## El dano ESPERADO de un golpe (el centro del rango). Always at least 1 so a
+## fight can never stall. La IA planea con este numero; el golpe de verdad sale
+## de rolled_damage() (feat/ritmo-colono: el combate sin dados iba a escalones).
 ##
 ## Encima va la ventaja por tipo (GameConfig.combat_type_advantage): el dano neto
 ## se multiplica por la ventaja o la desventaja del emparejamiento y se redondea,
 ## sin bajar nunca de 1.
-static func damage(attacker: CombatUnit, target: CombatUnit) -> int:
-	var net: int = maxi(1, attacker.attack_power() - target.defense())
+## `cover` (Bastion, feat/edificios-defensa-vida): defensa de mas que da la
+## casilla en la que esta `target` (Encounter.cover_at). 0 = sin cobertura, la
+## formula de siempre.
+static func damage(attacker: CombatUnit, target: CombatUnit, cover: int = 0) -> int:
+	return maxi(1, roundi(_mean_damage(attacker, target, cover)))
+
+## El dano sin redondear, con la cobertura y la ventaja por tipo dentro.
+static func _mean_damage(attacker: CombatUnit, target: CombatUnit, cover: int = 0) -> float:
+	var net: int = maxi(1, attacker.attack_power() - target.defense() - maxi(0, cover))
 	var mult: float = type_multiplier(attacker.unit_id, target.unit_id)
 	if is_equal_approx(mult, 1.0):
-		return net
-	return maxi(1, roundi(float(net) * mult))
+		return float(net)
+	return maxf(1.0, float(roundi(float(net) * mult)))
+
+## El rango de un golpe: Vector2i(minimo, maximo), los dos >= 1. Con
+## combat_damage_spread = 0, el minimo y el maximo son damage().
+static func damage_range(attacker: CombatUnit, target: CombatUnit, cover: int = 0) -> Vector2i:
+	var mean: float = _mean_damage(attacker, target, cover)
+	var spread: float = clampf(GameConfig.combat_damage_spread, 0.0, 0.9)
+	var lo: int = maxi(1, roundi(mean * (1.0 - spread)))
+	var hi: int = maxi(lo, roundi(mean * (1.0 + spread)))
+	return Vector2i(lo, hi)
+
+## El golpe de verdad. `roll` en [0, 1) (la tirada, de fuera): reparte por igual
+## cada entero del rango (0 = el minimo, casi 1 = el maximo). Puro: la misma
+## tirada, el mismo dano.
+static func rolled_damage(attacker: CombatUnit, target: CombatUnit, roll: float, cover: int = 0) -> int:
+	var r: Vector2i = damage_range(attacker, target, cover)
+	if r.x == r.y:
+		return r.x
+	var span: int = r.y - r.x + 1
+	return clampi(r.x + int(floor(clampf(roll, 0.0, 1.0) * float(span))), r.x, r.y)
 
 ## +1 si `attacker_id` pega con ventaja a `target_id`, -1 con desventaja, 0 si
 ## no hay nada entre ellos (o son del mismo tipo). La desventaja es la ventaja
@@ -339,20 +368,28 @@ static func hp_fraction(units: Array, side: int, start_hp: int) -> float:
 
 # ── Vistas previas (docs/15 §3 "Ensenar el combate", 2026-10-14) ─────
 # Lo que el tablero ensena ANTES de actuar. Puras como todo lo de arriba: no
-# tocan las unidades, no tiran dados (no los hay) y no dependen de la vista.
+# tocan las unidades, no tiran dados (ensenan el rango) y no dependen de la vista.
 
 ## Lo que haria `attacker` a `target` si le atacara ahora, sin hacerlo:
-## {damage, hp, max_hp, hp_after, kills, matchup (+1/0/-1), mult}. Usa damage(),
-## asi que la ventaja por tipo, la defensa doblada y la moral ya van dentro.
-static func preview_damage(attacker: CombatUnit, target: CombatUnit) -> Dictionary:
-	var dealt: int = damage(attacker, target)
+## {damage, damage_min, damage_max, hp, max_hp, hp_after, kills, may_kill,
+## matchup (+1/0/-1), mult}. `damage` es el esperado; el golpe sale entre
+## damage_min y damage_max (combat_damage_spread). `kills`: cae seguro (hasta con
+## el minimo); `may_kill`: puede caer (con el maximo). Usa damage_range(), asi que
+## la ventaja por tipo, la defensa doblada, la moral y la cobertura (`cover`,
+## Bastion) ya van dentro.
+static func preview_damage(attacker: CombatUnit, target: CombatUnit, cover: int = 0) -> Dictionary:
+	var dealt: int = damage(attacker, target, cover)
+	var r: Vector2i = damage_range(attacker, target, cover)
 	var hp_after: int = maxi(0, target.hp - dealt)
 	return {
 		"damage": dealt,
+		"damage_min": r.x,
+		"damage_max": r.y,
 		"hp": target.hp,
 		"max_hp": target.max_hp,
 		"hp_after": hp_after,
-		"kills": hp_after == 0,
+		"kills": target.hp - r.x <= 0,
+		"may_kill": target.hp - r.y <= 0,
 		"matchup": type_matchup(attacker.unit_id, target.unit_id),
 		"mult": type_multiplier(attacker.unit_id, target.unit_id),
 	}
@@ -409,3 +446,29 @@ static func threat_cells(units: Array, side: int, board: Vector2i, terrain: Dict
 			for cell in fire_cells_from(unit, stand, board):
 				seen[cell] = true
 	return seen.keys()
+
+# ── Cobertura del Bastion (feat/edificios-defensa-vida, doc 21 §6.3 n.º 18) ──
+
+## Las casillas de cobertura de un tablero de defensa: `count` casillas de
+## tierra en la fila `row` (la de atras del jugador), del centro hacia fuera
+## (centro, izquierda del centro, derecha...). Solo tierra: en el agua no se
+## levanta un parapeto. Puro y determinista; [] si count <= 0.
+static func cover_cells(board: Vector2i, terrain: Dictionary, count: int, row: int) -> Array:
+	var out: Array = []
+	if count <= 0 or row < 0 or row >= board.y:
+		return out
+	var mid: int = floori(board.x * 0.5)
+	var order: Array = [mid]
+	for k in range(1, board.x):
+		order.append(mid - k)
+		order.append(mid + k)
+	for x in order:
+		if out.size() >= count:
+			break
+		var cell := Vector2i(int(x), row)
+		if not in_board(cell, board):
+			continue
+		if terrain_at(terrain, cell) != TERRAIN_LAND:
+			continue
+		out.append(cell)
+	return out

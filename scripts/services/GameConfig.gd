@@ -28,7 +28,12 @@ var morale_growth_threshold := 30
 var morale_danger_threshold := 20
 var morale_satisfied_recovery := 3
 var morale_unsatisfied_penalty := -8
-var population_start := 5
+## 10 colonos al empezar, y el Nucleo da sitio a 10 (data/buildings/nucleo.tres)
+## desde 2026-10-24 (antes 5 y 5). Queja de Bryan: "los trabajadores se agotan".
+## Con el tutorial corto (Aserradero 2 + Mina de oro 3 + Cuartel 1 = 6) caben
+## todos, mas 2 de minar a mano, sin construir ninguna Casa; y detras, la Granja
+## (2) que pide ¿QUE HACER?. tests/tutorial/test_guide_workers.gd lo comprueba.
+var population_start := 10
 var consumption_interval := 30.0
 var growth_interval := 20.0
 
@@ -317,6 +322,21 @@ var material_sources := {
 ## El edificio que fabrica un material ("" si no es un material).
 func get_material_source(res_name: String) -> String:
 	return String(material_sources.get(res_name, ""))
+
+## Los recursos de era y el edificio cuya primera obra terminada los abre
+## (ProgressionManager._check_era_advance). Los materiales, en material_sources.
+var resource_unlock_buildings := {
+	"steel": "foundry",
+	"oil": "refinery",
+}
+
+## El edificio que trae al juego un recurso o material ("" si ya viene de
+## serie o no se sabe). Lo usa la tarjeta de receta bloqueada para decir el
+## porque: "Falta acero: llega con la Fundicion".
+func get_unlock_building(res_name: String) -> String:
+	if resource_unlock_buildings.has(res_name):
+		return String(resource_unlock_buildings[res_name])
+	return get_material_source(res_name)
 
 ## El material que fabrica un edificio ("" si ninguno).
 func get_material_of(building_id: String) -> String:
@@ -732,8 +752,6 @@ var ui_scale_pct := 0
 var ui_text_size := "auto"
 ## Paleta de colores (UITheme.PALETTES), alto contraste y opacidad de paneles.
 var ui_palette := "default"
-## Tema de las ventanas: "light" (crema, de serie) o "dark" (CartoonTheme.window_theme).
-var ui_theme := "light"
 var ui_high_contrast := false
 var ui_panel_opacity := 1.0
 ## Calidad grafica del mapa 3D (WorldLook, docs/21 §12): "high" pone SSAO (solo
@@ -798,6 +816,9 @@ var fps_minimal_pc := 30
 var quality_weak_gpu_patterns: Array = [
 	r"Intel\(R\) HD Graphics( [2-6]\d\d\b|$| Family)",
 	r"\bUHD Graphics 6\d\d\b",
+	# Los drivers nuevos de Intel ya no dan el numero: una UHD 630 sale como
+	# "Intel(R) UHD Graphics" a secas (medido 2026-10-26: 20-24 fps en Alta a 720p).
+	r"^Intel\(R\) UHD Graphics$",
 	r"\bHD Graphics [45]\d\d\b",
 	r"\bRadeon R[2-7]\b",
 	r"\bRadeon\(TM\) Vega [368] ",
@@ -881,8 +902,10 @@ func load_user_settings() -> void:
 	ui_helper_visible = bool(cf.get_value("ui", "helper_visible", ui_helper_visible))
 	ui_instructors_visible = bool(cf.get_value("ui", "instructors_visible", ui_instructors_visible))
 	ui_fullscreen = bool(cf.get_value("ui", "fullscreen", ui_fullscreen))
-	var view := String(cf.get_value("ui", "view_mode", ui_view_mode))
-	ui_view_mode = view if view in ["3d", "2d"] else ui_view_mode
+	# La vista 2D esta oculta en Ajustes (0.9 beta, no rinde en movil): una
+	# preferencia guardada "2d" se ignora y carga 3D. `--view=2d` por linea de
+	# comandos sigue funcionando (ViewMode.requested()).
+	ui_view_mode = "3d"
 	var touch_mode := String(cf.get_value("ui", "touch_controls", ui_touch_controls))
 	# Un valor desconocido en el archivo (edicion a mano, version vieja) vuelve
 	# a "auto" en vez de dejar los controles en un estado que nadie eligio.
@@ -913,8 +936,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	var pal := str(cf.get_value("interfaz", "palette", ui_palette))
 	ui_palette = pal if pal in UITheme.PALETTES else "default"
 	ui_high_contrast = bool(cf.get_value("interfaz", "high_contrast", ui_high_contrast))
-	var theme_s := str(cf.get_value("interfaz", "ui_theme", ui_theme))
-	ui_theme = theme_s if theme_s in ["light", "dark"] else "light"
+	# window_theme / ui_theme de settings.cfg: ya no hay modo claro, se ignoran.
 	ui_panel_opacity = clampf(float(cf.get_value("interfaz", "panel_opacity", ui_panel_opacity)),
 		UITheme.OPACITY_MIN, UITheme.OPACITY_MAX)
 	var quality := str(cf.get_value("interfaz", "graphics_quality", ui_graphics_quality))
@@ -976,7 +998,9 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "text_size", ui_text_size)
 	cf.set_value("interfaz", "palette", ui_palette)
 	cf.set_value("interfaz", "high_contrast", ui_high_contrast)
-	cf.set_value("interfaz", "ui_theme", ui_theme)
+	for old_key in ["window_theme", "ui_theme"]:
+		if cf.has_section_key("interfaz", old_key):
+			cf.erase_section_key("interfaz", old_key)
 	cf.set_value("interfaz", "panel_opacity", ui_panel_opacity)
 	cf.set_value("interfaz", "graphics_quality", ui_graphics_quality)
 	cf.set_value("interfaz", "combat_view", ui_combat_view)
@@ -1880,11 +1904,22 @@ func get_upgrade_cost(data: BuildingData, to_level: int) -> Dictionary:
 	# HQ has special override costs
 	if data.id == "headquarters" and hq_upgrade_costs.has(to_level):
 		var hq_cost_raw: Dictionary = hq_upgrade_costs[to_level]
+		# Colono pide menos material del taller (regla `hq_material_mult` de
+		# game_tier_rules, feat/ritmo-colono): la era 3 se alargaba esperando
+		# vigas, lingotes y combustible; y `hq_resource_mult` la bolsa (oro, acero,
+		# petroleo, madera): Colono 0,75, asi que su nivel 3 ya no pide la bolsa
+		# entera (Gobernador si: 3.500 = la bolsa maxima sin tecnologias).
+		var mat_mult: float = GameMode.hq_material_mult()
+		var res_mult: float = GameMode.hq_resource_mult()
 		var cost := {}
 		for res_name in hq_cost_raw:
 			var type := ResourceManager.name_to_type(res_name)
 			if type != -1:
-				cost[type] = hq_cost_raw[res_name]
+				var amount: int = int(hq_cost_raw[res_name])
+				var mult: float = mat_mult if ResourceManager.is_material(type) else res_mult
+				if not is_equal_approx(mult, 1.0):
+					amount = maxi(1, roundi(float(amount) * mult))
+				cost[type] = amount
 		return cost
 	var mult: float = upgrade_cost_multiplier[to_level - 1]
 	var cost := {}
@@ -2400,6 +2435,14 @@ var combat_home_coast_seed := 7
 ## filas de en medio (CombatRules.open_sea_terrain). Los barcos los rodean.
 var combat_sea_islets := 3
 
+## Algo de azar en el dano (feat/ritmo-colono, decision de Bryan 2026-10-25,
+## docs/15 §3 "El dano y su azar"): cada golpe sale entre (1 - esto) y (1 + esto)
+## de su dano esperado, con el generador SEMBRADO de su Encounter (misma semilla y
+## mismas jugadas = mismo combate). Antes el combate no tiraba dados y cada mision
+## era un escalon: un 1,5 % de enemigo pasaba del 95 % al 29 % de victorias.
+## 0 = el dano fijo de antes. La vista previa ensena el rango ("-8-11 de 75").
+var combat_damage_spread := 0.12
+
 ## Ventajas por tipo (piedra-papel-tijera, 2026-10-12, docs/15 §3 "Ventaja por
 ## tipo"). El circulo de tierra:
 ##   artilleria > vehiculo : el obus de alto explosivo raja la chapa remachada
@@ -2595,7 +2638,13 @@ var combat_loot_expedition_boss_colonists := 3
 ## los activan sin tocar nada aqui. El candado lo pone quien construye
 ## (CombatManager.blueprint_locked(); PlacementRules tiene que llamarlo, como
 ## check_rank()).
-var combat_blueprint_buildings := ["infirmary", "military_forge", "scrapyard", "diesel_plant"]
+## v1.2 (decision de Bryan, 2026-10-25): sin planos. La Chatarreria y la Central
+## diesel salieron de la lista y se abren por era, rango y requisitos
+## (building_prerequisites / rank_rewards); la Enfermeria y la Herreria son de la
+## rama militar, que no entro, y sin su .tres nunca se ofrecen. Nadie pone el
+## candado (PlacementRules no llama a blueprint_locked): la rama del Nucleo y los
+## planos lo traera.
+var combat_blueprint_buildings := ["infirmary", "military_forge"]
 
 # ── Tres campañas: Tierra, Mar y Aire (feat/tres-campanas, docs/15 §13) ──
 # Decision de Bryan (2026-10-18): tres cadenas de misiones APARTE, cada una de
@@ -2661,17 +2710,23 @@ var campaign_level_step := 2
 ##     pide enemigos a x2, monstruos por unidad: no se hace.
 ##   * Las de en medio: la columna bien formada de su era gana el 60-100 %, la
 ##     floja (4 infantes, 4 lanchas, 3 cazas) no.
-## El combate no tira dados: cada fila es un escalon, y entre dos cifras de la
-## calibracion la tasa salta. Retocar de 0,02 en 0,02.
+## Desde feat/ritmo-colono (2026-10-25) el dano tira un poco de azar
+## (combat_damage_spread): las filas siguen siendo empinadas pero ya no son un
+## escalon (tierra m3: x1,34 93 %, x1,38 56 %). Recalibradas con el azar
+## (docs/16 "Azar del dano"): tierra m3 1,30 -> 1,36 (99 % -> ~75 %), tierra m5
+## 1,15 -> 1,13 (57 % -> 75 %). Retocar de 0,02 en 0,02.
 var campaign_enemy_mult := {
-	"land": [1.5, 1.7, 1.30, 1.31, 1.15, 0.93],
-	"sea": [1.6, 1.30, 1.25, 1.17, 0.90],
-	"air": [1.4, 1.03, 1.02, 0.97, 0.78],
+	"land": [1.5, 1.7, 1.36, 1.31, 1.13, 0.93],
+	"sea": [1.6, 1.30, 1.25, 1.17, 0.88],
+	"air": [1.4, 1.03, 1.02, 0.97, 0.76],
 }
 ## El jefe de campana: la escala de jefe de siempre (combat_boss_multiplier) por
 ## esto, por medio. Antes 1,10 para todos (0 % de victorias); ahora la columna
 ## bien formada gana el 45-75 % (tierra 2+2+2, mar con acorazados, aire 6 cazas).
-var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.90, "air": 0.78}
+## Con el azar del dano (feat/ritmo-colono) el Leviatan bajo al 48 % y el
+## Zepelin al 46 %: mar 0,90 -> 0,88 (x0,86 82 %, x0,90 51 %) y aire 0,78 -> 0,76
+## (x0,74 97 %, x0,78 42 %), docs/16 "Azar del dano".
+var campaign_boss_extra_scale := {"land": 0.93, "sea": 0.88, "air": 0.76}
 ## Cuantas unidades de su clase pesada lleva el jefe de campana ademas de su
 ## escolta, por medio (antes 2: el jefe era casi solo pesados y no se ganaba).
 var campaign_boss_heavies := {"land": 1, "sea": 1, "air": 1}
@@ -2717,9 +2772,52 @@ func campaign_unit_allowed(domain: String, unit_id: String) -> bool:
 	var targets: Dictionary = stats.get("targets", {})
 	return int(targets.get(domain, -1)) != 0
 
-## Numero de misiones de una campana (jefe incluido).
+## Numero de misiones de una campana EN ESTE NIVEL (jefe incluido): las de
+## campaign_mission_list(). Colono juega menos que Gobernador (feat/ritmo-colono).
 func campaign_mission_count(domain: String) -> int:
+	return campaign_mission_list(domain).size()
+
+## Todas las misiones de la tabla (campaign_defs), jefe incluido: lo que juega
+## Gobernador. Los indices de mision de todo el combate (ofertas, mapas, nombres,
+## eras, escalas) son indices de esta tabla.
+func campaign_base_count(domain: String) -> int:
 	return (campaign_defs.get(domain, {}).get("eras", []) as Array).size()
+
+## Las misiones que se juegan en este nivel, como indices de la tabla, en orden
+## (regla `campaign_missions` de game_tier_rules; sin regla, todas). El jefe (la
+## ultima de la tabla) va siempre: es quien entrega la pieza del Cuartel General.
+## Colono (feat/ritmo-colono, decision de Bryan 2026-10-25): Tierra 4, Mar 2,
+## Aire 2, sin tocar las cifras de cada mision (su escala y su era son las de la
+## tabla, calibradas en docs/15 §13).
+func campaign_mission_list(domain: String) -> Array:
+	var base: int = campaign_base_count(domain)
+	var out: Array = []
+	var rule: Variant = GameMode.tier_rule("campaign_missions")
+	var picked: Variant = (rule as Dictionary).get(domain, null) if rule is Dictionary else null
+	if picked is Array and not (picked as Array).is_empty():
+		for v in picked:
+			var i: int = int(v)
+			if i >= 0 and i < base and not out.has(i):
+				out.append(i)
+		out.sort()
+	else:
+		for i in range(base):
+			out.append(i)
+	if base > 0 and not out.has(base - 1):
+		out.append(base - 1)
+	return out
+
+## Las piezas del Cuartel General nivel 3 (feat/ritmo-colono, decision de Bryan
+## 2026-10-25: "una sola llave"). El jefe de cada campana entrega la suya; el CG
+## nivel 3 las pide las tres ademas de su coste (donde el modo lo pida,
+## GameMode.audit_needs_campaigns) y el Ataque Final llega con el CG nivel 3.
+## Nombres: PIECE_<MEDIO> en Tr ("Planos del Bastion", "Casco del Leviatan",
+## "Motor del Zepelin").
+const CAMPAIGN_PIECES := {"land": "bastion_plans", "sea": "leviathan_hull", "air": "zeppelin_engine"}
+
+## ¿Pide el Cuartel General nivel `to_level` las piezas de las campanas?
+func hq_needs_pieces(to_level: int) -> bool:
+	return to_level >= max_building_level and GameMode.audit_needs_campaigns()
 
 ## La unidad que ¿QUE HACER? propone entrenar para una campana sin tropa en casa.
 var campaign_suggested_unit := {"land": "artillery", "sea": "gunboat", "air": "fighter"}
@@ -2817,6 +2915,11 @@ var storm_trial_after_guide := 90.0
 ## detras del Cuartel temprano y a 120 oro + 80 madera tardaba (queja de Bryan,
 ## 2026-10-19). Las siguientes, al precio de la ficha. BuildingData.get_cost.
 var first_building_discount := {"gold_mine": 0.5}
+## Gratis en el tutorial (2026-10-24): mientras dura el tutorial guiado, el
+## primero de cada edificio que pide (y la carretera) no cuesta nada
+## (TutorialManager.is_free_build). Las pruebas de "consigue lo que falta" lo
+## apagan para ver la maquinaria con precios.
+var tutorial_free_builds := true
 var storm_trial_severity := 1
 ## Lo que deja producir durante su Ceniza y su Tormenta: bastante mas que una de
 ## verdad (0,5 y 0,15). Se nota, no hunde.
@@ -2958,6 +3061,15 @@ func get_storm_mitigation(towers: int) -> float:
 var storm_tithe_ratio := 0.25
 ## How many enemies the Assessors field, before severity scaling.
 var storm_tithe_base_force := 3
+## La Visita (feat/ritmo-colono, decision de Bryan 2026-10-25): solo uno de cada
+## tantos Impuestos se pelea en el tablero (el primero de verdad siempre, para
+## ensenar; luego el 4.º, el 7.º...). Los demas los resuelve la guarnicion sola con
+## AutoResolver (las mismas reglas) y el parte de guerra lo cuenta. 1 = todos en el
+## tablero, como antes. La prueba de la era 1 no cuenta: va siempre al tablero.
+var storm_tithe_board_every := 3
+## Segundos (de juego) que se ofrece ¡PELEAR! en un Impuesto con parte automatico
+## antes de resolverlo solo.
+var storm_tithe_choice_seconds := 12.0
 
 ## ── La Cuota Mínima ──
 ## El porcentaje solo no bastaba: con el almacén en cero se llevaban cero, así
@@ -3359,6 +3471,13 @@ func get_storm_loss_refund(cost: Dictionary) -> Dictionary:
 ## 4-5 desde 2026-10-12 (antes 3-5): un final mas exigente (docs/17, "2026-10-12").
 var final_audit_waves := Vector2i(4, 5)
 
+## Las oleadas del asedio en este nivel: las de `final_audit_waves` mas la regla
+## `final_audit_waves_delta` de game_tier_rules (feat/ritmo-colono: Colono -1,
+## es decir 3-4; Gobernador 0). Nunca menos de 1.
+func get_final_audit_waves() -> Vector2i:
+	var delta: int = int(GameMode.tier_rule("final_audit_waves_delta")) if GameMode.tier_rule("final_audit_waves_delta") != null else 0
+	return Vector2i(maxi(1, final_audit_waves.x + delta), maxi(1, final_audit_waves.y + delta))
+
 ## Cuerpos de la primera oleada, y cuantos suma cada oleada siguiente. El techo
 ## real lo pone `combat_deploy_cap`: el tablero sigue siendo el mismo de siempre.
 var final_audit_base_slots := 3
@@ -3397,7 +3516,11 @@ var final_audit_scale_per_era := 0.05
 ## 1.14 desde la ronda final de la 1.1 (2026-10-18, IA nueva + dirigible): con
 ## 1.10 la referencia (6 blindados, 4 torres) ganaba el 90 %; 1.12-1.13 lo mismo
 ## (88-90 %), 1.14 el 82,5 % y 1.15 se desploma al 57,5 % (docs/17 "Ronda final").
-var final_audit_last_wave_multiplier := 1.14
+## 1.06 desde feat/ritmo-colono (2026-10-25): con el azar del dano (±12 %) el
+## asedio de 4-5 oleadas acumula la mala suerte y la referencia caia al 58,5 %
+## con 1.14. Ya no es un escalon: 1.02 86,5 %, 1.06 79,5 %, 1.10 69,5 %, 1.14
+## 58,5 % (docs/17 "Azar del dano").
+var final_audit_last_wave_multiplier := 1.06
 
 ## Formacion: un canon por cada N cuerpos, y el blindado no aparece hasta esta
 ## oleada. Cada oleada tiene que verse distinta antes de verse mas grande, o el
@@ -3545,6 +3668,15 @@ var game_mode_rules := {
 ##   audit_enemy_mult        escala de cada oleada de la Auditoria Final
 ## Las cifras de combate salen de tools/siege_probe.gd y tools/balance_probe.gd
 ## (docs/16 y docs/17): con la guarnicion maxima el asedio sigue >= 60 %.
+##   campaign_missions       (feat/ritmo-colono) que misiones de cada campana se
+##                           juegan, como indices de campaign_defs; sin el medio,
+##                           todas. El jefe va siempre.
+##   hq_material_mult        (feat/ritmo-colono) los materiales del taller que
+##                           piden los niveles 2 y 3 del Cuartel General
+##   hq_resource_mult        (feat/ritmo-colono) lo de la bolsa que piden esos
+##                           niveles (oro, acero, petroleo, madera)
+##   final_audit_waves_delta (feat/ritmo-colono) oleadas de mas o de menos en el
+##                           asedio (get_final_audit_waves)
 var game_tier_rules := {
 	"colonist": {
 		"spoilage": false,
@@ -3553,6 +3685,14 @@ var game_tier_rules := {
 		"expedition_enemy_mult": 1.0,
 		"tithe_force_mult": 1.0,
 		"audit_enemy_mult": 1.0,
+		# Colono en 3-4 h, tres capitulos (decision de Bryan 2026-10-25, docs/22
+		# §17): Tierra 4 (m1, m3, m5 y el jefe), Mar 2 y Aire 2 (la de entrada y el
+		# jefe). Medido: con Mar 3 y Aire 3 la linea ganaba en 5 h. Gobernador
+		# juega las 16.
+		"campaign_missions": {"land": [0, 2, 4, 5], "sea": [0, 4], "air": [0, 4]},
+		"hq_material_mult": 0.3,
+		"hq_resource_mult": 0.6,
+		"final_audit_waves_delta": -1,
 	},
 	"governor": {
 		"spoilage": true,
@@ -3567,6 +3707,11 @@ var game_tier_rules := {
 		# 67,5 % (docs/17 "Ronda final"). El Gobernador se nota en las expediciones,
 		# las campanas y el Diezmo; en el asedio, casi nada.
 		"audit_enemy_mult": 1.005,
+		# Gobernador lo juega todo: las 16 misiones y el taller entero del CG.
+		"campaign_missions": {},
+		"hq_material_mult": 1.0,
+		"hq_resource_mult": 1.0,
+		"final_audit_waves_delta": 0,
 	},
 }
 
@@ -3789,4 +3934,642 @@ func _register_fishing_dock() -> bool:
 	building_lot_style[id] = {"ground": "dirt", "trim": "fence", "yard": 0.3, "accent": "residential",
 		"props": ["barrel", "crate", "sacks", "barrel"], "count": [3, 5]}
 	building_active_fx[id] = "smoke"
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Defensa y vida (feat/edificios-defensa-vida, doc 21 §6.3 n.º 11, 12, 18 y §6.4) ──
+# ══════════════════════════════════════════════════════════════════════
+# Bastion (tramo de muro 2x1), Chatarreria y Telegrafo. La belleza del barrio
+# de la rama original no entro en la 1.2 (decision de Bryan): quitada.
+# Como el bloque de los utiles: las areas se calculan al construir, terminar,
+# demoler, arruinar, reparar o mejorar (DefenseLifeEffects.refresh, agrupado y
+# diferido por ProductionManager), nunca por frame, y quedan como metas en los
+# edificios. Nada de esto viaja en el save: sale de los edificios, que ya van en
+# el. El hueco extra de encargos SI va en el save, dentro de "contracts".
+#
+# Sus filas en las tablas comunes (topes, prerrequisitos, obra, parcela,
+# actividad) las anade _register_defense_life_buildings() al crear GameConfig,
+# para que este bloque viva solo y no choque con otras ramas. Quien busque
+# "bastion", "scrapyard" o "telegraph" en una tabla y no lo vea, lo tiene aqui.
+# El nivel de Nucleo y el plano que abren cada uno (core_level_unlocks /
+# blueprint_required) son de la rama del Nucleo; aqui no se tocan.
+
+const BASTION_ID := "bastion"
+const SCRAPYARD_ID := "scrapyard"
+const TELEGRAPH_ID := "telegraph"
+
+## Bastion: los edificios a `bastion_radius` casillas (borde a borde) que quedan
+## DETRAS del muro (del lado del centro de la isla, lejos del mar) reciben este
+## tanto menos de dano de la Tormenta. No se suma entre bastiones; con un Pozo
+## cerca, los dos se multiplican (0,7 x 0,8 = 0,56 del golpe).
+var bastion_radius := 3
+var bastion_storm_reduction := 0.3
+## Casillas de cobertura en el tablero de defensa (Impuesto y asedio): una por
+## cada `bastion_per_cover_cell` bastiones en pie, hasta `bastion_board_cover_max`.
+## Quien este encima (de superficie, no un avion) suma `bastion_cover_defense`.
+var bastion_per_cover_cell := 3
+var bastion_board_cover_max := 2
+var bastion_cover_defense := 2
+## Topes por era (sin bastiones antes del acero: la era 1 no se ve).
+var bastion_limits_by_era := [6, 10, 14]
+
+## Chatarreria (con obreros y en pie): sus brigadas reparan mas barato lo que
+## esta a `scrapyard_radius` (descuento sobre el precio de la reparacion; no se
+## suma entre chatarrerias) y, al acabar cada Tormenta, despejan las ruinas de
+## su zona: por ruina, `scrapyard_steel_per_ruin` de acero; un repuesto por cada
+## `scrapyard_ruins_per_part` ruinas (hasta `scrapyard_parts_max` por chatarreria
+## y Tormenta), y levantan `scrapyard_brigade_lifts` ruinas al
+## `scrapyard_brigade_lift_ratio` de su salud (gratis: vuelven a funcionar).
+var scrapyard_radius := 4
+var scrapyard_repair_discount := 0.4
+var scrapyard_steel_per_ruin := 12
+var scrapyard_ruins_per_part := 2
+var scrapyard_parts_max := 3
+var scrapyard_brigade_lifts := 1
+var scrapyard_brigade_lift_ratio := 0.35
+var scrapyard_limits_by_era := [1, 2, 2]
+
+## Telegrafo (unico, en pie): un hueco mas en el tablon de encargos (el hilo del
+## telegrafo: le llegan encargos de cualquier fuente abierta) y los plazos de los
+## encargos nuevos duran este tanto mas.
+var telegraph_extra_contracts := 1
+var telegraph_duration_bonus := 0.5
+## Espera hasta el primer encargo por el hilo, desde que el Telegrafo esta en pie.
+var telegraph_first_delay := 60.0
+
+## Runtime (lo pone DefenseLifeEffects; nunca se guarda ni se toca a mano).
+## Casillas de cobertura que el Bastion pone en el proximo tablero de defensa.
+var defense_cover_cells := 0
+## Huecos de encargos de mas (Telegrafo) y multiplicador de los plazos nuevos.
+var contract_extra_slots := 0
+var contract_duration_mult := 1.0
+
+## Casillas de cobertura que dan `bastions` bastiones en pie.
+func bastion_cover_cells_for(bastions: int) -> int:
+	if bastions <= 0:
+		return 0
+	return mini(bastion_board_cover_max, ceili(float(bastions) / float(maxi(1, bastion_per_cover_cell))))
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _defense_life_registered := _register_defense_life_buildings()
+
+func _register_defense_life_buildings() -> bool:
+	# Topes (la era 1 coincide con building_limits, como pide la prueba de topes).
+	building_limits[BASTION_ID] = int(bastion_limits_by_era[0])
+	building_limits_by_era[BASTION_ID] = bastion_limits_by_era.duplicate()
+	building_limits[SCRAPYARD_ID] = int(scrapyard_limits_by_era[0])
+	building_limits_by_era[SCRAPYARD_ID] = scrapyard_limits_by_era.duplicate()
+	building_limits[TELEGRAPH_ID] = 1
+	building_limits_by_era[TELEGRAPH_ID] = [1, 1, 1]
+	# Prerrequisitos: los tres son de la era 2 (piden acero). El Bastion, ademas,
+	# el Cuartel (quien lo defiende); el Telegrafo, el Almacen (de donde salen
+	# los encargos); la Chatarreria, solo la Fundicion (alli funde lo que recoge).
+	building_prerequisites[BASTION_ID] = ["foundry", "barracks"]
+	building_prerequisites[SCRAPYARD_ID] = ["foundry"]
+	building_prerequisites[TELEGRAPH_ID] = ["foundry", "warehouse"]
+	# Obra: piedra y sacos para el muro; chatarra y chapa para la Chatarreria;
+	# ladrillo y un mastil para el Telegrafo.
+	construction_style[BASTION_ID] = {"piles": ["stone", "sandbags", "gravel"], "fence": "canvas",
+		"tarp": Color(0.33, 0.37, 0.20), "frame": "low", "frame_mat": "stone", "site_fx": "dust",
+		"flag": Color(0.95, 0.74, 0.12)}
+	construction_style[SCRAPYARD_ID] = {"piles": ["drums", "rivets", "pipes"], "fence": "sheet",
+		"tarp": Color(0.40, 0.30, 0.22), "frame": "hall", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.80, 0.16, 0.10), "crane": Color(0.80, 0.16, 0.10)}
+	construction_style[TELEGRAPH_ID] = {"piles": ["bricks", "beams", "crates"], "fence": "planks",
+		"tarp": Color(0.22, 0.36, 0.42), "frame": "mast", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.82, 0.63, 0.20)}
+	# Parcela: el muro casi sin patio y sin atrezo (el muro ya es todo);
+	# Chatarreria industrial con su chatarra; Telegrafo civico.
+	building_lot_style[BASTION_ID] = {"ground": "dirt", "trim": "sandbags", "yard": 0.08,
+		"accent": "military", "props": [], "count": [0, 0]}
+	building_lot_style[SCRAPYARD_ID] = {"ground": "dirt", "trim": "fence", "yard": 0.3,
+		"accent": "industrial", "props": ["drums", "crate", "barrel", "drums", "lamp"], "count": [4, 6]}
+	building_lot_style[TELEGRAPH_ID] = {"ground": "slabs", "trim": "curb", "yard": 0.3,
+		"accent": "civic", "props": ["bench", "lamp", "planter", "crate"], "count": [3, 5]}
+	# Trabajando: la Chatarreria levanta polvo de chatarra y el Telegrafo
+	# parpadea (su lampara de senales).
+	building_active_fx[SCRAPYARD_ID] = "dust"
+	building_active_fx[TELEGRAPH_ID] = "glow"
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Economia (feat/edificios-economia, doc 21 §6.3 n.º 13, 14 y 16) ──
+# ══════════════════════════════════════════════════════════════════════
+# Puerto comercial (el barco del contrabandista, doc 14 §P4), Casa de cambio
+# (Mercado mas barato; interes en Gobernador) y Central diesel (gasta
+# combustible, +15 % a los industriales de alrededor). El reloj del barco, el
+# combustible de las Centrales y el interes los lleva EconomyManager; las areas
+# y el "esta en marcha" de cada uno, UtilityEffects.refresh (al construir,
+# terminar, demoler, arruinar, reparar o cambiar los obreros: nunca por frame).
+#
+# Como el Muelle de pesca, sus filas en las tablas comunes (topes, requisitos,
+# obra, parcela, efecto) las anade _register_economy_buildings() al crear
+# GameConfig: este bloque vive solo y no choca con otras ramas.
+#
+# Lo que NO esta aqui (lo lleva la rama del Nucleo y los planos): en que nivel
+# del Nucleo se abre cada uno y si pide plano. Propuesta de esta rama: Puerto
+# Nucleo 3; Casa de cambio Nucleo 3 + plano; Central diesel Nucleo 4 + plano
+# (la Central ya esta en combat_blueprint_buildings).
+
+const TRADE_PORT_ID := "trade_port"
+const EXCHANGE_ID := "exchange"
+const DIESEL_PLANT_ID := "diesel_plant"
+
+## Topes fijos: el Puerto y la Casa de cambio son unicos; Centrales, dos.
+var economy_building_limits := {"trade_port": 1, "exchange": 1, "diesel_plant": 2}
+## Requisitos: los dos de comercio piden el Mercado (y la Fundicion, que es la
+## era 2: el acero de su obra); la Central, la Refineria (de ahi el combustible).
+var economy_building_prerequisites := {
+	"trade_port": ["market", "foundry"],
+	"exchange": ["market", "foundry"],
+	"diesel_plant": ["refinery"],
+}
+
+# ── Puerto comercial: el barco del contrabandista ──
+## Espera entre dos barcos (segundos de juego, pasan por get_duration): un
+## sorteo entre min y max. El primero llega antes, para que se vea pronto.
+var smuggler_interval_min := 360.0
+var smuggler_interval_max := 600.0
+var smuggler_first_wait := 75.0
+## Lo que se queda atracado. Si llega la Ceniza, zarpa antes.
+var smuggler_dock_seconds := 90.0
+## Ofertas por barco (una de cada hueco: exclusiva, material, recursos).
+var smuggler_offer_count := 3
+## Lo que se mueve en cada clase de oferta.
+## Repuestos: [min, max] y oro por repuesto (caros: lo normal es traerlos de
+## las misiones, doc 21 D2).
+var smuggler_parts_amount := [2, 4]
+var smuggler_parts_price := 60
+## Planos menores: los de edificios que abre el RANGO (decoraciones y utiles,
+## rank_rewards) por encima del rango de ahora. Nunca un plano obligatorio (los
+## de combat_blueprint_buildings salen solo de las misiones). Oro por rango.
+var smuggler_plan_price_per_rank := 40
+var smuggler_plan_price_min := 120
+## Materiales: [min, max] y oro por unidad (un poco por encima de lo que cuesta
+## hacerlos: 20 madera -> 5 tablones = 12 de oro el tablon; vigas ~48; combustible ~36).
+var smuggler_material_offers := {
+	"planks": {"amount": [8, 14], "price": 13},
+	"ingots": {"amount": [4, 8], "price": 12},
+	"beams": {"amount": [4, 8], "price": 52},
+	"fuel": {"amount": [4, 8], "price": 40},
+}
+## Recursos: vende por debajo del Mercado (fraccion del precio de compra de
+## ahora) o compra lo que te sobra por encima (multiplo del precio de venta).
+var smuggler_resource_amount := [40, 80]
+var smuggler_sell_discount := 0.75
+var smuggler_buy_premium := 1.6
+## Probabilidad de que el tercer hueco sea "te compro" en vez de "te vendo".
+var smuggler_buy_chance := 0.5
+## Probabilidad de que el hueco exclusivo sea un plano (si queda alguno).
+var smuggler_plan_chance := 0.45
+## XP de rango por cada compra o venta al barco.
+var smuggler_rank_xp := 5
+
+# ── Casa de cambio ──
+## Lo que baja el spread del Mercado con una Casa en marcha (0,30 -> 0,20), y
+## el suelo que nunca cruza (con las tecnologias de Logistica tambien).
+var exchange_spread_cut := 0.1
+var exchange_spread_floor := 0.08
+## Gobernador: interes sobre el oro guardado, cada `exchange_interest_interval`
+## segundos de juego, con tope por pago.
+var exchange_interest_interval := 60.0
+var exchange_interest_rate := 0.01
+var exchange_interest_cap := 20
+## Lo que baja el spread ahora mismo (runtime, lo pone UtilityEffects).
+var market_spread_cut := 0.0
+
+## El spread que usa el Mercado: el de la partida (tecnologias incluidas)
+## menos el de la Casa de cambio, sin bajar del suelo.
+func effective_market_spread() -> float:
+	if market_spread_cut <= 0.0:
+		return market_spread
+	return maxf(minf(market_spread, exchange_spread_floor), market_spread - market_spread_cut)
+
+# ── Central diesel ──
+## Los industriales a esta distancia (casillas de borde a borde) rinden
+## +`diesel_plant_bonus`. Dos Centrales no suman: cada edificio cuenta una.
+var diesel_plant_radius := 5
+var diesel_plant_bonus := 0.15
+var diesel_plant_targets := ["sawmill", "gold_mine", "foundry", "refinery"]
+## Combustible que quema cada Central con obreros cada `diesel_plant_interval`
+## segundos de juego. Sin combustible se para (y no da nada) hasta el siguiente.
+var diesel_plant_fuel_cost := 1
+var diesel_plant_interval := 45.0
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _economy_registered := _register_economy_buildings()
+
+func _register_economy_buildings() -> bool:
+	for id in economy_building_limits:
+		building_limits[id] = int(economy_building_limits[id])
+	for id in economy_building_prerequisites:
+		building_prerequisites[id] = (economy_building_prerequisites[id] as Array).duplicate()
+	# Obra: madera de muelle y cajas (Puerto), piedra y laton (Casa de cambio),
+	# chapa y tuberias con chispas (Central).
+	construction_style[TRADE_PORT_ID] = {"piles": ["crates", "planks", "sacks"], "fence": "dark_planks",
+		"tarp": Color(0.26, 0.38, 0.50), "frame": "hall", "frame_mat": "wood", "site_fx": "dust",
+		"flag": Color(0.95, 0.74, 0.12), "crane": Color(0.95, 0.72, 0.10)}
+	construction_style[EXCHANGE_ID] = {"piles": ["stone", "bricks", "rivets"], "fence": "canvas",
+		"tarp": Color(0.55, 0.42, 0.20), "frame": "plinth", "frame_mat": "stone", "site_fx": "dust",
+		"flag": Color(0.77, 0.59, 0.16)}
+	construction_style[DIESEL_PLANT_ID] = {"piles": ["pipes", "drums", "rivets"], "fence": "sheet",
+		"tarp": Color(0.20, 0.20, 0.22), "frame": "chimney", "frame_mat": "steel", "site_fx": "sparks",
+		"flag": Color(0.95, 0.45, 0.08)}
+	# Parcela: tablones y cajas en el muelle; losas y faroles en la Casa;
+	# chapa y bidones en la Central.
+	building_lot_style[TRADE_PORT_ID] = {"ground": "plate", "trim": "rail", "yard": 0.3, "accent": "civic",
+		"props": ["crate", "barrel", "goods", "crate", "sacks"], "count": [4, 6]}
+	building_lot_style[EXCHANGE_ID] = {"ground": "slabs", "trim": "curb", "yard": 0.3, "accent": "civic",
+		"props": ["lamp", "planter", "bench", "lamp"], "count": [3, 5]}
+	building_lot_style[DIESEL_PLANT_ID] = {"ground": "plate", "trim": "pipes", "yard": 0.3, "accent": "industrial",
+		"props": ["drums", "valve", "drums", "barrel", "crate"], "count": [4, 6]}
+	building_active_fx[TRADE_PORT_ID] = "glow"
+	building_active_fx[EXCHANGE_ID] = "glow"
+	building_active_fx[DIESEL_PLANT_ID] = "smoke"
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Decoraciones y trafico (feat/decoraciones-y-trafico, doc 21 §6.4-6.5 y §7 V5)
+# ══════════════════════════════════════════════════════════════════════
+# Las dieciocho decoraciones que faltaban del catalogo y los camiones de la red
+# de carreteras. Como el Muelle de pesca, sus filas en las tablas comunes
+# (rank_rewards, construction_style, building_lot_style) no estan escritas
+# dentro de cada tabla: las anade _register_decorations_traffic() al crear
+# GameConfig, sin reescribir las filas que ya hay. Quien busque "clock_tower"
+# en rank_rewards y no lo vea, lo tiene aqui. Detalle: docs/03 y docs/04.
+
+## Rango que abre cada decoracion nueva (se anade a la lista `buildings` de su
+## fila de rank_rewards, doc 21 §6.5). Las que no estan aqui se abren por
+## hazana (decor_deed_unlocks).
+var decor_rank_unlocks := {
+	"flower_stall": 4, "community_garden": 4,
+	"small_fountain": 5,
+	"entrance_arch": 6, "bandstand": 6,
+	"beached_boat": 7, "gear_garden": 7,
+	"fair_stage": 8,
+	"fair_tent": 9,
+	"pond_bridge": 10, "water_mill": 10,
+	"container_mural": 11,
+	"clock_tower": 12,
+	# El pecio del doc 21 §3.2 aun no existe en esta rama: hasta que llegue, el
+	# Pecio monumento se abre con el rango del barco (13, junto a las palmeras).
+	"wreck_monument": 13,
+	"moored_airship": 14,
+	"governor_plaza": 18,
+}
+## Decoraciones que se abren por una hazana y no por rango: {id: {que: cuanto}}.
+## "tithes_repelled": Impuestos (Diezmos) rechazados en la partida
+## (StormManager.tithes_repelled()). Sandbox las tiene abiertas.
+var decor_deed_unlocks := {
+	"museum_cannon": {"tithes_repelled": 1},
+	"storm_column": {"tithes_repelled": 5},
+}
+## Las decoraciones nuevas que solo se plantan en la costa (PlacementRules.needs_shore).
+var decor_shore_only := ["beached_boat", "wreck_monument"]
+
+## ¿Se cumple la hazana que abre `building_id`? true si no tiene ninguna.
+func decor_deed_met(building_id: String, tithes_repelled: int) -> bool:
+	var deed: Dictionary = decor_deed_unlocks.get(building_id, {})
+	if deed.is_empty():
+		return true
+	return tithes_repelled >= int(deed.get("tithes_repelled", 0))
+
+# ── Trafico: camiones de los extractores al almacen (solo vista, docs/04) ──
+
+## Un camion por cada tantos extractores con dotacion.
+var traffic_sources_per_truck := 2
+## Tope de camiones a la vez por perfil de dispositivo. Como las figuras de la
+## gente, cada uno cuesta una matriz por fotograma (no una llamada de dibujo).
+var traffic_truck_cap := {"pc": 12, "tablet": 8, "phone": 5}
+## El tope en calidad Minima (0 = ningun camion).
+var traffic_truck_cap_minimal := 0
+## Donde descargan: los Almacenes (sin ninguno, el Nucleo).
+var traffic_depot_ids := ["warehouse"]
+## Celdas por segundo, y cuanto aprietan en el Aviso de Tormenta.
+var traffic_speed := 2.2
+var traffic_hurry_multiplier := 1.5
+## Distancia del centro de la calzada a su carril (en celdas; a la derecha).
+var traffic_lane_offset := 0.2
+## Cuanto se quedan dentro cargando en el extractor y descargando en el
+## almacen (segundos reales, min y max).
+var traffic_stay_load := Vector2(4.0, 9.0)
+var traffic_stay_unload := Vector2(2.0, 4.0)
+## Colores de la cabina (ToyTones): rojo valvula, azul marino, oliva y teja.
+var traffic_truck_paints := ["red", "navy", "olive", "terracotta"]
+
+## Se evalua al crear GameConfig, despues de todas las tablas de arriba.
+var _decorations_traffic_registered := _register_decorations_traffic()
+
+func _register_decorations_traffic() -> bool:
+	for id in decor_rank_unlocks:
+		var r := int(decor_rank_unlocks[id])
+		if not rank_rewards.has(r):
+			rank_rewards[r] = {}
+		var row: Dictionary = rank_rewards[r]
+		var list: Array = row.get("buildings", [])
+		if not list.has(id):
+			list.append(id)
+		row["buildings"] = list
+	# La obra de cada una (docs/03, "Obra por edificio").
+	var obra := {
+		"flower_stall": ["planks", "sacks", "planks", "planks", "low", "wood", Color(0.35, 0.6, 0.3)],
+		"community_garden": ["soil", "sacks", "planks", "planks", "low", "wood", Color(0.3, 0.6, 0.22)],
+		"small_fountain": ["stone", "gravel", "bricks", "planks", "basin", "stone", Color(0.25, 0.55, 0.78)],
+		"entrance_arch": ["stone", "bricks", "stone", "planks", "plinth", "stone", Color(0.82, 0.63, 0.2)],
+		"bandstand": ["planks", "rivets", "stone", "canvas", "dome", "steel", Color(0.72, 0.13, 0.1)],
+		"beached_boat": ["planks", "sacks", "gravel", "planks", "low", "wood", Color(0.25, 0.55, 0.78)],
+		"gear_garden": ["rivets", "pipes", "soil", "sheet", "plinth", "steel", Color(0.82, 0.63, 0.2)],
+		"fair_stage": ["planks", "crates", "planks", "canvas", "hall", "wood", Color(0.72, 0.13, 0.1)],
+		"fair_tent": ["sacks", "planks", "crates", "canvas", "dome", "wood", Color(0.93, 0.78, 0.32)],
+		"pond_bridge": ["stone", "soil", "planks", "planks", "basin", "wood", Color(0.25, 0.55, 0.78)],
+		"water_mill": ["stone", "planks", "logs", "planks", "gable", "wood", Color(0.25, 0.55, 0.78)],
+		"museum_cannon": ["stone", "rivets", "sandbags", "sheet", "plinth", "stone", Color(0.95, 0.74, 0.12)],
+		"container_mural": ["crates", "rivets", "drums", "sheet", "box", "steel", Color(0.80, 0.16, 0.1)],
+		"clock_tower": ["stone", "bricks", "beams", "canvas", "tower", "stone", Color(0.82, 0.63, 0.2)],
+		"wreck_monument": ["planks", "logs", "gravel", "planks", "low", "wood", Color(0.25, 0.55, 0.78)],
+		"storm_column": ["stone", "beams", "rivets", "sheet", "tower", "stone", Color(0.72, 0.13, 0.1)],
+		"moored_airship": ["beams", "pipes", "drums", "canvas", "mast", "steel", Color(0.93, 0.78, 0.32)],
+		"governor_plaza": ["stone", "bricks", "gravel", "sheet", "plinth", "stone", Color(0.82, 0.63, 0.2)],
+	}
+	for id in obra:
+		if construction_style.has(id):
+			continue
+		var o: Array = obra[id]
+		construction_style[id] = {"piles": [o[0], o[1], o[2]], "fence": o[3],
+			"tarp": (o[6] as Color).darkened(0.35), "frame": o[4], "frame_mat": o[5],
+			"site_fx": "sparks" if o[5] == "steel" else "dust", "flag": o[6]}
+	# La parcela: suelo, borde y atrezo (docs/03, "Parcela").
+	var lot := {
+		"flower_stall": ["slabs", "curb", "residential", ["planter", "bench"]],
+		"community_garden": ["dirt", "fence", "residential", ["sacks", "barrel"]],
+		"small_fountain": ["slabs", "curb", "civic", ["bench", "planter"]],
+		"entrance_arch": ["slabs", "curb", "civic", ["lamp", "planter"]],
+		"bandstand": ["grass", "curb", "civic", ["bench", "lamp"]],
+		"beached_boat": ["grass", "curb", "residential", ["barrel", "crate"]],
+		"gear_garden": ["grass", "curb", "industrial", ["planter", "lamp"]],
+		"fair_stage": ["dirt", "curb", "residential", ["barrel", "crate"]],
+		"fair_tent": ["grass", "curb", "residential", ["barrel", "bench"]],
+		"pond_bridge": ["grass", "curb", "residential", ["bench", "planter"]],
+		"water_mill": ["grass", "fence", "residential", ["sacks", "logs"]],
+		"museum_cannon": ["slabs", "curb", "military", ["planter", "lamp"]],
+		"container_mural": ["slabs", "curb", "industrial", ["crate", "barrel"]],
+		"clock_tower": ["slabs", "curb", "civic", ["bench", "lamp"]],
+		"wreck_monument": ["grass", "curb", "residential", ["barrel", "crate"]],
+		"storm_column": ["slabs", "curb", "civic", ["lamp", "planter"]],
+		"moored_airship": ["grass", "curb", "industrial", ["crate", "barrel"]],
+		"governor_plaza": ["slabs", "curb", "civic", ["bench", "planter", "lamp"]],
+	}
+	for id in lot:
+		if building_lot_style.has(id):
+			continue
+		var l: Array = lot[id]
+		building_lot_style[id] = {"ground": l[0], "trim": l[1], "yard": 0.25, "accent": l[2],
+			"props": l[3], "count": [1, 2]}
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Amenazas de costa (feat/amenazas-costa) ──────────────────────────
+#
+# Marcas en la orilla que dan SOLO BOTIN OPCIONAL (decision de Bryan,
+# 2026-10-18): saqueadores (en la playa o, con Astillero, en un bote en el
+# agua), la avanzadilla de la Regencia (desde la era 2) y un pecio. Aparecen
+# cada cierto tiempo, duran un rato y SE VAN SOLAS sin hacer ningun dano.
+# Atacarlas (un combate de dominio puro) o explorar el pecio con trabajadores
+# da botin. Modelo puro: scripts/combat/ThreatBoard.gd; servicio:
+# ThreatManager; combate y botin: ExpeditionGenerator.threat_*; docs/15 §14.
+# Todos los tiempos son segundos JUGADOS (pasan por get_duration).
+
+## Interruptor general.
+var threats_enabled := true
+## Cada cuanto mira el servicio si toca algo (segundos reales; barato).
+var threat_check_interval := 5.0
+## La primera marca, este rato despues de que se abran (Cuartel + primera
+## escaramuza ganada).
+var threat_first_delay := 90.0
+## Entre una marca y la siguiente (al azar dentro del rango). Con 2 a la vez como
+## mucho y ~4 min de vida, hay casi siempre una a la vista sin llenar la costa.
+var threat_spawn_interval := Vector2(150.0, 270.0)
+## Cuantas a la vez como mucho.
+var threat_max_active := 2
+## Cuanto duran en la orilla si nadie las toca.
+var threat_lifetime := {"raiders": 240.0, "vanguard": 300.0, "wreck": 360.0}
+## Peso de cada tipo por era. La avanzadilla de la Regencia, desde la era 2.
+var threat_weights := {
+	1: {"raiders": 70, "wreck": 30},
+	2: {"raiders": 45, "vanguard": 30, "wreck": 25},
+	3: {"raiders": 40, "vanguard": 35, "wreck": 25},
+}
+## Probabilidad de que los saqueadores lleguen en bote (al agua) cuando hay un
+## Astillero: entonces solo se les ataca con barcos (dominio puro).
+var threat_sea_chance := 0.4
+## Casillas (Chebyshev) entre dos marcas, y de una marca a la acera del Nucleo.
+var threat_spacing := 6
+var threat_core_gap := 6
+## El combate: profundidad y riesgo en la curva de enemy_pressure, y escala de
+## los enemigos encima. Los saqueadores son un poco mas faciles que la incursion
+## del tablon (profundidad 0 frente a 1); la avanzadilla, como ella.
+var threat_fight := {
+	"raiders": {"depth": 0, "risk": Vector2i(0, 1), "mult": 0.9},
+	"vanguard": {"depth": 1, "risk": Vector2i(1, 1), "mult": 1.0},
+}
+## Botin fijo y a la vista (sorteado con la semilla de la marca), +25 % por era.
+var threat_rewards := {
+	"raiders": {"gold": Vector2i(40, 70), "wood": Vector2i(20, 40)},
+	"vanguard": {"gold": Vector2i(60, 100), "steel": Vector2i(20, 40)},
+	"wreck": {"wood": Vector2i(30, 60), "gold": Vector2i(15, 35)},
+}
+var threat_era_reward_step := 0.25
+## Repuestos (material fuera de la bolsa) por tipo; uno mas si la pelea es en el agua.
+var threat_parts := {"raiders": Vector2i(1, 2), "vanguard": Vector2i(2, 3), "wreck": Vector2i(0, 2)}
+var threat_sea_extra_parts := 1
+## A veces un material de taller ("material raro"), de los que da la era.
+var threat_rare_chance := {"raiders": 0.3, "vanguard": 0.6, "wreck": 0.5}
+var threat_rare_by_era := {
+	1: ["planks", "ingots"],
+	2: ["planks", "ingots", "beams"],
+	3: ["ingots", "beams", "fuel"],
+}
+var threat_rare_amount := Vector2i(2, 4)
+## Las claves de material que puede llevar un botin (CombatManager._apply_loot,
+## SkirmishPanel.loot_lines).
+const THREAT_LOOT_MATERIALS := ["planks", "ingots", "beams", "fuel"]
+## El pecio: cuantos trabajadores salen a explorarlo y cuanto tardan (los
+## trabajadores dejan su puesto mientras tanto, como al minar a mano).
+var threat_wreck_workers := 2
+var threat_wreck_explore_seconds := 60.0
+## Rango por explorar un pecio (atacar ya da la XP de un combate ganado).
+var threat_wreck_rank_xp := 20
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Volverse el Imperio (feat/volverse-imperio, docs/06 §Volverse el Imperio) ──
+# ══════════════════════════════════════════════════════════════════════
+# Tras GANAR el Ataque Final la partida sigue en la misma isla: la Tormenta para
+# y ahora eres tu quien cobra a las islas vecinas. Un mapa del archipielago con
+# seis islas, cada una con su escudo, su dificultad, su cadena corta de
+# misiones (mar, aire y tierra, dominio puro como las tres campanas) y su
+# tributo periodico al conquistarla, mas una recompensa unica.
+#
+# Modelo puro: scripts/empire/Archipelago.gd (estado) y ConquestGenerator.gd
+# (mapas). Servicio: EmpireManager (autoload, el ultimo). Guardado: "empire".
+#
+# SIN MEDIR: las cifras de enemigos y tributos son una primera propuesta. Medir
+# con tools/balance_probe.gd (como las campanas, docs/15 §13 "Medido") en la
+# ronda final y retocar empire_tier_enemy.
+
+## Las islas, en el orden del mapa. Cada una:
+##   id        clave interna (guardado)
+##   name/desc claves de Tr (EMP_ISLE_<ID>_NAME / _DESC)
+##   tier      dificultad 1-3 (estrellas)
+##   needs     islas conquistadas antes de poder atacarla
+##   pos       sitio en el mapa (0..1 del recuadro; tu isla esta en el centro)
+##   crest     su escudo: una receta de ColonyFlag (piezas propias, sin simbolos reales)
+##   missions  la cadena: medio, combates y nombre (EMP_M_*). La ultima toma la isla.
+##   tribute   lo que paga cada empire_tribute_interval una vez conquistada
+##   reward    lo unico que da al conquistarla: edificios (decoraciones que abre
+##             antes de su rango), piezas de bandera (patterns/emblems/colors) o
+##             un titulo (EMP_TITLE_*).
+var empire_islands := [
+	{"id": "gulls", "tier": 1, "needs": 0, "pos": Vector2(0.18, 0.26),
+		"crest": {"pattern": "bands_h", "emblem": "anchor", "colors": ["sky", "ivory", "steel"]},
+		"missions": [
+			{"domain": "sea", "fights": 1, "name": "EMP_M_SEA_BLOCKADE"},
+			{"domain": "land", "fights": 1, "name": "EMP_M_LAND_LANDING"},
+		],
+		"tribute": {"wood": 80, "food": 40},
+		"reward": {"buildings": ["palm_trees"]}},
+	{"id": "ember", "tier": 1, "needs": 0, "pos": Vector2(0.80, 0.22),
+		"crest": {"pattern": "diagonal", "emblem": "sun", "colors": ["red", "soot", "gold"]},
+		"missions": [
+			{"domain": "air", "fights": 1, "name": "EMP_M_AIR_SKIES"},
+			{"domain": "land", "fights": 1, "name": "EMP_M_LAND_LANDING"},
+		],
+		"tribute": {"gold": 70, "wood": 30},
+		"reward": {"colors": ["gold", "terracotta"]}},
+	{"id": "fog", "tier": 2, "needs": 1, "pos": Vector2(0.12, 0.66),
+		"crest": {"pattern": "waves", "emblem": "ship", "colors": ["slate", "ivory", "gold"]},
+		"missions": [
+			{"domain": "sea", "fights": 1, "name": "EMP_M_SEA_BLOCKADE"},
+			{"domain": "sea", "fights": 2, "name": "EMP_M_SEA_HARBOR"},
+			{"domain": "land", "fights": 2, "name": "EMP_M_LAND_LANDING"},
+		],
+		"tribute": {"steel": 45, "gold": 40, "planks": 4},
+		"reward": {"emblems": ["ship"], "patterns": ["waves"]}},
+	{"id": "wind", "tier": 2, "needs": 1, "pos": Vector2(0.88, 0.62),
+		"crest": {"pattern": "hoist_triangle", "emblem": "airship", "colors": ["sky", "brass", "soot"]},
+		"missions": [
+			{"domain": "air", "fights": 1, "name": "EMP_M_AIR_SKIES"},
+			{"domain": "air", "fights": 2, "name": "EMP_M_AIR_HANGARS"},
+			{"domain": "land", "fights": 2, "name": "EMP_M_LAND_FORT"},
+		],
+		"tribute": {"oil": 35, "gold": 40, "fuel": 3},
+		"reward": {"emblems": ["airship"]}},
+	{"id": "iron", "tier": 3, "needs": 3, "pos": Vector2(0.32, 0.88),
+		"crest": {"pattern": "quartered", "emblem": "cogs", "colors": ["steel", "soot", "copper"]},
+		"missions": [
+			{"domain": "sea", "fights": 2, "name": "EMP_M_SEA_HARBOR"},
+			{"domain": "air", "fights": 2, "name": "EMP_M_AIR_HANGARS"},
+			{"domain": "land", "fights": 2, "name": "EMP_M_LAND_FORT"},
+		],
+		"tribute": {"steel": 70, "beams": 3, "ingots": 2},
+		"reward": {"buildings": ["statue"], "patterns": ["checks"]}},
+	{"id": "ash", "tier": 3, "needs": 5, "pos": Vector2(0.70, 0.88),
+		"crest": {"pattern": "saltire", "emblem": "tower", "colors": ["soot", "crimson", "gold"]},
+		"missions": [
+			{"domain": "air", "fights": 2, "name": "EMP_M_AIR_HANGARS"},
+			{"domain": "sea", "fights": 2, "name": "EMP_M_SEA_HARBOR"},
+			{"domain": "land", "fights": 3, "name": "EMP_M_LAND_CITADEL", "boss": true},
+		],
+		"tribute": {"gold": 120, "oil": 40, "fuel": 3},
+		"reward": {"title": "EMP_TITLE_LORD"}},
+]
+
+## La dureza de cada nivel: profundidad de partida en la curva enemiga de
+## siempre (ExpeditionGenerator.enemy_pressure / enemy_scale, era 3, mision N
+## suma N) y una cifra encima, como campaign_enemy_mult. El jefe de la Ciudadela
+## usa el roster de jefe de campana (campaign_boss_roster) y empire_boss_extra_scale.
+var empire_tier_enemy := {
+	1: {"depth": 4, "mult": 1.0},
+	2: {"depth": 6, "mult": 1.0},
+	3: {"depth": 8, "mult": 1.0},
+}
+var empire_boss_extra_scale := 0.93
+## Las misiones se juegan en la era de la colonia, nunca por debajo de esta.
+var empire_min_era := 3
+## Oro y madera de la curva en el ultimo combate de cada mision, por esto (como
+## campaign_reward_mult), y repuestos al ganarla.
+var empire_reward_mult := 0.75
+var empire_mission_parts := 2
+## Segundos de juego entre ganar una mision y la siguiente de la MISMA isla.
+## Pasa por get_duration().
+var empire_mission_cooldown := 120.0
+## Cada cuanto pagan las islas conquistadas (segundos jugados, get_duration()).
+var empire_tribute_interval := 180.0
+## Vida que recupera la columna entre dos combates de una mision.
+var empire_heal_between := 0.30
+## Titulos por islas conquistadas (el mayor alcanzado; la Ciudadela da ademas el
+## suyo propio en su reward). Claves de Tr.
+var empire_titles := [
+	{"count": 1, "key": "EMP_TITLE_PROTECTOR"},
+	{"count": 3, "key": "EMP_TITLE_VICEROY"},
+	{"count": 6, "key": "EMP_TITLE_LORD"},
+]
+
+## Lo que se registra en tablas de mas arriba sin tocarlas: la regla de modo
+## "empire_phase" (Campana y Supervivencia si; Constructor y Sandbox no: no
+## tienen asedio que ganar) y la XP de rango de las conquistas.
+var _empire_registered := _register_empire()
+
+func _register_empire() -> bool:
+	game_mode_rules["campaign"]["empire_phase"] = true
+	game_mode_rules["builder"]["empire_phase"] = false
+	game_mode_rules["sandbox"]["empire_phase"] = false
+	rank_xp_sources["conquest_mission"] = 80
+	rank_xp_sources["island_conquered"] = 300
+	return true
+
+## La definicion de una isla, o {} si no existe.
+func empire_island(island_id: String) -> Dictionary:
+	for island in empire_islands:
+		if String(island.get("id", "")) == island_id:
+			return island
+	return {}
+
+func empire_island_ids() -> Array:
+	var ids: Array = []
+	for island in empire_islands:
+		ids.append(String(island.get("id", "")))
+	return ids
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Integracion de la 1.2 (integracion/v1.2b, decision de Bryan 2026-10-25) ──
+# ══════════════════════════════════════════════════════════════════════
+# Sin Nucleo 1-5 y sin planos (esa rama no entra en la 1.2). Los edificios que
+# la rama de economia y la de defensa proponian abrir con "Nucleo N + plano" se
+# abren por ERA (sus requisitos de siempre, building_prerequisites) y por RANGO
+# (rank_rewards, el mismo candado "Rango N" de CONSTRUIR). Los topes siguen
+# siendo los de la era (building_limits_by_era); estas son sus filas.
+#
+# | Edificio      | Antes (propuesta)      | 1.2                                    |
+# |---------------|------------------------|----------------------------------------|
+# | Puerto        | Nucleo 3               | Mercado + Fundicion (era 2)            |
+# | Chatarreria   | plano de mision        | Fundicion (era 2) + rango 4            |
+# | Casa de cambio| Nucleo 3 + plano       | Mercado + Fundicion (era 2) + rango 6  |
+# | Central diesel| Nucleo 4 + plano       | Refineria (era 3) + rango 9            |
+#
+# El barco del contrabandista no vende "planos menores" (smuggler_plan_chance a
+# 0): sin planos en la 1.2, su hueco exclusivo son siempre repuestos.
+const V12_RANK_BUILDINGS := {4: ["scrapyard"], 6: ["exchange"], 9: ["diesel_plant"]}
+
+var _v12_registered := _register_v12_unlocks()
+
+func _register_v12_unlocks() -> bool:
+	for rank in V12_RANK_BUILDINGS:
+		var row: Dictionary = rank_rewards.get(rank, {})
+		var list: Array = (row.get("buildings", []) as Array).duplicate()
+		for id in V12_RANK_BUILDINGS[rank]:
+			if not list.has(id):
+				list.append(id)
+		row["buildings"] = list
+		rank_rewards[rank] = row
+	smuggler_plan_chance = 0.0
 	return true

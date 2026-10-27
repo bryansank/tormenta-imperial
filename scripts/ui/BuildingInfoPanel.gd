@@ -29,6 +29,7 @@ const TrainingSectionScript := preload("res://scripts/ui/TrainingSection.gd")
 var _panel: Control
 var _win: Dictionary = {}
 var _scroll: ScrollContainer
+var _vbox_end: Control
 var _vbox: VBoxContainer
 var _title_label: Label
 ## Estado en una palabra ("Trabajando", "Sin carretera"...) junto al nivel.
@@ -48,7 +49,7 @@ var _upgrade_container: VBoxContainer
 var _upgrade_btn: Button
 ## Lo que da la mejora ("Madera: 6 → 9 cada 12 s").
 var _upgrade_cost_label: Label
-var _upgrade_cost_row: HBoxContainer
+var _upgrade_cost_row: HFlowContainer
 ## "Nivel 1 de 3" (arriba, con la barra), el aviso de repuestos, POR QUE el
 ## boton esta apagado y, en los que no se mejoran, una linea que lo dice.
 var _upgrade_level_label: Label
@@ -59,10 +60,11 @@ var _upgrade_refresh_queued := false
 var _repair_container: PanelContainer
 var _repair_btn: Button
 var _repair_label: Label
-var _repair_cost_row: HBoxContainer
-## La cabecera de los procesos: solo con procesos que ofrecer.
-var _actions_header: Control
-var _actions_sep: Control
+var _repair_cost_row: HFlowContainer
+## FABRICAR (ProcessActionsPanel): solo con recetas que ofrecer. Con recetas,
+## en tablet y PC la ficha se ensancha para dos columnas de tarjetas.
+var _recipes: VBoxContainer
+var _wide := false
 ## Fila de acciones de abajo (mover, girar, derribar...).
 var _actions_box: HFlowContainer
 ## ENTRENAR en los edificios militares (2026-10-19): las unidades de ESE edificio.
@@ -84,6 +86,10 @@ var _confirm_label: Label
 var _process_panel: ProcessActionsPanel
 ## PARA RECOGER y, en la Granja, CULTIVO.
 var _harvest: VBoxContainer = null
+## Economia (feat/edificios-economia): linea de estado y su reloj.
+var _economy_label: Label = null
+var _economy_tick := 0.0
+const ECONOMY_TICK := 0.5
 var _selected_node: Node = null
 var _selected_data: BuildingData = null
 var _selected_deposit_id: String = ""
@@ -111,6 +117,7 @@ func _ready() -> void:
 	EventBus.building_demolished.connect(func(_n, _c): _hide_panel())
 	EventBus.deposit_depleted.connect(func(n, _id): if n == _selected_node: _hide_panel())
 	UILayoutManager.layout_changed.connect(_fit_layout)
+	UILayoutManager.panel_rect_changed.connect(_on_layout_rect_changed)
 	get_viewport().size_changed.connect(_fit_layout)
 
 func _process(_delta: float) -> void:
@@ -125,6 +132,11 @@ func _process(_delta: float) -> void:
 		_training.update_progress()
 	if _harvest != null and not _is_deposit:
 		_harvest.refresh()
+	if _economy_label != null and _economy_label.visible:
+		_economy_tick -= _delta
+		if _economy_tick <= 0.0:
+			_economy_tick = ECONOMY_TICK
+			_refresh_economy()
 
 # ── UI Construction ──
 
@@ -142,7 +154,7 @@ func _build_ui() -> void:
 	# La etiqueta de la cinta es el titulo (la unica etiqueta al crearla).
 	_title_label = _panel.find_children("*", "Label", true, false)[0] as Label
 	# En un panel lateral estrecho la cinta lleva letra de titulo, no de cartel.
-	var tc := CT.on_fill(CT.sem("ACCENT"))
+	var tc := CT.ribbon_text(CT.sem("ACCENT"))
 	CT.style_label(_title_label, "title", tc["color"], tc["outline"])
 	_title_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	_close_btn = _win["close"]
@@ -162,6 +174,10 @@ func _build_ui() -> void:
 	_vbox.add_theme_constant_override("separation", 8 if _phone else CT.GAP)
 	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_vbox)
+	# Aire al final del contenido: lo ultimo nunca queda pegado al pie fijo.
+	_vbox_end = Control.new()
+	_vbox_end.name = "EndPad"
+	_vbox_end.custom_minimum_size = Vector2(0, 8 if _phone else 12)
 
 	# ── Nivel "2 de 3" con su barra, y el estado en una palabra ──
 	_level_row = HBoxContainer.new()
@@ -178,6 +194,15 @@ func _build_ui() -> void:
 	_level_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_level_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	_vbox.add_child(_level_label)
+
+	# Economia (feat/edificios-economia): el barco del Puerto, el spread y el
+	# interes de la Casa de cambio, el combustible de la Central. Una o dos
+	# lineas, repintadas a ritmo de reloj (no por fotograma).
+	_economy_label = CT.label("", "body", CT.text("window"))
+	_economy_label.name = "EconomyStatus"
+	_economy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_economy_label.visible = false
+	_vbox.add_child(_economy_label)
 
 	# ── Lo que hace: fichas de cifra ──
 	_production_container = PanelContainer.new()
@@ -225,8 +250,8 @@ func _build_ui() -> void:
 	_name_edit.add_theme_font_size_override("font_size", CT.fs("body"))
 	_name_edit.add_theme_color_override("font_color", CT.text("window"))
 	_name_edit.add_theme_color_override("font_placeholder_color", CT.text("window", true))
-	_name_edit.add_theme_stylebox_override("normal", CT.well_style("window", 12, 8))
-	_name_edit.add_theme_stylebox_override("focus", CT.box(CT.c("window", "WELL"), CT.sem("ACCENT"), 2, 12, 8))
+	_name_edit.add_theme_stylebox_override("normal", CT.well_style("window", CT.RADIUS_CARD, 8))
+	_name_edit.add_theme_stylebox_override("focus", CT.box(CT.c("window", "WELL"), CT.sem("ACCENT"), 2, CT.RADIUS_CARD, 8))
 	_name_edit.text_submitted.connect(func(_t): _on_rename())
 	var name_btn := CT.pill_button("", "check", "primary", CT.h("small"))
 	name_btn.tooltip_text = Tr.t("BTN_RENAME")
@@ -247,8 +272,10 @@ func _build_ui() -> void:
 	_repair_label = CT.label("", "body", CT.text("window"))
 	_repair_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rep_col.add_child(_repair_label)
-	var rep_row := HBoxContainer.new()
-	rep_row.add_theme_constant_override("separation", 6)
+	# Se parte como la de mejorar: el coste baja bajo el boton si no cabe.
+	var rep_row := HFlowContainer.new()
+	rep_row.add_theme_constant_override("h_separation", 6)
+	rep_row.add_theme_constant_override("v_separation", 4)
 	_repair_btn = CT.pill_button(Tr.t("UI2C_BTN_REPAIR"), "wrench", "warn", CT.h("btn"))
 	# Grupos para que el tutorial los senale (HelpTargets: info_repair, info_move,
 	# info_demolish, info_demolish_confirm).
@@ -256,13 +283,21 @@ func _build_ui() -> void:
 	_repair_btn.tooltip_text = Tr.t("UI2C_TIP_REPAIR")
 	_repair_btn.pressed.connect(_on_repair)
 	rep_row.add_child(_repair_btn)
-	_repair_cost_row = CT.cost_strip({})
+	_repair_cost_row = CT.cost_flow()
 	_repair_cost_row.name = "RepairCost"
 	_repair_cost_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_repair_cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rep_row.add_child(_repair_cost_row)
 	rep_col.add_child(rep_row)
 	_repair_container.visible = false
 	_vbox.add_child(_repair_container)
+
+	# ── FABRICAR: las recetas como tarjetas grandes (feat/recetas-tarjetas) ──
+	# Antes que mejorar: es lo que se viene a hacer a un taller.
+	_recipes = VBoxContainer.new()
+	_recipes.visible = false
+	_vbox.add_child(_recipes)
+	_process_panel = ProcessActionsPanel.new(_recipes)
 
 	# ── Mejorar: la accion principal, con su coste al lado ──
 	_upgrade_container = VBoxContainer.new()
@@ -279,9 +314,12 @@ func _build_ui() -> void:
 	_upgrade_btn.name = "UpgradeButton"
 	_upgrade_btn.pressed.connect(_on_upgrade)
 	up_row.add_child(_upgrade_btn)
-	_upgrade_cost_row = CT.cost_strip({})
+	# Las fichas del coste tambien bajan de linea: el Cuartel General pide siete
+	# cosas y la ficha salia 340 px por la derecha.
+	_upgrade_cost_row = CT.cost_flow()
 	_upgrade_cost_row.name = "UpgradeCost"
 	_upgrade_cost_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_upgrade_cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	up_row.add_child(_upgrade_cost_row)
 	_upgrade_container.add_child(up_row)
 	# El nivel 3 de los que producen pide repuestos: se avisa antes de pulsar.
@@ -309,24 +347,7 @@ func _build_ui() -> void:
 	_no_upgrade_label.name = "NoUpgrade"
 	_no_upgrade_label.visible = false
 	_vbox.add_child(_no_upgrade_label)
-
-	# ── Procesos del taller ──
-	_actions_sep = Control.new()
-	_actions_sep.custom_minimum_size.y = 2
-	_vbox.add_child(_actions_sep)
-	_actions_header = CT.section(Tr.t("LBL_ACTIONS"), "build")
-	_vbox.add_child(_actions_header)
-	var processes_box := VBoxContainer.new()
-	processes_box.add_theme_constant_override("separation", 6)
-	_vbox.add_child(processes_box)
-	var progress_container := VBoxContainer.new()
-	progress_container.add_theme_constant_override("separation", 4)
-	var progress_label := CT.label("", "small", CT.text("window"))
-	var progress_bar := CT.progress(0.0, CT.sem("ACCENT"), "window", 14)
-	progress_container.add_child(progress_label)
-	progress_container.add_child(progress_bar)
-	_vbox.add_child(progress_container)
-	_process_panel = ProcessActionsPanel.new(processes_box, progress_container, progress_bar, progress_label)
+	_vbox.add_child(_vbox_end)
 
 	# ── Abajo, fuera del scroll: abrir, trabajadores, mover, girar, derribar ──
 	_open_btn = CT.pill_button("", "market", "open", CT.h("btn"))
@@ -354,7 +375,7 @@ func _build_ui() -> void:
 	_workers_hint.name = "WorkersHint"
 	_workers_hint.visible = false
 
-	_move_btn = CT.pill_button("" if _phone else Tr.t("UI2C_BTN_MOVE"), "move", "secondary", CT.h("small"), "window", "body")
+	_move_btn = CT.pill_button("" , "move", "secondary", CT.h("small"), "window", "body")
 	_move_btn.name = "MoveButton"
 	_move_btn.add_to_group("hud_info_move")
 	_move_btn.tooltip_text = Tr.t("LBL_MOVE_HINT")
@@ -362,7 +383,7 @@ func _build_ui() -> void:
 	_move_container = _move_btn
 	_actions_box.add_child(_move_btn)
 
-	_rotate_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_ROTATE"), "", "secondary", CT.h("small"), "window", "body")
+	_rotate_btn = CT.pill_button("" , "", "secondary", CT.h("small"), "window", "body")
 	_rotate_btn.name = "RotateButton"
 	var rot_glyph := CT.rotate_glyph(roundi(CT.h("small") * 0.56))
 	_rotate_btn.get_child(0).add_child(rot_glyph)
@@ -372,7 +393,7 @@ func _build_ui() -> void:
 	_actions_box.add_child(_rotate_btn)
 
 	# Derribar: rojo y solo icono; el nombre al mantener. Pide confirmacion.
-	_demolish_btn = CT.pill_button("" if _phone else Tr.t("UI2F_BTN_DEMOLISH"), "demolish", "danger", CT.h("small"), "window", "body")
+	_demolish_btn = CT.pill_button("" , "demolish", "danger", CT.h("small"), "window", "body")
 	_demolish_btn.name = "DemolishButton"
 	_demolish_btn.add_to_group("hud_info_demolish")
 	_demolish_btn.tooltip_text = Tr.t("UI2C_TIP_DEMOLISH")
@@ -383,6 +404,7 @@ func _build_ui() -> void:
 	_confirm_container = VBoxContainer.new()
 	_confirm_container.add_theme_constant_override("separation", 6)
 	_confirm_container.visible = false
+	_confirm_container.add_to_group("hud_info_demolish_question")
 	_confirm_label = CT.para("", "window")
 	_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_confirm_container.add_child(_confirm_label)
@@ -414,13 +436,16 @@ func _fit_layout() -> void:
 	if not ph:
 		UILayoutManager.apply_layout("BuildingInfoPanel", _panel)
 		CT.fit_desktop(_win)
+		_widen_for_recipes()
 		# Tablet: la zona segura (muesca, bordes curvos) tampoco se pisa.
 		var safe := _safe_right()
 		if safe > 0.0:
 			_panel.offset_left -= safe
 			_panel.offset_right -= safe
 		return
-	var width := minf(330.0, vp.x * 0.52)
+	# Con FABRICAR algo mas ancha: las tarjetas a todo el ancho y las pestanas
+	# del Nucleo en una fila. El edificio se sigue viendo a la izquierda.
+	var width := minf(380.0, vp.x * 0.56) if _wide else minf(330.0, vp.x * 0.52)
 	_panel.anchor_left = 1.0
 	_panel.anchor_right = 1.0
 	_panel.anchor_top = 0.0
@@ -441,6 +466,26 @@ func _fit_layout() -> void:
 	(_win["panel"] as PanelContainer).add_theme_stylebox_override("panel", s)
 	_close_btn.offset_left = -_close_btn.custom_minimum_size.x - 2
 	_close_btn.offset_right = -2
+
+## Con recetas, la ficha de tablet y PC pide sitio para dos columnas de
+## tarjetas (CartoonTheme.recipe_panel_w: de la letra y como mucho algo mas de
+## media pantalla), creciendo hacia la izquierda desde su sitio. Sin recetas,
+## el ancho del slot.
+func _widen_for_recipes() -> void:
+	if not _wide or _phone or _panel == null:
+		return
+	var want := CT.recipe_panel_w(_vp())
+	var now := _panel.offset_right - _panel.offset_left
+	if want <= now + 0.5:
+		return
+	_panel.offset_left = _panel.offset_right - want
+	_panel.custom_minimum_size.x = want
+
+## UILayoutManager recoloca la ficha cuando se mueve lo de encima: vuelve a
+## pedir su ancho de recetas (sin bucle: si ya lo tiene, no toca nada).
+func _on_layout_rect_changed(panel_id: String) -> void:
+	if panel_id == "BuildingInfoPanel" and _wide and not _phone:
+		_widen_for_recipes.call_deferred()
 
 ## Cuanto hay que apartarse del borde derecho para no caer debajo del ☰ (el
 ## boton del menu, arriba a la derecha). 0 si no esta o no se ve.
@@ -559,6 +604,8 @@ func _show_building_panel() -> void:
 		_training.setup(String(_selected_data.id))
 	_refresh_workers_toggle()
 	_refresh_open_button()
+	_economy_tick = 0.0
+	_refresh_economy()
 
 	_construction_container.visible = is_building
 	if is_building:
@@ -581,12 +628,41 @@ func _show_building_panel() -> void:
 	_set_actions_header(_process_panel.action_count() > 0)
 	_scroll.scroll_vertical = 0
 	_panel.visible = true
+	_reveal_primary_action()
 	(func(): CT.sync_ribbon_pad(_win)).call_deferred()
 	set_process(true)
 	UIManager.open_panel(self)
 
 ## El estado en una palabra (o dos): en obras, sin carretera, sin trabajadores,
 ## retirados, sin veta o trabajando. Lo mismo que dice su placa en el mapa.
+## La accion principal (REPARAR, ENTRENAR, RECOGER, MEJORAR) se ve siempre:
+## el contenido hace scroll por encima del pie y, al abrir, baja hasta ella.
+func _primary_action() -> Control:
+	if _repair_container != null and _repair_container.visible and _repair_btn.is_visible_in_tree():
+		return _repair_btn
+	if _training != null and _training.visible:
+		for b in _training.find_children("TrainButton", "Button", true, false):
+			if b.is_visible_in_tree():
+				return b
+	if _harvest != null and _harvest.visible:
+		var c := _harvest.find_child("CollectButton", true, false) as Control
+		if c != null and c.is_visible_in_tree():
+			return c
+	if _upgrade_btn != null and _upgrade_btn.is_visible_in_tree():
+		return _upgrade_btn
+	return null
+
+func _reveal_primary_action() -> void:
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if _scroll == null or not is_instance_valid(_scroll) or not _panel.visible:
+		return
+	var b := _primary_action()
+	if b != null and is_instance_valid(b):
+		_scroll.ensure_control_visible(b)
+
 func _refresh_status_line() -> void:
 	if _selected_node == null or not is_instance_valid(_selected_node) or _selected_data == null or _is_deposit:
 		_level_label.visible = false
@@ -605,6 +681,13 @@ func _refresh_status_line() -> void:
 			text = Tr.t("LBL_WORKERS_OFF_SHORT")
 		else:
 			text = Tr.t("LBL_WORKERS_ON_SHORT") % _selected_data.workers_required
+	# Defensa (v1.2): lo que cubre un Bastion, la brigada de la Chatarreria, el
+	# Telegrafo (metas de DefenseLifeEffects, sin recalcular).
+	if not ProductionManager.is_constructing(_selected_node):
+		var effect: String = preload("res://scripts/buildings/DefenseLifeEffects.gd").info_line(_selected_node, _selected_data)
+		if not effect.is_empty():
+			text = effect if text.is_empty() else text + "
+" + effect
 	_level_label.text = text
 	_level_label.visible = text != ""
 
@@ -706,9 +789,57 @@ func _show_deposit_panel() -> void:
 const SCREENS := {
 	"market": ["MarketPanel", "BTN_OPEN_MARKET"],
 	"laboratory": ["TechTreePanel", "BTN_OPEN_LAB"],
+	# El Puerto comercial (feat/edificios-economia): su panel no esta en la
+	# escena, se crea al pedirlo (SmugglerPanel.open_in).
+	"trade_port": ["SmugglerPanel", "BTN_OPEN_PORT"],
 }
 ## El icono del boton ABRIR de cada una.
-const SCREEN_GLYPHS := {"market": "market", "laboratory": "research"}
+const SCREEN_GLYPHS := {"market": "market", "laboratory": "research", "trade_port": "anchor"}
+const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
+const UtilityEffectsScript := preload("res://scripts/buildings/UtilityEffects.gd")
+
+## La linea de estado de los edificios de economia; oculta en los demas.
+func _refresh_economy() -> void:
+	if _economy_label == null:
+		return
+	var text := ""
+	if _selected_data != null and not _is_deposit and is_instance_valid(_selected_node) \
+			and not ProductionManager.is_constructing(_selected_node):
+		text = economy_status(_selected_node, _selected_data)
+	_economy_label.text = text
+	_economy_label.visible = text != ""
+
+## Lo que dice la ficha de un Puerto, una Casa de cambio o una Central ("" en
+## los demas). Publico para los tests.
+static func economy_status(node: Node, data: BuildingData) -> String:
+	match data.id:
+		"trade_port":
+			if not EconomyManager.is_working(node):
+				return Tr.t("LBL_ECON_IDLE")
+			if EconomyManager.is_ship_docked():
+				return Tr.t("LBL_SMUGGLER_LEAVES") % TextKit.short_time(EconomyManager.ship_seconds_left())
+			var left: float = EconomyManager.seconds_until_ship()
+			if left <= 0.0:
+				return Tr.t("LBL_SMUGGLER_SOON")
+			return Tr.t("LBL_SMUGGLER_NEXT") % TextKit.short_time(left)
+		"exchange":
+			if not EconomyManager.is_working(node):
+				return Tr.t("LBL_ECON_IDLE")
+			var line: String = Tr.t("LBL_EXCHANGE_SPREAD") % [
+				roundi(GameConfig.market_spread * 100.0), roundi(GameConfig.effective_market_spread() * 100.0)]
+			if GameMode.is_governor():
+				line += "\n" + Tr.t("LBL_EXCHANGE_INTEREST") % [EconomyManager.interest_due(),
+					TextKit.short_time(GameConfig.get_duration(GameConfig.exchange_interest_interval))]
+			return line
+		"diesel_plant":
+			if not EconomyManager.is_working(node):
+				return Tr.t("LBL_ECON_IDLE")
+			if not EconomyManager.is_plant_running(node):
+				return Tr.t("LBL_DIESEL_NO_FUEL")
+			return Tr.t("LBL_DIESEL_RUNNING") % [UtilityEffectsScript.diesel_targets_of(node),
+				roundi(GameConfig.diesel_plant_bonus * 100.0), GameConfig.diesel_plant_fuel_cost,
+				TextKit.short_time(GameConfig.get_duration(GameConfig.diesel_plant_interval))]
+	return ""
 
 func _refresh_open_button() -> void:
 	var id: String = _selected_data.id if _selected_data != null and not _is_deposit else ""
@@ -734,6 +865,10 @@ func _refresh_open_button() -> void:
 func _on_open_screen() -> void:
 	var entry: Array = SCREENS.get(_selected_data.id if _selected_data != null else "", [])
 	if entry.is_empty():
+		return
+	if _selected_data.id == "trade_port":
+		_hide_panel()
+		SmugglerPanelScript.open_in(get_tree())
 		return
 	var scene := get_tree().current_scene
 	var panel: Node = scene.get_node_or_null(String(entry[0])) if scene != null else null
@@ -969,5 +1104,9 @@ static func missing_by_name(cost: Dictionary) -> Dictionary:
 	return out
 
 func _set_actions_header(shown: bool) -> void:
-	_actions_header.visible = shown
-	_actions_sep.visible = shown
+	_recipes.visible = shown
+	# Una sola tarjeta (un yacimiento) cabe en la ficha de siempre.
+	var wide := shown and (_process_panel.action_count() > 1 or not _process_panel.tab_ids().is_empty())
+	if wide != _wide:
+		_wide = wide
+		_fit_layout()

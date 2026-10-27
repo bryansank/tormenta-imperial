@@ -44,7 +44,7 @@ func _put(id: String, cell: Vector2i) -> Node:
 	assert_bool(GridManager.place_building(cell, _data(id), n)).is_true()
 	return n
 
-## Nucleo (sitio para 5) con su acera, una mina (3 obreros) y un aserradero (2)
+## Nucleo (sitio para 8 desde 2026-10-24; antes 5) con su acera, una mina (3 obreros) y un aserradero (2)
 ## pegados a ella, y una Casa en obra. Poblacion 5, moral `morale`.
 func _base(morale: int = 75) -> Dictionary:
 	_put("nucleo", Vector2i(10, 10))
@@ -57,7 +57,7 @@ func _base(morale: int = 75) -> Dictionary:
 	var mine := _put("gold_mine", Vector2i(10, 7))
 	var house := _put("house", Vector2i(7, 10))
 	house.set_meta("under_construction", true)
-	PopulationManager.load_save_data({"population": 5, "morale": morale})
+	PopulationManager.load_save_data({"population": _core(), "morale": morale})
 	return {"sawmill": sawmill, "mine": mine, "house": house}
 
 ## Lo que hace ProductionManager al terminar la obra.
@@ -65,17 +65,21 @@ func _finish(house: Node) -> void:
 	house.remove_meta("under_construction")
 	EventBus.construction_completed.emit(house)
 
+## El sitio del Nucleo, que es la gente de salida (8 desde 2026-10-24).
+func _core() -> int:
+	return int(_data("nucleo").population_capacity)
+
 func _room(level: int) -> int:
 	return int(_data("house").population_capacity
 		* GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, level))
 
 func test_a_finished_house_fills_at_once() -> void:
 	var b := _base()
-	assert_int(PopulationManager.get_population()).is_equal(5)
+	assert_int(PopulationManager.get_population()).is_equal(_core())
 	_finish(b["house"])
 	assert_int(PopulationManager.get_population()).override_failure_message(
-		"los 6 de la Casa llegan juntos al terminarla, sin esperar tics").is_equal(5 + _room(1))
-	assert_int(PopulationManager.get_max_population()).is_equal(5 + _room(1))
+		"los 6 de la Casa llegan juntos al terminarla, sin esperar tics").is_equal(_core() + _room(1))
+	assert_int(PopulationManager.get_max_population()).is_equal(_core() + _room(1))
 	assert_int(_arrived.size()).is_equal(1)
 	assert_object(_arrived[0][0]).is_same(b["house"])
 	assert_int(int(_arrived[0][1])).is_equal(_room(1))
@@ -86,29 +90,29 @@ func test_a_finished_house_fills_at_once() -> void:
 func test_with_low_morale_nobody_comes_at_once() -> void:
 	var b := _base(GameConfig.morale_growth_threshold - 5)
 	_finish(b["house"])
-	assert_int(PopulationManager.get_population()).is_equal(5)
+	assert_int(PopulationManager.get_population()).is_equal(_core())
 	assert_int(_arrived.size()).is_equal(0)
 	# Siguen viniendo de uno en uno cuando la moral se recupera.
 	PopulationManager._tick_growth()
-	assert_int(PopulationManager.get_population()).is_equal(5)
+	assert_int(PopulationManager.get_population()).is_equal(_core())
 	PopulationManager._morale = GameConfig.morale_growth_threshold
 	PopulationManager._tick_growth()
-	assert_int(PopulationManager.get_population()).is_equal(6)
+	assert_int(PopulationManager.get_population()).is_equal(_core() + 1)
 
 func test_an_upgrade_brings_its_extra_room_and_the_ones_it_displaced() -> void:
 	var b := _base()
 	var house: Node = b["house"]
 	_finish(house)
-	assert_int(PopulationManager.get_population()).is_equal(5 + _room(1))
+	assert_int(PopulationManager.get_population()).is_equal(_core() + _room(1))
 	# Durante la mejora la casa no da sitio: los suyos se quedan fuera.
 	house.set_meta("under_construction", true)
 	PopulationManager._recalculate_all()
-	assert_int(PopulationManager.get_population()).is_equal(5)
+	assert_int(PopulationManager.get_population()).is_equal(_core())
 	house.remove_meta("under_construction")
 	house.set_meta("level", 2)
 	EventBus.building_upgrade_completed.emit(house, 2)
 	assert_int(_room(2)).is_greater(_room(1))
-	assert_int(PopulationManager.get_population()).is_equal(5 + _room(2))
+	assert_int(PopulationManager.get_population()).is_equal(_core() + _room(2))
 	assert_int(int(_arrived[-1][1])).is_equal(_room(2))
 
 func test_an_upgrade_without_eviction_adds_only_the_extra() -> void:
@@ -117,7 +121,7 @@ func test_an_upgrade_without_eviction_adds_only_the_extra() -> void:
 	_finish(house)
 	house.set_meta("level", 2)
 	EventBus.building_upgrade_completed.emit(house, 2)
-	assert_int(PopulationManager.get_population()).is_equal(5 + _room(2))
+	assert_int(PopulationManager.get_population()).is_equal(_core() + _room(2))
 	assert_int(int(_arrived[-1][1])).is_equal(_room(2) - _room(1))
 
 func test_losses_come_back_slowly() -> void:
@@ -134,7 +138,7 @@ func test_a_house_without_road_brings_nobody() -> void:
 	loose.set_meta("under_construction", true)
 	PopulationManager._recalculate_all()
 	_finish(loose)
-	assert_int(PopulationManager.get_population()).is_equal(5)
+	assert_int(PopulationManager.get_population()).is_equal(_core())
 	assert_int(_arrived.size()).is_equal(0)
 	assert_bool(b["house"].has_meta("under_construction")).is_true()
 
@@ -144,7 +148,7 @@ func test_other_buildings_bring_nobody() -> void:
 	sawmill.set_meta("under_construction", true)
 	PopulationManager._recalculate_all()
 	_finish(sawmill)
-	assert_int(PopulationManager.get_population()).is_equal(5)
+	assert_int(PopulationManager.get_population()).is_equal(_core())
 	assert_int(_arrived.size()).is_equal(0)
 
 func test_the_newcomers_walk_out_of_the_new_house() -> void:

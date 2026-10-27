@@ -37,6 +37,9 @@ func before_test() -> void:
 	_unlocks = ResourceManager.get_unlock_state()
 	_locale = Tr.get_locale()
 	_tutorial = TutorialManager.get_save_data()
+	# Sin tutorial en marcha: con el, los edificios que pide salen gratis
+	# (2026-10-24) y aqui se miran sus precios de siempre.
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
 	GridManager.clear_all()
 	_nodes.clear()
 	_rows.clear()

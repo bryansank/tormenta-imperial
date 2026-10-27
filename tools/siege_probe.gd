@@ -32,6 +32,7 @@ extends SceneTree
 ##   --siege_atk=lo,hi  pisa `final_audit_morale_attack_range`
 ##   --siege_init=lo,hi  pisa `final_audit_morale_initiative_range`
 ##   --only=a,b       varias configuraciones separadas por comas
+##   --spread=F       pisa `combat_damage_spread` (azar del dano; 0 = sin dados)
 ##   --adv=off        sin ventaja por tipo (combat_type_advantage), para medir
 ##                    el "antes"; --adv=1.5,0.75 pisa los dos multiplicadores
 ##
@@ -208,6 +209,8 @@ func _play(seed_value: int, roster: Dictionary) -> Dictionary:
 				terrain = Rules.coastal_terrain(_cfg.combat_board_size, _cfg.combat_home_coast_seed)
 				break
 		var encounter = EncounterScript.create(units, 0, false, true, crew_uids, false, terrain)
+		# Azar del dano (feat/ritmo-colono): una semilla por asedio y oleada.
+		encounter.seed_rng(hash([seed_value, audit.current_wave, encounter.board_seed()]))
 		var outcome: Dictionary = AutoResolverScript.resolve(encounter)
 		rounds += int(outcome["rounds"])
 		minutes += float(_clock._minutes(_clock._timing_of(outcome["events"], units), 5.0))
@@ -260,6 +263,7 @@ func _apply_overrides() -> void:
 			"escort": _cfg.final_audit_air_escort_fighters = int(value)
 			"airship_hp": _cfg.combat_unit_stats["airship"]["hp"] = int(value)
 			"threat_w": _cfg.combat_ai_threat_weight = float(value)
+			"spread": _cfg.combat_damage_spread = float(value)
 			"siege_atk":
 				var lohi: PackedStringArray = value.split(",")
 				_cfg.final_audit_morale_attack_range = Vector2(float(lohi[0]), float(lohi[1]))

@@ -21,14 +21,26 @@ var _board
 func _ready() -> void:
 	_board = BoardScript.create()
 
+## Rendimiento (2026-10-26): el tablon avanza por tic de `TICK_SECONDS`, no por
+## fotograma. Antes montaba context() (un Array y un Dictionary, nueve consultas
+## a ResourceManager) en cada fotograma: 160-190 us siempre, aun sin encargos.
+## Las esperas y los plazos son de minutos; medio segundo no se nota.
+const TICK_SECONDS := 0.5
+var _tick_acc := 0.0
+
 func _process(delta: float) -> void:
+	_tick_acc += delta
+	if _tick_acc < TICK_SECONDS:
+		return
+	var elapsed := _tick_acc
+	_tick_acc = 0.0
 	if not GameManager.is_started() or not GameMode.contracts_enabled():
 		return
 	# Con un combate abierto el reloj de los encargos espera: no se puede
 	# fabricar ni entregar desde el tablero.
 	if CombatManager.is_board_open():
 		return
-	_publish(_board.advance(GameConfig.sim_delta(delta), context()))
+	_publish(_board.advance(GameConfig.sim_delta(elapsed), context()))
 
 # ── Consultas ────────────────────────────────────────────────────────
 
@@ -47,7 +59,19 @@ func seconds_until_next(source: String) -> float:
 	return maxf(0.0, float(_board.cooldowns.get(source, 0.0)))
 
 func is_source_open(source: String) -> bool:
-	return BoardScript.source_open(source, ProgressionManager.current_era)
+	return BoardScript.slot_open(source, ProgressionManager.current_era, context())
+
+## Los huecos que ensena el tablon: las tres fuentes y, con un Telegrafo en pie
+## (o un encargo suyo aun a la vista), el hilo (feat/edificios-defensa-vida).
+func slot_ids() -> Array:
+	var out: Array = BoardScript.SOURCES.duplicate()
+	if GameConfig.contract_extra_slots > 0 or not get_contract(BoardScript.WIRE).is_empty():
+		out.append(BoardScript.WIRE)
+	return out
+
+## De quien es el encargo de un hueco (en el hilo del Telegrafo, su fuente real).
+func origin_of(slot: String) -> String:
+	return BoardScript.origin_of(get_contract(slot), slot)
 
 func get_reputation(source: String) -> int:
 	return int(_board.reputation.get(source, 0))
@@ -70,7 +94,7 @@ func can_deliver(source: String) -> bool:
 
 ## Alguna fuente tiene un encargo que ya se puede entregar. Para ¿QUE HACER?.
 func first_deliverable() -> String:
-	for source in BoardScript.SOURCES:
+	for source in slot_ids():
 		if can_deliver(source):
 			return source
 	return ""
@@ -88,6 +112,9 @@ func context() -> Dictionary:
 		"morale_ok": ProgressionManager.current_phase >= GameConfig.Phase.ECONOMY,
 		"tithe_discount_ok": GameMode.tithe_enabled() and StormManager.has_method("add_tithe_discount"),
 		"reputation": GameMode.is_governor(),
+		# Telegrafo (DefenseLifeEffects): un hueco mas y plazos mas largos.
+		"extra_slots": GameConfig.contract_extra_slots,
+		"duration_mult": GameConfig.contract_duration_mult,
 	}
 
 # ── Ordenes ──────────────────────────────────────────────────────────
@@ -188,5 +215,6 @@ func load_save_data(data: Dictionary) -> void:
 
 ## Tira el tablon de la partida anterior. Sin avisos.
 func reset() -> void:
+	_tick_acc = 0.0
 	_board = BoardScript.create()
 	EventBus.contract_board_changed.emit()

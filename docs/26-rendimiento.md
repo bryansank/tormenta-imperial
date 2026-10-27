@@ -15,6 +15,13 @@ esta sonda como árbitro antes y después.
 > las calzadas en lote, la interfaz que actualiza, la calidad Mínima...). El resumen y
 > las cifras de §1 y §4 son de **antes** y no se han vuelto a medir: "la 2D es la más
 > cara" ya no vale (ver §6).
+>
+> **Vuelto a medir (2026-10-26, rama `qa-escritorio`, sobre `main` 4c02f6d):** §4.7.
+> Resumen: la colonia grande pasa de 44-48 a **~206 fps** en Forward+ Alta (de ~5600
+> a ~830 draw calls), la 2D de 14-17 a **~143 fps**, y en una **Intel UHD real** la
+> calidad Mínima (Mobile) da **110-157 fps** en todos los escenarios. Lo que queda
+> lejos del presupuesto: la RAM del proceso en Vulkan (~900-1000 MB) y Forward+ Alta
+> en una integrada (20-24 fps).
 
 ---
 
@@ -142,6 +149,8 @@ calma lejana (salvo en `tormenta`), con el tutorial hecho y con `dev_mode` apaga
 `--quality=auto|high|low|minima`, `--view=3d|2d`, `--size=1280x720`, `--seed=`,
 `--vsync=1` (por defecto se mide **sin vsync ni tope**, para ver el margen),
 `--profile=` (segundos del perfil por script, 4; 0 lo apaga), `--tag=` y `--shot=0`.
+Desde §4.7, también `--device=pc|tablet|phone` (fuerza el perfil del dispositivo) y
+`--quality=minimal` (la Mínima de verdad del juego, frente a `minima`, la emulada).
 
 `--quality=minima` **emula** la propuesta de §7 desde la sonda: calidad baja, sin
 sombras (`shadow_enabled = false` en todas las luces), sin SSAO, SSIL, glow ni SSR,
@@ -368,6 +377,188 @@ Solo la interfaz pone unos 350 `Label` y 150 `Button` en todas las escenas.
    edificios dañados (§5.2) puede crecer tras varias tormentas.
 6. **El combate pesa lo mismo que su colonia** (la de `media`): el tablero 8×8 es
    interfaz y no añade coste apreciable.
+
+### 4.7 Medidas de QA por dispositivo (2026-10-25/26)
+
+Tres tandas sobre `main` 4c02f6d con la misma sonda (`tools/perf_probe.gd`, que junta
+las opciones de las tres ramas: `--quality=minimal`, `--device=pc|tablet|phone`, el tope
+de FPS quitado en cada fotograma y los tirones contados). Escritorio, tablet y teléfono,
+en ese orden.
+
+#### 4.7.1 Escritorio (2026-10-26, rama `qa-escritorio`)
+
+**Máquina**: la misma de §4 (RTX 3060 Laptop + **Intel UHD Graphics** integrada del
+i5-10500H, una UHD 630), binario del editor, 15 s de medida y 6 de calentamiento,
+semilla 1, sin vsync ni tope. Esta vez con la máquina casi en reposo: 6 procesos de
+Godot en total (antes 6-34) y el cerrojo `perf.lockdir` compartido con los agentes de
+tablet y teléfono. Cada JSON trae ahora `frames_capped` y `frames_unfocused` (abajo).
+
+**Dos cambios en la sonda** (rama `qa-escritorio`), que hacen que `grande` no sea
+idéntico al de §4:
+
+- **Las casas van primero** al repartir las esquinas. Con los topes de hoy (11
+  aeródromos, 10 astilleros...) hay más edificios que esquinas libres y el corte
+  dejaba 4 casas de 10: 41 habitantes, casi todo "sin trabajadores" y la mitad de
+  caminantes. Ahora `grande` son **81 edificios** (antes 67), 276 carreteras, **95
+  habitantes** y 48 caminantes.
+- **El tope de FPS se quita en cada fotograma** de la medida. `DeviceProfile` vuelve a
+  poner el suyo (60 en PC, 30 en pausa, **10 sin foco**) cuando cambia la pausa o el
+  foco: con otro agente abriendo ventanas, una tanda salió clavada a 10 fps y otra a
+  60. `frames_capped` cuenta los fotogramas en que estaba puesto y `frames_unfocused`
+  los que la ventana no tenía el foco.
+
+Columnas como en §4.1: fps · 1 % bajo · p99 (ms) · render CPU (ms) · resto CPU (ms) ·
+GPU (ms) · draw calls · primitivas (k) · VRAM (MB) · proceso (MB).
+
+**Forward+ Alta, RTX 3060, 1280×720** (antes → ahora; el "antes" es §4.1):
+
+| Escenario | fps | 1 % | p99 | render CPU | resto CPU | GPU | draw calls | prim. k | VRAM | proceso |
+|---|---|---|---|---|---|---|---|---|---|---|
+| inicio | 160 → **362** | 97 → 246 | 3,8 | 1,46 | 1,31 | 1,65 | 1378 → **376** | 74 | 238 | 895 |
+| media | 86 → **289** | 52 → 133 | 4,5 | 1,67 | 1,79 | 1,82 | 3339 → **488** | 201 | 244 | 903 |
+| grande | 48 → **206** | 28 → 107 | 7,4 | 2,27 | 2,57 | 2,19 | 5628 → **833** | 548 | 254 | 977 |
+| tormenta | 47 → **220** | 25 → 124 | 7,1 | 2,09 | 2,46 | 2,16 | 5652 → 683 | 541 | 254 | 979 |
+| combate | 81 → **312** | 46 → 192 | 4,3 | 1,16 | 2,04 | 0,22 | 3476 → 402 | 48 | 301 | 915 |
+| grande_2d | 17 → **143** | 9 → 107 | 8,8 | 2,73 | 4,24 | 1,04 | 9342 → 1306 | 28 | 93 | 905 |
+
+**Forward+ Alta, RTX 3060, 1920×1080** (el "PC medio" del presupuesto pide 60):
+inicio 239 · media 219 · **grande 188** (1 % 115) · tormenta 189 · combate 296 ·
+grande_2d 141 fps. GPU 3,4-4,4 ms; VRAM 400-466 MB (sube 160 MB con la resolución).
+
+**Compatibility, Mínima emulada, RTX 3060, 1280×720** (antes → ahora):
+
+| Escenario | fps | 1 % | p99 | render CPU | GPU | draw calls | VRAM | proceso |
+|---|---|---|---|---|---|---|---|---|
+| inicio | 111 → **147** | 49 → 110 | 8,5 | 5,38 | 4,84 | 438 → 326 | 123 | 554 |
+| media | 68 → **136** | 33 → 86 | 10,2 | 5,58 | 4,73 | 1285 → 367 | 108 | 547 |
+| grande | 53 → **123** | 32 → 81 | 11,0 | 5,97 | 4,50 | 2501 → 548 | 106 | 554 |
+| tormenta | 52 → **135** | 28 → 84 | 10,2 | 5,12 | 3,77 | 2534 → 403 | 106 | 566 |
+| combate | 75 → **134** | 46 → 90 | 10,0 | 5,00 | 4,89 | 1423 → 405 | 114 | 552 |
+| grande_2d | 10 → **66** | 7 → 53 | 18,4 | 11,49 | 5,47 | 9273 → 1263 | 117 | 549 |
+
+**Intel UHD Graphics (integrada, `--gpu-index 1`), 1280×720** — la primera medida en
+una GPU de la clase "papa" (una UHD 630 rinde algo más que la HD 520 del presupuesto):
+
+| Escenario | Mobile · Mínima: fps | 1 % | GPU ms | VRAM | Forward+ · Alta: fps | 1 % | GPU ms |
+|---|---|---|---|---|---|---|---|
+| inicio | **130** | 73 | 5,0 | 126 | 24 | 15 | 39,6 |
+| media | **113** | 37 | 5,6 | 132 | 23 | 20 | 40,3 |
+| grande | **113** | 58 | 6,1 | 142 | 20 | 17 | 46,8 |
+| tormenta | **110** | 69 | 6,2 | 154 | 21 | 17 | 45,7 |
+| combate | **157** | 107 | 1,1 | 146 | 43 | 31 | 1,4 |
+| grande_2d | **114** | 69 | 4,2 | 90 | 97 | 58 | 4,2 |
+
+(Con `--scenario=all` el proceso hijo no hereda `--gpu-index` y mide la NVIDIA: en la
+integrada hay que lanzar los escenarios de uno en uno. En OpenGL el driver de Optimus
+elige siempre la NVIDIA.)
+
+Lo que dicen:
+
+1. **Las optimizaciones de §6 funcionan.** Draw calls de la colonia grande de ~5600 a
+   ~830 (−85 %), render en CPU de 13,5 a 2,3 ms, y la 2D de 37 ms de scripts a ~1,2 ms
+   (Building2D 0,77 + StatusBadge2D 0,48 ms con 81 nodos cada uno).
+2. **El presupuesto de "papa" se cumple con margen en GPU**: en la UHD real, Mínima
+   (Mobile, que es lo que pone Mínima en PC, §7.5) va a 110-157 fps con el 1 % bajo
+   ≥ 37 y VRAM ≤ 154 MB. El 1 % de `media` (37) es un tirón suelto, no la media.
+3. **Forward+ Alta en una integrada no es jugable** (20-24 fps, GPU 40-47 ms incluso en
+   `inicio`: es el coste por píxel, no la escena). Por eso importa que la detección del
+   primer arranque la reconozca. El driver de Intel de este equipo nombra la GPU
+   **"Intel(R) UHD Graphics" sin número**, y la lista de §7.6 solo tenía `UHD Graphics
+   6xx`: se añadió el patrón `^Intel\(R\) UHD Graphics$` (`GameConfig.
+   quality_weak_gpu_patterns`, test `tests/ui/test_gpu_weak_names.gd`). Sin él decidía
+   el paso 2 (la medida), que también la habría mandado a Mínima.
+4. **Lo que no baja: la RAM del proceso.** 900-1000 MB en Vulkan (Forward+ y Mobile,
+   también en la integrada) y ~550 MB en Compatibility, con el binario del editor. El
+   presupuesto del PC de 4 GB (≤ 600 MB) solo lo cumple Compatibility. Hay que medir el
+   `.exe` exportado antes de decidir.
+5. **Scripts por fotograma en `grande`**: `ProductionManager` **0,40 ms** (antes 0,13:
+   ×3, por la comida, los encargos y los procesos nuevos), `WorkerWalkers` 0,28,
+   `ContractManager` 0,09 (nuevo; 0,09 ms ya en `inicio`), `BuildingPlacer` 0,06. En
+   total < 1 ms: no es el cuello, pero ProductionManager es el que más crece.
+6. **La interfaz duplicó sus nodos**: 765 `Label`, 407 `PanelContainer` y 255 `Button`
+   ya en `inicio` (antes 353 `Label`), 3386 nodos frente a 2177. No se ve en los fps,
+   sí en memoria y en el tiempo de reconstruir la interfaz (cambio de tema o idioma).
+
+#### 4.7.2 Tablet, renderizador Mobile (2026-10-25, rama `qa-tablet`)
+
+Medido sobre `main` en `4c02f6d` (con las optimizaciones de §6 ya integradas), en el mismo
+portátil (RTX 3060 Laptop), ventana **1280x800**, perfil **tablet** (`settings.cfg [interfaz]
+device_profile="tablet"`), `--rendering-method mobile`, sin vsync ni tope. "Auto" es lo que da la
+detección aquí (Mobile → Baja); "Mínima" es la **de verdad del juego** (`--quality=minimal`, nueva
+en la sonda: `WorldLook` más `GraphicsQuality.apply_runtime`), no la emulada. Con 21-36 procesos de
+Godot ajenos en marcha: comparar entre filas, no tomar el absoluto.
+
+| Escenario | Auto fps · 1 % | Mínima fps · 1 % | draw calls auto / mín. | VRAM MB auto / mín. | proceso MB auto / mín. |
+|---|---|---|---|---|---|
+| inicio | 208 · 119 | 244 · 133 | 370 / 352 | 158 / 88 | 988 / 978 |
+| media | 158 · 72 | 170 · 84 | 491 / 430 | 164 / 93 | 998 / 995 |
+| grande | 118 · 56 | 138 · 65 | 867 / 723 | 175 / 104 | 999 / 1024 |
+| tormenta | 128 · 47 | 125 · 57 | 713 / 573 | 175 / 104 | 993 / 998 |
+| combate | 170 · 83 | 173 · 81 | 438 / 422 | 176 / 102 | 990 / 1025 |
+| grande_2d | 77 · 52 | 77 · 53 | 1440 / 1427 | 93 / 93 | 940 / 910 |
+
+Mínima **emulada** en `grande` (la de §4.2): 132 fps · 64, 497 draw calls, VRAM 137 MB.
+
+- Frente a §4.1 (Mobile auto): la colonia grande pasa de 47 a **118 fps** y de 4502 a **867 draw
+  calls**; la 2D grande, de 14 a **77 fps**. La 2D es ahora la vista más lenta y la de más draw
+  calls.
+- VRAM dentro del presupuesto de tablet (≤ 200 MB); en Mínima, 88-104 MB. La RAM del proceso
+  (~1 GB, binario del editor en Vulkan) sigue el doble del presupuesto: falta medirla en el APK.
+- Perfil por script en `grande`: `ProductionManager` **784 µs** (131 en §4.3), `ContractManager`
+  164-193 µs (nuevo, con `_process` siempre activo), `WorkerWalkers` 282, `BuildingPlacer` 187. En
+  `grande_2d`, `Building2D` 1412 y `StatusBadge2D` 1048 (81 nodos cada uno).
+- La Mínima real dibuja más que la emulada (723 frente a 497 draw calls y 295 k frente a 220 k
+  primitivas): algo que la emulación apaga sigue encendido en el juego.
+- **Trampa de la sonda, arreglada**: en una máquina compartida otra ventana roba el foco y
+  `DeviceProfile` baja el tope a `fps_background` (10). Dos escenarios salieron clavados a 10 fps.
+  La sonda pone ahora `fps_background` y `fps_paused` a 0 y `ui_fps_cap = "unlimited"`.
+
+Informe completo (toque, pantallas y estas cifras): `tormenta-imperial-contexto/29_QA_TABLET.md`.
+
+#### 4.7.3 Teléfono (2026-10-26, rama `qa-telefono`)
+
+Medido **después** de las optimizaciones de §6, con `--device=phone` (perfil de
+teléfono) y ventana 1600×720 (móvil HD+ en apaisado), misma máquina y binario del
+editor, sin vsync ni tope, 15 s, semilla 1, con el cerrojo `perf.lockdir` y 5-17
+procesos de Godot ajenos. La colonia `grande` de hoy tiene 81 edificios (astilleros,
+aeródromos, granjas) y 4532 nodos: no es la de §4.1. Informe completo, con la QA
+de interfaz en 640×360, en el contexto privado (`30_QA_TELEFONO.md`).
+
+| Renderizador · calidad | Escenario | fps | 1 % | máx ms | render CPU | GPU | draw calls | prim. k | VRAM | proceso |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Compatibility · Mínima emulada | inicio | 115 | 64 | 18 | 6,5 | 6,1 | 316 | 37 | 105 | 569 |
+| | media | 107 | 15 | 643 (1 tirón) | 6,3 | 5,9 | 354 | 85 | 172 | 638 |
+| | grande | 100 | 57 | 22 | 7,1 | 6,0 | 559 | 217 | 114 | 586 |
+| | combate | 106 | 58 | 22 | 6,0 | 6,5 | 386 | 33 | 82 | 551 |
+| | grande_2d | **52** | **27** | 39 | 14,8 | 7,9 | 1342 | 28 | 174 | 641 |
+| Mobile · auto (Baja) | inicio | 326 | 187 | 16 | 1,4 | 1,1 | 331 | 56 | 165 | 1017 |
+| | media | 272 | 146 | 18 | 1,6 | 1,1 | 450 | 159 | 170 | 987 |
+| | grande | 198 | 102 | 21 | 2,4 | 1,2 | 822 | 450 | 181 | 999 |
+| | combate | 255 | 140 | 14 | 1,3 | 0,3 | 386 | 40 | 182 | 999 |
+| | grande_2d | 106 | 62 | 18 | 3,6 | 0,7 | 1348 | 27 | 95 | 893 |
+| Mobile · **Mínima del juego** | inicio | 326 | 172 | 7 | 1,4 | 0,5 | 313 | 36 | 88 | 982 |
+| | media | 198 | 100 | 22 | 2,1 | 0,7 | 389 | 108 | 94 | 984 |
+| | grande | 159 | 81 | 27 | 2,8 | 0,8 | 678 | 294 | 105 | 994 |
+| | combate | 194 | 102 | 26 | 1,7 | 0,3 | 372 | 30 | 102 | 998 |
+| | grande_2d | 104 | 64 | 16 | 3,6 | 1,3 | 1350 | 27 | 95 | 897 |
+
+- Frente a §4.1, `grande` en Compatibility Mínima pasa de 53 a 100 fps y de 2501 a
+  559 draw calls; en Mobile auto de 47 a 198 fps y de 4502 a 822 draw calls.
+- **VRAM**: Mínima 88-105 MB, dentro del presupuesto del móvil (≤ 150); "auto"
+  165-182 MB, fuera. En teléfono tiene que acabar en Mínima.
+- **La 2D sigue siendo la vista más cara** (52 fps en Compatibility frente a 100 de
+  la 3D, 1342 draw calls): `Building2D` 1,0-1,2 ms, `StatusBadge2D` 0,7-0,8 ms y
+  `StockIcon2D` por nodo. §7.3 sigue sin cumplirse.
+- **Regresión**: `ProductionManager._process` 0,43-0,60 ms por fotograma en
+  `grande` (0,13 en §4.3): recorre cada productor con `is_full()` y
+  `get_cycle_seconds()` en cada fotograma.
+- Con `--quality=minimal` siguen 21 caminantes (§7.6 dice 12): a comprobar.
+- Un tirón de 643 ms (y otro de 277) en `media` con Compatibility, sin repetir en
+  Mobile: sin identificar.
+- La sonda aprende `--device=pc|tablet|phone`, `--quality=minimal` (la Mínima real,
+  no la emulada) y anota `frames_over_50ms` y `hitches_over_100ms` (segundo y ms).
+  Ya no recrea la swapchain antes de medir: hacerlo metía un fotograma de ~250 ms en
+  Vulkan en cada medida.
 
 ---
 
@@ -612,6 +803,7 @@ mínima 151**. Este diseño parte de esa calidad y le añade lo que no es del mu
 | Rejilla (`GridOverlay`) | encendida | encendida | **apagada por defecto** | Pase transparente casi a pantalla completa |
 | Humo, polvo, brillo | quads con shader | igual | **ocultos** (grupo `building_fx`) | Transparentes y con `TIME`; son adorno |
 | Caminantes | 72 PC / 44 tablet / 26 móvil, con sombra en PC | igual | **16 / 12 / 8**, sin sombra | 0,4-0,7 ms de CPU en la colonia grande, más su dibujo |
+| Camiones (§7.8) | 12 PC / 8 tablet / 5 móvil, con sombra en PC | igual | **ninguno** (`traffic_truck_cap_minimal` = 0) | Una matriz por camión y una llamada de dibujo para todos |
 | Tope de FPS | el del jugador (§7.4) | igual | **30** por defecto | Estable mejor que alto, y menos calor y batería |
 
 Lo de la tabla lo cubre `WorldLook` (sol, entorno, escalado) más tres interruptores
@@ -793,11 +985,39 @@ con `UnitModels3D.tri_count`:
 - **Mínima**: igual que la tierra (tablero, sin sombras del sol, 0,7 de
   resolución); el agua es la misma malla del terreno, sin shader propio.
 
+### 7.8 Decoraciones restantes y tráfico (1.2): coste a ojo
+
+Rama `feat/decoraciones-y-trafico`. Sin medir con la sonda (va en la ronda final
+de pruebas); triángulos contados al hornear:
+
+| Qué | Triángulos | Llamadas de dibujo | Nota |
+|---|---|---|---|
+| 17 decoraciones 2x2 nuevas | 236-596 (media ~440) | 1 por **tipo** en el mapa (2 si brilla) | En `DecorBatch3D` como las diez de antes: cien relojes son una llamada. Sombra solo las de 1,5 m o más |
+| Plaza del Gobernador (3x3) | 916 | 1-2 por tipo | Presupuesto de edificio útil (1.500) |
+| Camión | ~400 | **1 para todos** (+ sombra en PC) | `TrafficFigures3D`: un MultiMesh, un material de shader |
+| Camiones en la calle | PC 12 / tableta 8 / móvil 5 | — | **0 en Mínima** (`traffic_truck_cap_minimal`) |
+
+- **CPU:** un solo `_process` para todos los camiones (`RoadTraffic`), apagado
+  cuando no hay ninguno; por fotograma, unas sumas y una matriz por camión en la
+  calle y una escritura del buffer. Con el tope de PC (12) es un sexto de los
+  caminantes (72, 0,4-0,7 ms en la colonia grande): del orden de 0,1 ms.
+  Rutas por BFS al salir, con caché; repaso solo con señales y cada 30 s.
+- **2D:** seis rectángulos por camión en un `_draw`, sin texturas; no se repinta
+  sin camiones en la calle.
+- **Decoraciones 2D:** primitivas en `BuildingArt2D`, horneadas en `ArtCache2D`
+  como las demás: nada por fotograma.
+- **Sin luces, sin `_process` nuevo en decoraciones, sin texturas nuevas:** el
+  molino y el dirigible están quietos (la animación por shader queda pendiente).
+- **Por medir:** la sonda con la colonia `grande` y 150 decoraciones de todos los
+  tipos (doc 21 §6.6), y `life_probe` con los camiones (`RoadTraffic.avg_frame_usec`).
+
 ---
 
 ## 8. Límites de esta medida
 
-- **Una sola máquina, y fuerte.** No hay datos de una integrada ni de un Android real.
+- **Una sola máquina, y fuerte.** No hay datos de un Android real. De una integrada,
+  desde el 2026-10-26, sí: la UHD 630 del mismo portátil (§4.7), en Vulkan; en OpenGL
+  Optimus elige siempre la NVIDIA.
   Mobile y Compatibility en esta RTX **aproximan** la carga de CPU de esos caminos,
   pero no el fill-rate ni el ancho de banda de una GPU de móvil. Lo siguiente es
   correr la sonda en el APK de QA (`--rendering-method gl_compatibility`) en el
@@ -819,3 +1039,25 @@ con `UnitModels3D.tri_count`:
   marcha, sin edificios dañados ni paneles abiertos (las ayudas y el tutorial se
   ocultan). Las obras, la ceniza sobre edificios dañados y la lista de construcción
   abierta cuestan más (§5.2, §5.5).
+
+## Coste de la 1.2: camiones, amenazas de costa y barco (2026-10-25, `integracion/v1.2b`)
+
+Medido con `tools/perf_probe.gd -- --scenario=grande --quality=minima --v12=on|off`,
+`--rendering-method gl_compatibility --rendering-driver opengl3`, 1280×720, en el PC de
+desarrollo con otros procesos de Godot abiertos (dos pasadas; la primera salió a 10 fps
+en las dos variantes por carga ajena y no cuenta). `on` = 2 amenazas pedidas (cabe 1 en
+la orilla de la colonia grande), el barco atracado y los camiones (6 en la calle);
+`off` = sin camiones, sin marcas y sin barco.
+
+| Variante | fps | 1 % bajo | p99 ms | pico proceso ms | render CPU ms | GPU ms | draw calls | primitivas | nodos | scripts con `_process` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| on  | 60 | 44 | 21,2 | 21,09 | 10,67 | 8,02 | 557 | 209 500 | 5274 | 47 |
+| off | 60 | 45 | 18,6 | 20,16 | 10,11 | 7,23 | 553 | 206 972 | 5267 | 46 |
+
+Diferencia: **+4 draw calls, ~+2 500 primitivas, +7 nodos, un `_process` más**
+(`RoadTraffic`, que se apaga solo sin camiones) y menos de 1 ms de CPU de render;
+dentro del ruido de la máquina. En la **Mínima real** del juego
+(`GraphicsQuality.is_minimal()`) los camiones son 0 (`traffic_truck_cap_minimal`); la
+sonda emula Mínima con calidad "low", así que esta tabla es el peor caso. Las marcas de
+amenaza y el barco no tienen `_process` (malla cacheada por tipo; el barco, Tweens solo
+al llegar e irse). Falta medirlo en un móvil de gama baja de verdad.

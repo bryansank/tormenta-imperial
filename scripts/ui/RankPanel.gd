@@ -49,6 +49,8 @@ var _is_open := false
 const HUB_ENTRIES := [
 	["progress", "BTN_PROGRESS", "ProgressPanel", "star"],
 	["contracts", "BTN_CONTRACTS", "ContractPanel", "check"],
+	# Volverse el Imperio (v1.2): el mapa de las islas, solo tras FIRMAR el libro.
+	["archipelago", "BTN_ARCHIPELAGO", "ArchipelagoPanel", "anchor"],
 	["log", "BTN_LOG_MENU", "NotificationPanel", "clock"],
 	["sandbox", "BTN_SANDBOX", "SandboxPanel", "wrench"],
 ]
@@ -69,6 +71,10 @@ func _ready() -> void:
 	EventBus.governor_rank_up.connect(_on_rank_up)
 	EventBus.colony_identity_changed.connect(func(_n, _s): refresh())
 	EventBus.game_load_completed.connect(refresh)
+	# Volverse el Imperio: una isla tomada puede cambiar el titulo imperial.
+	EventBus.island_conquered.connect(func(_i): refresh())
+	# Final con eleccion: firmar abre el ARCHIPIELAGO; quemar cambia el titulo.
+	EventBus.ending_chosen.connect(func(_c): refresh())
 	EventBus.game_new_started.connect(refresh)
 	get_viewport().size_changed.connect(_relayout)
 	refresh()
@@ -123,7 +129,7 @@ func _setup_ui() -> void:
 	row.add_child(_badge_flag)
 	if _cartoon():
 		# La estrella del rango delante de la cifra (docs/28 §12).
-		var star := CartoonTheme.make_glyph("star", 20 if CartoonTheme.phone else 24)
+		var star := CartoonTheme.make_glyph("star", 20 if CartoonTheme.phone else 24, Color(0, 0, 0, 0), "hud")
 		star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(star)
 	_badge_rank = UITheme.make_label("1", "section", UITheme.ACCENT)
@@ -195,7 +201,11 @@ func _setup_ui() -> void:
 
 	var edit := ModalKit.make_menu_button(Tr.t("BTN_COLONY_EDIT"), UITheme.ACCENT_DIM, open_editor)
 	edit.name = "EditColony"
-	col.add_child(edit)
+	# En telefono va en la fila de abajo, con los demas: a lo ancho, la tarjeta
+	# medía 395 de alto y se salia de un lienzo de 360 por arriba y por abajo.
+	var edit_in_hub := _cartoon() and CartoonTheme.phone
+	if not edit_in_hub:
+		col.add_child(edit)
 
 	# ── La colonia, en una fila (rediseno 2026-10): lo que salio del menu ☰ y no
 	# va en la barra de abajo. Progreso, Encargos, Registro y, en su modo,
@@ -217,6 +227,10 @@ func _setup_ui() -> void:
 		b.name = "Hub_" + id
 		_hub.add_child(b)
 		_hub_buttons[id] = b
+	if edit_in_hub:
+		edit.size_flags_horizontal = Control.SIZE_FILL
+		_hub.add_child(edit)
+		_hub.move_child(edit, 0)
 	_relayout()
 
 func _make_flag_rect(px: Vector2) -> TextureRect:
@@ -279,7 +293,7 @@ func _flush_refresh() -> void:
 func refresh() -> void:
 	var rank: int = RankManager.get_rank()
 	var flag_tex := ColonyFlag.current_texture()
-	var title := Tr.t(RankManager.get_title_key())
+	var title := _title_text()
 	_badge_flag.texture = flag_tex
 	_badge_rank.text = str(rank)
 	_badge_title.text = RankManager.get_colony_name()
@@ -289,11 +303,22 @@ func refresh() -> void:
 	if _is_open:
 		_refresh_card()
 
+## El titulo del rango y, despues de ganar, el imperial por islas conquistadas
+## (Volverse el Imperio): "Gobernador · Virrey de las Islas".
+func _title_text() -> String:
+	var title: String = Tr.t(RankManager.get_title_key())
+	var empire: Node = get_node_or_null("/root/EmpireManager")
+	if empire != null:
+		var imperial: String = String(empire.title_key())
+		if imperial != "":
+			title += " · " + Tr.t(imperial)
+	return title
+
 func _refresh_card() -> void:
 	var rank: int = RankManager.get_rank()
 	_card_flag.texture = ColonyFlag.current_texture()
 	_card_name.text = RankManager.get_colony_name()
-	_card_rank.text = Tr.t("FMT_RANK_TITLE") % [rank, Tr.t(RankManager.get_title_key())]
+	_card_rank.text = Tr.t("FMT_RANK_TITLE") % [rank, _title_text()]
 	_card_bar.value = RankManager.get_rank_progress()
 	if RankManager.is_max_rank():
 		_card_xp.text = Tr.t("LBL_RANK_MAX")
@@ -361,6 +386,31 @@ func _on_rank_up(rank: int, rewards: Dictionary) -> void:
 
 func show_rank_toast(rank: int, rewards: Dictionary) -> void:
 	EventBus.notification_posted.emit(rank_up_text(rank, rewards), "achievement", UITheme.ACCENT)
+	show_rank_stamp()
+
+## Cuanto se queda el sello ASCENDIDO sobre la insignia.
+const RANK_STAMP_SECONDS := 4.0
+
+## El sello oficial (CartoonTheme.stamp) sobre la insignia, unos segundos: el
+## momento del ascenso. Un PanelContainer y un temporizador; nada mas.
+func show_rank_stamp() -> void:
+	if not _cartoon() or _dock == null:
+		return
+	var old := _dock.get_node_or_null("RankStamp")
+	if old != null:
+		old.free()
+	var st := CartoonTheme.stamp(Tr.t("STAMP_RANK_UP"), CartoonTheme.sem("ACCENT"), true)
+	st.name = "RankStamp"
+	st.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dock.add_child(st)
+	if is_inside_tree():
+		get_tree().create_timer(RANK_STAMP_SECONDS).timeout.connect(func():
+			if is_instance_valid(st):
+				st.queue_free())
+
+## El sello del ascenso, si se ve (pruebas).
+func rank_stamp() -> Control:
+	return _dock.get_node_or_null("RankStamp") if _dock != null else null
 
 static func rank_up_text(rank: int, rewards: Dictionary) -> String:
 	var text := Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))]
@@ -400,6 +450,8 @@ static func hub_entry_available(id: String) -> bool:
 			return GameMode.sandbox_tools()
 		"contracts":
 			return GameMode.contracts_enabled()
+		"archipelago":
+			return EmpireManager.is_active()
 	return true
 
 ## Cierra la tarjeta y abre el panel de esa entrada (si ya estaba abierto, lo

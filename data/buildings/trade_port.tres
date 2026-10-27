@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "trade_port"
+display_name = "Puerto comercial"
+description = "Cada pocos minutos atraca el barco del contrabandista con tres ofertas. Va en la costa."
+grid_size = Vector2i(2, 2)
+cost_gold = 300
+cost_steel = 100
+cost_oil = 0
+cost_wood = 160
+cost_materials = {"planks": 12, "beams": 6}
+build_time = 14.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+mesh_height = 1.8
+mesh_color = Color(0.35, 0.45, 0.55, 1)
+workers_required = 2
+max_health = 260

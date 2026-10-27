@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**141 signals** in 30 categories (2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**165 signals** in the categories of `EventBus.gd` (2026-10-26, integration v1.3: + `chapter_completed`, `tithe_choice_changed` and `campaign_piece_won` of `feat/ritmo-colono`; 2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -156,6 +156,7 @@ collected ([02-economy.md](02-economy.md)).
 | `milestone_completed` | `milestone_id: String` | ProgressionManager, TechTreeManager | ProgressPanel, NotificationPanel, AudioManager |
 | `phase_advanced` | `new_phase: int` | ProgressionManager | MarketPanel, NotificationPanel, StormManager |
 | `victory_achieved` | `stats: Dictionary` | ProgressionManager | VictoryScreen, AudioManager |
+| `chapter_completed` | `chapter: int` | ProgressionManager (once per chapter and game, never on load) | ChapterScreen (I and II; III is closed by the victory) |
 
 `victory_achieved` is still the end of the game, but it is now reached **only**
 through a won Final Audit — HQ level 3 summons the siege, it does not win.
@@ -219,6 +220,7 @@ Emitted only by `CombatManager`. `side`: 0 = player, 1 = enemy.
 | `campaign_changed` | — | CombatManager | SkirmishButton, SkirmishPanel |
 | `campaign_mission_won` | domain: String, mission: int, is_boss: bool | CombatManager | RankManager, line_probe_player |
 | `campaign_completed` | domain: String | CombatManager | ProgressionManager (`try_summon_final_audit`), line_probe_player |
+| `campaign_piece_won` | domain: String | CombatManager (right after `campaign_completed`: the boss's HQ level 3 piece) | *(no listener)* |
 | `sortie_loot_gained` | `loot: Dictionary` | CombatManager | (sin oyentes: el parte lo lee de `get_last_result()`) |
 | `blueprint_unlocked` | `building_id: String` | CombatManager | (para el candado de planos de las ramas de edificios) |
 | `enemy_routed` | — | CombatManager | BattleScreen |
@@ -241,6 +243,22 @@ and shows the after-action report; `StormManager` still reads the return value o
 `auto_resolve_defense()` directly for its own toast.
 
 Full design: [15-combat.md](15-combat.md).
+
+### Coastal threats (`feat/amenazas-costa`, 1.2, docs/15 §14)
+
+Optional loot only: marks on the shore that leave on their own, doing no harm.
+
+| Signal | Args | Emitter | Listeners |
+|---|---|---|---|
+| `threats_changed` | — | ThreatManager | ThreatMarks3D, ThreatMarks2D, ThreatCard, PopulationManager (workers at a wreck) |
+| `threat_appeared` | `threat_id: int, threat_type: String, water: bool` | ThreatManager | (no listener: the notice goes through `notification_posted`) |
+| `threat_cleared` | `threat_id: int, threat_type: String` | ThreatManager | (no listener) |
+| `threat_left` | `threat_id: int, threat_type: String` | ThreatManager | (no listener) |
+| `wreck_explored` | `threat_id: int, rewards: Dictionary, loot: Dictionary` | ThreatManager | (no listener: already paid) |
+| `threat_clicked` | `threat_id: int` | BuildingPlacer, BuildingPlacer2D | ThreatCard |
+
+ThreatManager also emits `sortie_offers_changed` on every change, so MISIONES, its
+red dot and ¿QUÉ HACER? repaint without new connections. 146 signals with these six.
 
 ## Building Health
 
@@ -271,6 +289,7 @@ follow `StormCycle.Phase`.
 | `tithe_demanded` | `severity: int` | StormManager | TutorialManager |
 | `tithe_resolved` | `paid: bool, taken: Dictionary` | StormManager | StormHUD, HelperPanel, WarReportScreen, AuditDefeatScreen |
 | `storm_order_changed` | `fresh: bool` | StormManager | StormHUD |
+| `tithe_choice_changed` | `open: bool` | StormManager (la Visita: an automatic Tax offers ¡PELEAR! for a few seconds) | StormHUD |
 
 `storm_incoming` carries no severity on purpose — the warning window says the ash
 is on the horizon, and the size of the bill is only announced with `storm_started`.
@@ -375,6 +394,7 @@ listeners are what is left of the old sidebar layout.
 |--------|--------|------------|-------------|
 | `game_new_started` | — | GameManager | TutorialManager, HelperPanel, AudioManager, StormSky, NotificationPanel, SandboxPanel, TitleMenu |
 | `game_load_completed` | — | GameManager | ArmyManager, ProcessManager, StormManager, ArmyPanel, SkirmishPanel, BattleScreen, HelperPanel, AudioManager, TutorialManager, StormSky, AuditDefeatScreen, NotificationPanel, SandboxPanel, TitleMenu |
+| `game_load_progress` | `done: int, total: int` | GameManager (per building of the save while loading; 0/2..2/2 for a new game) | LoadingScreen |
 
 ## Tutorial
 
@@ -439,6 +459,52 @@ Los avisos al jugador van por `notification_posted` (nuevo encargo, cumplido, se
 acabo el plazo); la XP de rango (`contract_rank_xp`) la suma ContractManager con
 `RankManager.add_xp()`.
 
+Con un Telégrafo en pie (1.2) hay un cuarto hueco, `source = "telegraph"`
+(`ContractBoard.WIRE`): su encargo lleva además `from` (la fuente real).
+
+## Defensa y vida (1.2, `feat/edificios-defensa-vida`)
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `scrap_salvaged` | `steel: int, parts: int, lifted: int` | StormManager (`_scrap_salvage`, al acabar la Tormenta) | *(no listener: el aviso va por `notification_posted`)* |
+
+La belleza del barrio de la rama (`beauty_changed`) no entró en la 1.2.
+
+## Economía (1.2)
+
+Los emite solo `EconomyManager` (`feat/edificios-economia`): el barco del
+contrabandista del Puerto comercial, el combustible de las Centrales diésel y el
+interés de la Casa de cambio. Ver docs/03 "Economía de la 1.2".
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `smuggler_ship_arrived` | `offers: Array, port: Node` | EconomyManager (atraca) | SmugglerShip3D, SmugglerShip2D |
+| `smuggler_ship_departed` | `reason: String` (`time`, `storm`, `no_port`) | EconomyManager | SmugglerShip3D, SmugglerShip2D |
+| `smuggler_offer_taken` | `index: int, offer: Dictionary` (ya cobrado y pagado) | EconomyManager (`take_offer()`) | *(no listener)* |
+| `building_plan_bought` | `building_id: String` | EconomyManager (`grant_plan()`) | *(no listener: `RankManager.is_building_unlocked()` pregunta `has_plan()`)* |
+| `diesel_plant_fuel_changed` | `node: Node, running: bool` | EconomyManager (`burn_fuel()`) | *(no listener)* |
+| `exchange_interest_paid` | `amount: int` | EconomyManager (`pay_interest()`, Gobernador) | *(no listener)* |
+| `economy_changed` | — | EconomyManager (cualquiera de las de arriba, `load_save_data()`, `reset()`) | SmugglerPanel |
+
+Los avisos van por `notification_posted` (barco atracado, barco que zarpa por la
+Ceniza, Central sin combustible). EconomyManager escucha `workers_changed` para pedir el
+recuento de áreas (`ProductionManager.request_area_refresh()`).
+## Volverse el Imperio
+
+Los emite solo `EmpireManager`, que publica lo que devuelve el modelo puro
+`Archipelago` ([06-progression-victory.md](06-progression-victory.md) §Volverse el
+Imperio). `island_id` es una clave de `GameConfig.empire_islands` ("gulls", "ember",
+"fog", "wind", "iron", "ash").
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `empire_phase_started` | — | EmpireManager (`_maybe_start()`: al ganar o al cargar una partida ya ganada) | GameManager (autosave) |
+| `empire_changed` | — | EmpireManager (misión, isla, tributo, descanso terminado, carga) | ArchipelagoPanel, SkirmishPanel |
+| `conquest_mission_won` | `island_id: String, mission: int, conquered: bool` | EmpireManager | RankManager (XP `conquest_mission`), GameManager (autosave) |
+| `island_conquered` | `island_id: String` | EmpireManager | RankManager (XP `island_conquered`), RankPanel, ConstructionMenu, AudioManager (`rank_up`) |
+| `archipelago_conquered` | — | EmpireManager | *(no listener: el aviso va por `notification_posted`)* |
+| `empire_tribute_paid` | `amounts: Dictionary` (ya en la bolsa) | EmpireManager | GameManager (autosave) |
+
 ## Orphan signals
 
 Declared in `EventBus.gd` but not wired on one or both sides. Most are suppressed
@@ -487,3 +553,15 @@ Not on this list, despite looking thin in the tables above: `process_started`,
 `mining_started`, `process_cancelled`, `construction_started` and
 `building_upgrade_started` each have exactly one consumer, `BuildingStatusBadge`,
 which connects through a `var bus := EventBus` alias. They are wired.
+
+## Final con elección (1.2, `integracion/v1.2b`)
+
+Decisión de Bryan (2026-10-25): tras ganar el Ataque Final, el libro del Impuesto
+queda en la mesa y el jugador elige (docs/06 §Final con elección).
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `ending_chosen` | `choice: String` (`"sign"` firma, `"burn"` quema) | EmpireManager (`choose_ending()`, una vez por partida) | RankPanel (título y entrada ARCHIPIÉLAGO) |
+
+Firmar arranca la fase con `empire_phase_started` (como antes); quemar avisa por
+`notification_posted` (`MSG_END_BURN`). Las dos emiten `empire_changed`.

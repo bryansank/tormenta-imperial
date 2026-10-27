@@ -19,6 +19,7 @@ extends Node
 const SAVE_PATH := "user://save_game.json"
 const SaveParking := preload("res://tests/save/save_parking.gd")
 const ViewMode := preload("res://scripts/view2d/ViewMode.gd")
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 const BACKUP_PATH := "user://save_game.perf_probe.bak"
 const OUT_DIR := "res://reports/perf"
 const CSV_NAME := "perf_runs.csv"
@@ -40,6 +41,9 @@ var _targets: Array = []     # {node, label, kind}
 var _cost: Dictionary = {}   # label -> {"us": int, "calls": int, "kind": String}
 var _rescan_at := 0
 
+## Lo que monto _apply_v12 (sale en la tabla).
+var _v12_note := ""
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = -1000
@@ -55,6 +59,12 @@ func _run() -> void:
 	DisplayServer.window_set_size(options.get("size", Vector2i(1280, 720)))
 	if not bool(options.get("vsync", false)):
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		# Sin tope tampoco al perder el foco ni en pausa: en una maquina compartida
+		# otra ventana roba el foco y DeviceProfile bajaria a fps_background (10),
+		# que es lo que salio en el combate de la tanda de tablet del 2026-10-25.
+		GameConfig.ui_fps_cap = "unlimited"
+		GameConfig.fps_background = 0
+		GameConfig.fps_paused = 0
 		Engine.max_fps = 0
 	await _frames(5)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
@@ -64,6 +74,13 @@ func _run() -> void:
 	_saved_view = GameConfig.ui_view_mode
 	_saved_quality = GameConfig.ui_graphics_quality
 	GameConfig.ui_graphics_quality = "low" if quality == "minima" else quality
+	# --device=phone|tablet|pc: el perfil manda en la escala de la interfaz y en el
+	# tope de caminantes. apply_all() pone el tope de FPS del perfil: se quita otra vez.
+	if String(options.get("device", "")) != "":
+		GameConfig.ui_device_profile = String(options["device"])
+		DeviceProfile.apply_all()
+		if not bool(options.get("vsync", false)):
+			Engine.max_fps = 0
 	ViewMode.set_preference(view)
 	_rng.seed = int(options.get("seed", 1)) * 7919 + 17
 	_write_save(scenario)
@@ -77,6 +94,15 @@ func _run() -> void:
 		await _frames(30)
 	if quality == "minima":
 		_apply_minima(view)
+	elif quality == "minimal":
+		# La Minima de verdad del juego (Ajustes): WorldLook ya la leyo al cargar la
+		# escena; lo que va fuera de el (humo, rejilla, caminantes) se aplica aqui
+		# como lo haria DeviceProfile al cambiarla.
+		GraphicsQuality.apply_runtime(get_tree())
+		var walkers := _walkers()
+		if walkers and walkers.has_method("reconcile"):
+			walkers.reconcile()
+	await _apply_v12(String(options.get("v12", "on")))
 	_set_camera(scenario, view)
 	var rid := get_viewport().get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(rid, true)
@@ -84,6 +110,14 @@ func _run() -> void:
 	_dismiss_overlays()
 	if quality == "minima":
 		_hide_fx()
+	# El perfil (o la Minima de PC) puede haber vuelto a poner su tope de FPS.
+	# Cambiar el vsync recrea la swapchain (en Vulkan, un fotograma de ~250 ms):
+	# solo si alguien lo volvio a encender, y con un segundo de margen.
+	if not bool(options.get("vsync", false)):
+		Engine.max_fps = 0
+		if DisplayServer.window_get_vsync_mode() != DisplayServer.VSYNC_DISABLED:
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+			await _seconds(1.0)
 	var m := await _measure(float(options.get("seconds", 15.0)), rid)
 	var prof: Array = []
 	if float(options.get("profile", 4.0)) > 0.0:
@@ -104,11 +138,22 @@ func _measure(seconds: float, rid: RID) -> Dictionary:
 	var maxs := {"proc": 0.0, "phys": 0.0, "draw": 0.0, "obj": 0.0, "prim": 0.0, "gpu": 0.0, "cpu_r": 0.0}
 	var walkers := _walkers()
 	var walk_sum := 0.0
+	# DeviceProfile vuelve a poner su tope (60 en PC, 30 en pausa, 10 sin foco)
+	# cuando cambia la pausa o el foco: aqui se quita en cada fotograma y se
+	# cuentan los fotogramas en que estaba puesto o la ventana no tenia el foco.
+	var capped := 0
+	var unfocused := 0
+	Engine.max_fps = 0
 	var start := Time.get_ticks_usec()
 	var prev := start
 	var end_at := start + int(seconds * 1000000.0)
 	while true:
 		await get_tree().process_frame
+		if Engine.max_fps != 0:
+			capped += 1
+			Engine.max_fps = 0
+		if not DisplayServer.window_is_focused():
+			unfocused += 1
 		var now := Time.get_ticks_usec()
 		frame_ms.append(float(now - prev) / 1000.0)
 		prev = now
@@ -139,9 +184,24 @@ func _measure(seconds: float, rid: RID) -> Dictionary:
 	var mean := {}
 	for k in sums:
 		mean[k] = sums[k] / maxf(1.0, float(n))
+	# Tirones: fotogramas largos y en que segundo de la medida caen (un pico
+	# periodico, como un guardado o un tick, sale con el mismo intervalo).
+	var hitches: Array = []
+	var over_50 := 0
+	var acc := 0.0
+	for ms in frame_ms:
+		acc += float(ms)
+		if float(ms) > 50.0:
+			over_50 += 1
+		if float(ms) > 100.0 and hitches.size() < 20:
+			hitches.append([snappedf(acc / 1000.0, 0.1), snappedf(float(ms), 0.1)])
 	return {
 		"frames": n,
+		"frames_over_50ms": over_50,
+		"hitches_over_100ms": hitches,
 		"seconds": elapsed_s,
+		"frames_capped": capped,
+		"frames_unfocused": unfocused,
 		"fps_mean": float(n) / maxf(0.001, elapsed_s),
 		"frame_ms_mean": elapsed_s * 1000.0 / maxf(1.0, float(n)),
 		"frame_ms_p50": float(sorted[n / 2]),
@@ -427,6 +487,11 @@ func _city(width: int, blocks: int, plan: Array, slots: Array, era: int) -> Dict
 	_shuffle(order)
 	slots = slots.duplicate()
 	_shuffle(slots)
+	# Las casas primero: desde que los topes (astilleros, aerodromos...) dan mas
+	# edificios que esquinas libres, el corte de abajo dejaba 4 casas de 10 y la
+	# colonia grande sin obreros ("sin trabajadores" en casi todo, sin caminantes).
+	var homes := slots.filter(func(s): return s == "house")
+	slots = homes + slots.filter(func(s): return s != "house")
 	var core_o := Vector2i(base + center * BLOCK + 1, base + center * BLOCK + 1)
 	buildings.append({"id": "nucleo", "cell_x": core_o.x, "cell_y": core_o.y})
 	var bi := 0
@@ -533,6 +598,59 @@ func _set_camera(scenario: String, view: String) -> void:
 		var cam := scene.get_node_or_null("MonumentalCamera")
 		if cam and cam.has_method("set_state"):
 			cam.set_state({"target_x": 0.0, "target_y": 0.0, "yaw": 0.0, "distance": d})
+
+# ── La 1.2: camiones, amenazas de costa y el barco (docs/26) ─────────
+
+## "on": dos amenazas en la orilla (una en tierra y otra en el agua) y el barco
+## atracado junto a un Puerto (si hay); los camiones salen solos de los
+## extractores. "off": fuera camiones, marcas y barco, para medir la diferencia.
+func _apply_v12(mode: String) -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var placer := scene.get_node_or_null("BuildingPlacer")
+	if mode == "off":
+		if placer != null:
+			for n in placer.get_children():
+				if String(n.name) in ["RoadTraffic", "SmugglerShip3D", "SmugglerShip2D"]:
+					n.queue_free()
+			for trucks in scene.find_children("Trucks", "", true, false):
+				trucks.queue_free()
+		for marks in scene.find_children("ThreatMarks", "", true, false):
+			marks.queue_free()
+		GameConfig.threats_enabled = false
+		ThreatManager.reset()
+		EconomyManager.load_save_data({})
+		await _frames(5)
+		_v12_note = "off"
+		return
+	var spots: Dictionary = ThreatManager.free_spots()
+	var threats: Array = []
+	var land: Array = spots.get("land", [])
+	var sea: Array = spots.get("sea", [])
+	if not land.is_empty():
+		var c: Vector2i = land[land.size() / 3]
+		threats.append({"id": 1, "type": "vanguard", "x": c.x, "y": c.y, "water": false, "seed": 5, "era": 3,
+			"born": 0.0, "ends": 99999.0, "state": "idle", "explore_ends": 0.0, "seen": true})
+	if not sea.is_empty():
+		var c2: Vector2i = sea[(sea.size() * 2) / 3]
+		threats.append({"id": 2, "type": "raiders", "x": c2.x, "y": c2.y, "water": true, "seed": 6, "era": 3,
+			"born": 0.0, "ends": 99999.0, "state": "idle", "explore_ends": 0.0, "seen": true})
+	ThreatManager.load_save_data({"threats": threats, "next_spawn_at": 99999.0, "next_id": 3})
+	var offers := [
+		{"kind": "parts", "give": {"parts": 2}, "price": 120, "sold": false},
+		{"kind": "material", "give": {"planks": 8}, "price": 104, "sold": false},
+		{"kind": "buy", "ask": {"wood": 40}, "pay": 130, "sold": false},
+	]
+	EconomyManager.load_save_data({"ship": {"wait_left": 300.0, "docked_left": 99999.0, "offers": offers, "visits": 1}})
+	var port: Node = EconomyManager.get_any_port()
+	if port != null:
+		EventBus.smuggler_ship_arrived.emit(offers, port)
+	await _frames(10)
+	var traffic := placer.get_node_or_null("RoadTraffic") if placer != null else null
+	_v12_note = "on: amenazas=%d barco=%s camiones=%s" % [threats.size(), str(port != null),
+		str(traffic.truck_count()) if traffic != null and traffic.has_method("truck_count") else "?"]
+	print("perf_probe: v12 " + _v12_note)
 
 func _walkers() -> Node:
 	var scene := get_tree().current_scene
@@ -660,6 +778,7 @@ func _print_table(r: Dictionary) -> void:
 	print("perf_probe: GPU '%s' (%s), %s / %s, calidad %s -> %s, ventana %s, scaling_3d %.2f" % [
 		r["gpu"], r["gpu_vendor"], r["renderer"], r["driver"], r["quality"], r["quality_effective"], r["window"], r["scaling_3d"]])
 	print("perf_probe: sembrado %s" % JSON.stringify(r["seeded"]))
+	print("perf_probe: v12 %s" % _v12_note)
 	print("| escenario | fps | 1 % bajo | p99 ms | pico proceso ms | pico fisica ms | render CPU ms | resto CPU ms | GPU ms | draw calls | objetos | primitivas | nodos | memoria est. MB | video MB | proceso MB |")
 	print("| %s | %.0f | %.0f | %.1f | %.2f | %.2f | %.2f | %.2f | %.2f | %.0f | %.0f | %.0f | %d | %.0f | %.0f | %.0f |" % [
 		r["scenario"], m["fps_mean"], m["fps_1pct_low"], m["frame_ms_p99"], m["process_peak_ms"], m["physics_peak_ms"],

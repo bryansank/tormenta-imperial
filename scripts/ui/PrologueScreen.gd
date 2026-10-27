@@ -37,8 +37,11 @@ const CT := preload("res://scripts/ui/CartoonTheme.gd")
 ## pagina lleva sello de tampon, PRO_<id>_STAMP. La "4" (2026-10-04) es la hoja
 ## final antes de jugar: que vamos a hacer (construir desde cero, economia,
 ## soldados, pelear contra el Imperio), sin instrucciones de botones.
+## Tutorial corto (decision de Bryan, 2026-10-24): el lore se queda en DOS folios
+## cortos (la Tormenta y quienes somos); "De que va" (AboutScreen) va delante. Los
+## folios 1 y 4 siguen en Tr por si vuelven.
 const VARIANTS := {
-	"full": ["1", "2", "3", "4"],
+	"full": ["2", "3"],
 	# Constructor: no hay Tormenta ni Diezmo que explicar. La portada y un cierre
 	# propio: el expediente esta "en tramite" y no se despacha ceniza.
 	"short": ["1", "B"],
@@ -379,6 +382,9 @@ func _build() -> void:
 	mid.add_child(_dots)
 	_hint = CT.label("", "small", CT.c("hud", "TEXT_DIM"))
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# La pista baja a dos lineas antes que empujar SIGUIENTE fuera de la pantalla
+	# (telefono en vertical: el pie salia 210 px por la derecha).
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mid.add_child(_hint)
 
 	# Atras: redondo, solo la flecha (el nombre al mantener pulsado).
@@ -389,8 +395,14 @@ func _build() -> void:
 	_back_btn.pressed.connect(prev_page)
 	footer.add_child(_back_btn)
 
-	_next_btn = CT.text_button(Tr.t("BTN_PROLOGUE_NEXT"), "next", "primary", CT.menu_h("btn"))
+	# Telefono en vertical: solo la flecha (el nombre al mantener pulsado); con
+	# "Siguiente" escrito el pie salia 90 px por la derecha en 400 de ancho.
+	var arrow_only := CT.portrait()
+	_next_btn = CT.text_button("" if arrow_only else Tr.t("BTN_PROLOGUE_NEXT"), "next", "primary", CT.menu_h("btn"))
 	_next_btn.name = "NextButton"
+	if arrow_only:
+		_next_btn.set_meta("text", Tr.t("BTN_PROLOGUE_NEXT"))
+		_next_btn.tooltip_text = Tr.t("BTN_PROLOGUE_NEXT")
 	_next_btn.pressed.connect(next_page)
 	footer.add_child(_next_btn)
 
@@ -423,6 +435,8 @@ func _set_button_text(b: Button, text_s: String) -> void:
 	for l in b.find_children("*", "Label", true, false):
 		(l as Label).text = text_s
 		return
+	# Solo icono (vertical): el nombre va en el globo.
+	b.tooltip_text = text_s
 
 func _rebuild_dots() -> void:
 	for d in _dots.get_children():

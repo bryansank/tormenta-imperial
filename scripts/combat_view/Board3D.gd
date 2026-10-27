@@ -98,6 +98,8 @@ var _scene := "land"
 ## El terreno del encuentro (BoardLayout3D.terrain_of): casilla -> "land" /
 ## "water" / "shore". Vacio = todo tierra. Solo se pinta: las reglas son suyas.
 var _terrain_map: Dictionary = {}
+## Casillas de cobertura del Bastion (Encounter.cover): solo se pintan (sacos).
+var _cover_cells: Array = []
 ## "front" o "board" (STYLES). Lo pone BattleScreen con la preferencia.
 var _style := STYLE_BOARD
 var _seed := 1
@@ -165,6 +167,7 @@ func setup(encounter, opts: Dictionary = {}) -> void:
 	_scene = String(opts.get("scene", Terrain.SCENE_LAND))
 	_seed = int(opts.get("seed", 1))
 	_terrain_map = Layout.terrain_of(encounter)
+	_cover_cells = Layout.cover_of(encounter)
 	var st := String(opts.get("style", _style))
 	_style = st if st in STYLES else STYLE_BOARD
 	_build_terrain()
@@ -245,7 +248,7 @@ func _place_toys() -> void:
 			toy.position = _world_of(_cell_of[uid])
 
 func _build_terrain() -> void:
-	_terrain.mesh = Terrain.build(board, _seed, _simple, _scene, is_front(), _terrain_map)
+	_terrain.mesh = Terrain.build(board, _seed, _simple, _scene, is_front(), _terrain_map, _cover_cells)
 
 ## Lo que cambia entre las dos vistas ademas del suelo: las marcas de casilla
 ## (en el frente no hay) y el fondo (en el frente, un cielo de bruma en vez de

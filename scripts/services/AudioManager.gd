@@ -27,10 +27,15 @@ const MUSIC_MANIFEST := {
 	"victory": "victory",
 	# Tema de combate propio: "Battle Theme A" de cynicmusic (CC0, OpenGameArt).
 	"combat": "combat",
+	# Pista del asedio (Auditoria Final): "Basilisk Boss Battle Loop" de beardalaxy
+	# (CC0, OpenGameArt). Suena en vez de `combat` mientras dura el asedio.
+	"audit": "audit",
 }
 
 ## Music key the combat theme is stored under; encounters cross-fade to it.
 const MUSIC_COMBAT_KEY := "combat"
+## Tema de las oleadas de la Auditoria Final (desde `final_audit_started`).
+const MUSIC_AUDIT_KEY := "audit"
 
 ## Cuatro bucles cortos (40 s, OGG en streaming); suena uno, y dos solo mientras
 ## se funden. `day` = olas + pajaros; `night` = grillos + olas suaves, sin
@@ -216,7 +221,12 @@ const IMPACT_SFX_BY_DOMAIN := {
 ## louder and would eat every voice in the pool (GameConfig.audio_sfx_voices).
 const SFX_BURST_GAP_MSEC := 60
 
-var _streams: Dictionary = {}          # key → AudioStream (only for files that exist)
+var _streams: Dictionary = {}          # key → AudioStream ya cargado (se llena al usarlo)
+## key → ruta del clip que existe. Los clips se cargan al primer uso (_stream) o,
+## al arrancar, los carga por hilos la pantalla de carga (stream_paths /
+## adopt_streams): cargar los ~55 al crear el autoload costaba 120-210 ms con el
+## juego aun sin pintar nada (docs/19 §14).
+var _paths: Dictionary = {}
 var _sfx_players: Array[AudioStreamPlayer] = []
 var _sfx_next: int = 0
 var _sfx_last_msec: Dictionary = {}    # key → Time.get_ticks_msec() of its last play
@@ -230,6 +240,7 @@ var _board_open: bool = false          # hay un tablero de combate abierto (ambi
 var _hooked_buttons: Dictionary = {}   # instance_id → true: botones ya enganchados
 var _current_music_key: String = ""
 var _music_before_combat: String = ""  # what was playing when the first encounter opened
+var _audit_siege: bool = false         # hay un asedio en curso: el tablero suena a `audit`
 var _combat_session: int = 0           # bumps per encounter_started; guards the deferred restore
 
 func _ready() -> void:
@@ -239,10 +250,9 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_ensure_buses()
 	_build_players()
-	_load_manifest(MUSIC_MANIFEST, MUSIC_DIR)
-	_load_manifest(AMBIENT_MANIFEST, AMBIENT_DIR)
-	_make_ambient_loop()
-	_load_manifest(SFX_MANIFEST, SFX_DIR)
+	_index_manifest(MUSIC_MANIFEST, MUSIC_DIR)
+	_index_manifest(AMBIENT_MANIFEST, AMBIENT_DIR)
+	_index_manifest(SFX_MANIFEST, SFX_DIR)
 	_apply_volumes()
 	_connect_events()
 	_hook_ui_sounds()
@@ -280,30 +290,62 @@ func _build_players() -> void:
 		add_child(a)
 		_ambient_players[key] = a
 
-func _load_manifest(manifest: Dictionary, dir: String) -> void:
+func _index_manifest(manifest: Dictionary, dir: String) -> void:
 	for key in manifest:
 		var base_path: String = dir + String(manifest[key])
 		for ext: String in [".ogg", ".wav", ".mp3"]:
 			var path: String = base_path + ext
 			if ResourceLoader.exists(path):
-				var stream: Resource = load(path)
-				if stream is AudioStream:
-					_streams[key] = stream
+				_paths[key] = path
 				break
+
+## Si hay clip instalado para `key` (cargado o no).
+func has_stream(key: String) -> bool:
+	return _paths.has(key)
+
+## El clip de `key`, cargandolo la primera vez; null si no esta instalado.
+func _stream(key: String) -> AudioStream:
+	var cached: AudioStream = _streams.get(key)
+	if cached != null:
+		return cached
+	var path: String = _paths.get(key, "")
+	if path == "":
+		return null
+	var stream := load(path) as AudioStream
+	if stream == null:
+		_paths.erase(key)
+		return null
+	if AMBIENT_MANIFEST.has(key):
+		_make_loop(stream)
+	_streams[key] = stream
+	return stream
+
+## Las rutas de todos los clips instalados, sin repetir (dos claves pueden
+## compartir fichero). La pantalla de carga las carga por hilos.
+func stream_paths() -> PackedStringArray:
+	var out := PackedStringArray()
+	for key in _paths:
+		var p: String = _paths[key]
+		if not out.has(p):
+			out.append(p)
+	return out
+
+## Recoge los clips que la pantalla de carga ya dejo en memoria (cache de
+## ResourceLoader): no vuelve a leer nada del disco.
+func adopt_streams() -> void:
+	for key in _paths:
+		if not _streams.has(key) and ResourceLoader.has_cached(_paths[key]):
+			_stream(key)
 
 ## Los bucles de ambiente se marcan en bucle aqui, sin depender de como los
 ## importe el editor (el reinicio en `finished` queda de red por si acaso).
-func _make_ambient_loop() -> void:
-	for key in AMBIENT_MANIFEST:
-		var stream: AudioStream = _streams.get(key)
-		if stream == null:
-			continue
-		if stream is AudioStreamWAV:
-			var wav := stream as AudioStreamWAV
-			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
-			wav.loop_end = wav.data.size() / (4 if wav.stereo else 2)
-		elif "loop" in stream:
-			stream.set("loop", true)
+func _make_loop(stream: AudioStream) -> void:
+	if stream is AudioStreamWAV:
+		var wav := stream as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = wav.data.size() / (4 if wav.stereo else 2)
+	elif "loop" in stream:
+		stream.set("loop", true)
 
 # ── Volume control (public — wire to a settings UI later) ─────────────
 
@@ -400,7 +442,7 @@ func set_master_volume(linear: float) -> void:
 
 ## Plays a one-shot SFX by manifest key. No-op if the clip is not installed.
 func play_sfx(key: String) -> void:
-	var stream: AudioStream = _streams.get(key)
+	var stream: AudioStream = _stream(key)
 	if stream == null:
 		return
 	if not _burst_guard_allows(key, Time.get_ticks_msec()):
@@ -426,7 +468,7 @@ func _burst_guard_allows(key: String, now_msec: int) -> bool:
 func play_music(key: String) -> void:
 	if key == _current_music_key:
 		return
-	var stream: AudioStream = _streams.get(key)
+	var stream: AudioStream = _stream(key)
 	if stream == null:
 		return
 	if not GameConfig.audio_music_enabled:
@@ -479,7 +521,7 @@ func set_ambient(key: String) -> void:
 	for k in _ambient_players:
 		var p: AudioStreamPlayer = _ambient_players[k]
 		if k == key:
-			var stream: AudioStream = _streams.get(k)
+			var stream: AudioStream = _stream(k)
 			if stream == null:
 				continue
 			if same and p.playing:
@@ -591,7 +633,12 @@ func _connect_events() -> void:
 	EventBus.governor_rank_up.connect(_on_rank_up)
 	# Final Audit.
 	EventBus.final_audit_summoned.connect(_on_final_audit_summoned)
+	EventBus.final_audit_started.connect(_on_final_audit_started)
+	EventBus.final_audit_lost.connect(_on_final_audit_ended)
 	EventBus.storm_halted_forever.connect(_on_storm_halted_forever)
+	EventBus.storm_halted_forever.connect(_on_final_audit_ended)
+	# Volverse el Imperio: una isla tomada suena como un ascenso (sin sonido nuevo).
+	EventBus.island_conquered.connect(func(_i): play_sfx("rank_up"))
 	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
 	EventBus.storm_phase_changed.connect(_on_storm_phase_changed)
 	# Dia y noche (DayClock): de noche cambia el ambiente, nada mas.
@@ -656,6 +703,7 @@ func _on_game_started() -> void:
 	_storm_phase = _current_storm_phase()
 	_night = _current_is_night()
 	_board_open = CombatManager.is_board_open()
+	_audit_siege = false
 	start_ambient()
 	# Default to Era 1 music; era_advanced switches tracks as the player progresses.
 	if _current_music_key.is_empty():
@@ -666,9 +714,9 @@ func _on_game_started() -> void:
 func _on_encounter_started(_index: int, _is_boss: bool) -> void:
 	_combat_session += 1
 	play_sfx("combat_start")
-	if _current_music_key != MUSIC_COMBAT_KEY:
+	if not _is_combat_music(_current_music_key):
 		_music_before_combat = _current_music_key
-	play_music(MUSIC_COMBAT_KEY)
+	play_music(MUSIC_AUDIT_KEY if _audit_siege else MUSIC_COMBAT_KEY)
 	_board_open = true
 	_refresh_ambient()
 
@@ -747,6 +795,17 @@ func _on_expedition_ended(result: int, _rewards: Dictionary, _casualties: Dictio
 
 func _on_rank_up(_rank: int, _rewards: Dictionary) -> void:
 	play_sfx("rank_up")
+
+func _is_combat_music(key: String) -> bool:
+	return key == MUSIC_COMBAT_KEY or key == MUSIC_AUDIT_KEY
+
+## El asedio empieza: las oleadas suenan a `audit` hasta que se pierde o se gana.
+func _on_final_audit_started(_waves: int = 0) -> void:
+	_audit_siege = true
+
+func _on_final_audit_ended(_wave: int = 0) -> void:
+	_audit_siege = false
+	_restore_music_after_combat()
 
 func _on_final_audit_summoned(_a = null, _b = null, _c = null) -> void:
 	play_sfx("audit_summoned")
@@ -869,7 +928,7 @@ func _on_ui_tab_clicked(_tab: int, bar: TabBar) -> void:
 ## the combat theme is actually on: if victory (or a future storm theme) took
 ## over the bus during the fight, that track stays.
 func _restore_music_after_combat() -> void:
-	if _current_music_key != MUSIC_COMBAT_KEY:
+	if not _is_combat_music(_current_music_key):
 		return
 	play_music(_music_key_after_combat())
 
@@ -877,6 +936,6 @@ func _restore_music_after_combat() -> void:
 ## mid-expedition); any other theme that was playing before is resumed as-is.
 func _music_key_after_combat() -> String:
 	var previous := _music_before_combat
-	if previous.is_empty() or previous.begins_with("era_") or previous == MUSIC_COMBAT_KEY:
+	if previous.is_empty() or previous.begins_with("era_") or _is_combat_music(previous):
 		return "era_%d" % clampi(ProgressionManager.current_era, 1, 3)
 	return previous

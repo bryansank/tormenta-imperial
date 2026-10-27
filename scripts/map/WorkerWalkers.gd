@@ -110,12 +110,31 @@ func _ready() -> void:
 	EventBus.storm_phase_changed.connect(_on_storm_phase)
 	EventBus.game_load_completed.connect(_on_load)
 	EventBus.day_phase_changed.connect(_on_day_phase)
+	# La calidad (Minima recorta el tope a life_figure_cap_minimal) cambia en
+	# marcha: DeviceProfile aplica el tope nuevo y aqui se rehace el dibujante y
+	# se reparte otra vez. Antes no se enteraba nadie: con Minima seguian las 21
+	# figuras de Baja hasta el repaso de 30 s (QA de telefono, 2026-10-26), y al
+	# subir de Minima el dibujante se quedaba en 12 hasta recargar la escena.
+	EventBus.graphics_quality_changed.connect(func(_q: String): apply_figure_cap.call_deferred())
 	_on_load()
 	if _layer != null:
-		_figures = Figures2D.new() if _is_2d else Figures3D.new()
-		_figures.name = "Figures"
-		_layer.add_child(_figures)
-		_figures.setup(figure_cap())
+		_make_figures()
+
+func _make_figures() -> void:
+	_figures = Figures2D.new() if _is_2d else Figures3D.new()
+	_figures.name = "Figures"
+	_layer.add_child(_figures)
+	_figures.setup(figure_cap())
+
+## Pone el tope de figuras de ahora (perfil y calidad): rehace el dibujante si
+## su capacidad ya no vale y reparte en el acto. Publico para la sonda.
+func apply_figure_cap() -> void:
+	var cap := figure_cap()
+	if _layer != null and _figures != null and int(_figures.get("_cap")) != maxi(1, cap):
+		_layer.remove_child(_figures)
+		_figures.queue_free()
+		_make_figures()
+	reconcile()
 
 func _mark_dirty(_a: Variant = null, _b: Variant = null) -> void:
 	_dirty = true

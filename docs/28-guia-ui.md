@@ -1,5 +1,12 @@
 # 28 · Guía de estilo de la interfaz (rediseño 2026-10)
 
+> **2026-10-25: la piel cambió.** La estructura de esta guía (pantallas, tamaños,
+> barra de abajo, avisos, teléfono) sigue en pie, pero los colores, las fuentes
+> y la forma de los botones de aquí (crema, Baloo 2 / Nunito Sans, pastillas con
+> labio) los sustituye la piel dieselpunk "D · Mezcla sobria":
+> [21-interfaz-y-dispositivos.md §17](21-interfaz-y-dispositivos.md) y
+> [24-paleta.md](24-paleta.md).
+
 Bryan: *"las interfaces se ven demasiado feas, la fuente, los textos muy feos y
 sobrecargados, los botones no se entienden bien"*, *"en teléfonos pequeños se ve
 feo y sobrecargado"* y *"las alertas se sobreponen a todo"*. Esta guía es la
@@ -527,3 +534,72 @@ serie (`GameConfig.ui_helper_visible`); §12 propone apagarlos.
   el ☰ mientras se ve (no tiene X que apartar); el paso a paso de `CartoonPicker`
   pide el ancho de su opción más larga (96-170) y parte en dos líneas antes que
   poner puntos; la cabecera de ENTRENAR deja 22 de margen a la derecha.
+
+## 20. Pantallas de la 1.2 (integración `integracion/v1.2b`, 2026-10-25)
+
+Las ramas de la 1.2 se escribieron con el estilo viejo; al integrarlas pasaron a esta
+guía. Capturas: `tools/v12_probe.gd` (640×360 teléfono y 1280×720 PC,
+`docs/media/dev/v12/`).
+
+| Pantalla | Cómo queda |
+|---|---|
+| **El barco** (`SmugglerPanel`) | `modal_window` con cinta de latón, velo y ✕ (dodge del ☰); arriba el barco dibujado y "El barco zarpa en 1:20"; una tarjeta por oferta: qué es (palabra de color), [icono] cifra (`cost_row`, en rojo lo que falta) y TRATO HECHO verde, gris con su porqué al mantener; el pie solo en PC |
+| **Amenaza de costa** (`ThreatCard`) | Ficha lateral a la derecha sin velo (la marca se sigue viendo), debajo del ☰ y encima de la barra; cinta de una palabra (AMENAZA roja, PECIO azul) y el nombre dentro; reloj, discos de enemigos, Favorable/Difícil, botín en iconos; ¡AL ATAQUE! o EXPLORAR fijos abajo; el resto en un scroll |
+| **MISIONES · Ataques rápidos** | Las amenazas libres son pastillas más (ancla en el mar, tormenta en tierra) y los pecios, una fila con EXPLORAR; la pestaña cuenta incursiones + amenazas |
+| **MISIONES · IMPERIO** | Pestaña con estrella (solo con la fase); pastillas por isla (azul la elegida), el recorrido de campaña, el candado y VER EL ARCHIPIÉLAGO; jefe y "toma la isla" como líneas con icono |
+| **El archipiélago** (`ArchipelagoPanel`) | Ventana azul: el Sargento (cara quieta, sin mover la boca) y su frase arriba; el mapa a la izquierda (en teléfono solo se nombra la isla elegida, las demás "n/m"); la ficha de la isla a la derecha con su scroll y PREPARAR EL ASALTO verde (gris con el candado) |
+| **Final con elección** (`VictoryScreen`) | Victoria → EL LIBRO (verde) → la mesa: dos tarjetas lado a lado con la cara del instructor, su frase y FIRMAR (latón) / QUEMAR (naranja) → el final (cinta latón "AHORA FIRMAS TÚ" o verde "LA ISLA ES LIBRE") con la última palabra del otro instructor |
+
+Todas sin `Tween` ni animación, el ☰ apartado de la ✕ y nada fuera de la ventana en
+640×360 (lo largo va en scroll o al mantener pulsado).
+
+## 21. FABRICAR: recetas como tarjetas grandes (`feat/recetas-tarjetas`, 2026-10-25)
+
+Bryan: *"no se entiende bien qué se puede construir/fabricar"*. En la ficha de
+cualquier edificio con procesos (Aserradero, Mina, Fundición, Refinería,
+Carpintería, Muelle, el Núcleo) y en la de un yacimiento, la sección se llama
+**FABRICAR** (yacimiento: **SACAR A MANO**; `RCP_SECTION_<ID>` permite el verbo
+propio de un edificio) y va antes de MEJORAR.
+
+- **Una receta = una tarjeta** (`ProcessCard`): nombre; `[icono entrada ×N] →
+  [icono salida ×N]` con iconos de 44 (34 en teléfono) y cifras en letra de
+  título, y al final el reloj con el tiempo (y los obreros, si ocupa); el
+  selector **×1 / ×5 / MÁX** (azul la elegida) elige cuántas tandas suma cada
+  toque; el botón verde con el **verbo** ("SERRAR ×1", "FUNDIR ×5") las suma a
+  la cola (`ProcessManager.enqueue_process`, se cobra al encolar).
+- **La que trabaja**: borde de latón, "En cola: 7" con −1 y Vaciar, y la barra
+  de la tanda ("Tanda 2 de 7 · 12 s") con cancelar (✕ roja; lo que devuelve, al
+  mantener). Las demás del mismo edificio: verbo gris y "Ocupado: …".
+- **Bloqueada** (pide o da un recurso o material que aún no existe): tarjeta
+  apagada con candado y el porqué en una frase, "Falta acero: llega con la
+  Fundición" (`GameConfig.get_unlock_building`). Antes se escondían; ahora se
+  ven, detrás de las abiertas, para que se sepa lo que viene.
+- **Sin recursos**: verbo gris, la ficha de entrada en rojo y "Te faltan 5
+  madera" en rojo. Un ×5 apagado dice al mantener si es por recursos o porque
+  no cabe en el almacén.
+- **Detalle al mantener pulsado** (tooltip de la tarjeta): nombre, una línea de
+  lore (`RCP_LORE_<ID>`), la receta en texto, lo que da por minuto y, en el
+  Núcleo, de qué taller la copia.
+- **El Núcleo** separa sus recetas en **pestañas**: Núcleo, una por taller
+  (icono de su material) y A mano; la que tiene todo cerrado lleva candado. En
+  teléfono, todas solo con icono y el nombre de la elegida en el título
+  ("FABRICAR · Aserradero"). Recuerda la última pestaña durante la sesión.
+- **Disposición**: teléfono, una tarjeta por fila a todo el ancho (la ficha
+  pasa a `min(380, 56 %)` de ancho para que quepan las seis pestañas); tablet
+  y PC, rejilla de **dos columnas** si caben (`CartoonTheme.recipe_columns`,
+  con el ancho mínimo de tarjeta sacado de la letra) y la ficha se ensancha
+  hacia la izquierda (`recipe_panel_w`, como mucho 56 % de la pantalla).
+
+**Piel aparte.** Toda la piel (cajas, colores, letras, iconos, tamaños,
+columnas) sale de la sección `RECETAS` de `CartoonTheme`: `recipe_card_style`,
+`recipe_amount`/`fill_recipe_row`, `res_glyph` (los cuatro materiales tienen
+glifo dibujado en `CartoonIcon`: `mat_planks`, `mat_ingots`, `mat_beams`,
+`mat_fuel`), `recipe_header`, `recipe_tab`, `style_pick`, `recipe_columns`,
+`recipe_panel_w`. La piel dieselpunk se cambia ahí sin tocar `ProcessCard` ni
+`ProcessActionsPanel`.
+
+Pruebas: `tests/ui/test_recipe_cards.gd` (recetas visibles por edificio,
+cerradas con su porqué, la cola acumula desde la tarjeta, MÁX, pestañas del
+Núcleo, columnas por dispositivo, textos ES/EN). Sonda con ventana:
+`godot --path . -s tools/recetas_probe.gd -- --shot-size=640x360 --profile=phone`
+(con `override.cfg` propio) → `docs/media/dev/recetas/`.

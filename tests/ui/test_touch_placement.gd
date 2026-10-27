@@ -35,6 +35,8 @@ var _touch_mode := "auto"
 var _notes: Array = []
 var _warehouses := 0
 
+var _guide := ""
+
 func before_test() -> void:
 	SaveParking.park(BACKUP_PATH)
 	_gm = {"placer": GameManager._placer, "map": GameManager._map_gen, "camera": GameManager._camera,
@@ -42,6 +44,10 @@ func before_test() -> void:
 	_resources = ResourceManager.get_all().duplicate()
 	_pop = [PopulationManager._population, PopulationManager._used_workers]
 	_touch_mode = GameConfig.ui_touch_controls
+	# Sin tutorial en marcha: con el, el Aserradero saldria gratis (2026-10-24) y
+	# aqui se mira lo que cobra.
+	_guide = TutorialManager.guide_state
+	TutorialManager.guide_state = TutorialManager.GUIDE_DONE
 	# Un dispositivo tactil: el fantasma lo apunta el dedo desde el principio.
 	GameConfig.ui_touch_controls = "always"
 	GridManager.clear_all()
@@ -58,6 +64,7 @@ func before_test() -> void:
 	PopulationManager._used_workers = 0
 
 func after_test() -> void:
+	TutorialManager.guide_state = _guide
 	EventBus.notification_posted.disconnect(_on_note)
 	EventBus.building_placement_cancelled.emit()
 	for info in GridManager.get_all_buildings():
@@ -374,9 +381,8 @@ func _check_guide_advances_with_confirm(view: String) -> void:
 	_setup(view)
 	TutorialManager.intro_seen = true
 	TutorialManager.start_guide(false)
-	# Las dos tarjetas de leer del principio (la meta y el Nucleo, 2026-10-16).
-	TutorialManager.note_guide_fact("goal_seen")
-	TutorialManager.note_guide_fact("core_seen")
+	# La tarjeta de leer del principio (los recursos, tutorial corto 2026-10-24).
+	TutorialManager.note_guide_fact("resources_seen")
 	_start()
 	var step_placing := TutorialManager.current_step()
 	var hl = _placer.get_spot_highlight()

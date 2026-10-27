@@ -322,11 +322,13 @@ const NARROW_SLOTS := {
 	"storm_icon": {
 		"margin": {"left": 0, "top": 118, "right": 10, "bottom": 0},
 	},
+	## CONSTRUIR ya va dentro de la barra (BarBuild): la barra se ancla abajo
+	## como en apaisado, no 268 px mas arriba (en vertical quedaba a media pantalla).
 	"bottom_bar": {
-		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 268},
+		"margin": {"left": 0, "top": 0, "right": 0, "bottom": 20},
 	},
 	"next_step": {
-		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 356},
+		"margin": {"left": 10, "top": 0, "right": 0, "bottom": 118},
 		"above_dpad": false,
 	},
 	## La velocidad, bajo la insignia del rango (el centro de arriba choca con
@@ -453,6 +455,7 @@ const PANEL_SLOTS := {
 	"RankPanel.modal":            "center_modal",
 	"SkirmishButton":             "skirmish_button",
 	"ContractPanel.modal":        "center_modal",
+	"SmugglerPanel.modal":       "center_modal",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)
@@ -463,6 +466,7 @@ const PANEL_SIZES := {
 	"ProgressPanel.modal":     Vector2(470, 0),
 	"ArmyPanel.modal":         Vector2(620, 0),
 	"ContractPanel.modal":     Vector2(620, 0),
+	"SmugglerPanel.modal":     Vector2(600, 0),
 	"SkirmishPanel.modal":     Vector2(640, 0),
 	## 1000: tres ramas y, a su derecha, la ficha de la tecnologia elegida.
 	"TechTreePanel.modal":     Vector2(1000, 0),

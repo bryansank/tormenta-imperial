@@ -149,9 +149,9 @@ func _fill_editor(look: Dictionary) -> void:
 	_name_edit.text = typed if had_focus else String(saved["name"])
 	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_name_edit.custom_minimum_size.y = 48
-	var edit_style := CT.well_style("window", 12, 8)
+	var edit_style := CT.well_style("window", CT.RADIUS_CARD, 8)
 	_name_edit.add_theme_stylebox_override("normal", edit_style)
-	_name_edit.add_theme_stylebox_override("focus", CT.box(CT.c("window", "WELL"), CT.sem("ACCENT"), 3, 12, 8))
+	_name_edit.add_theme_stylebox_override("focus", CT.box(CT.c("window", "WELL"), CT.sem("ACCENT"), 3, CT.RADIUS_CARD, 8))
 	_name_edit.add_theme_font_override("font", CT.body_font())
 	_name_edit.add_theme_font_size_override("font_size", CT.fs("body"))
 	_name_edit.add_theme_color_override("font_color", CT.text("window"))

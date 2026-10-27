@@ -19,6 +19,7 @@ extends Node2D
 
 const Badge3D := preload("res://scripts/buildings/BuildingStatusBadge.gd")
 
+## Cada cuanto se relee (lo marca Building2D: CHECK_FRAMES x BADGE_EVERY fotogramas).
 const REFRESH_EVERY := 0.5
 const ICON_PX := 18.0
 ## La ficha compacta: alto, tamano de letra y lado del pictograma (px de badge).
@@ -32,7 +33,6 @@ var _building: Node2D = null
 var _data: BuildingData = null
 var _status: int = Badge3D.Status.NONE
 var _reason: String = ""
-var _timer := 0.0
 ## Ultimo zoom, huella y seleccion con que se coloco (solo se recoloca si cambian).
 var _placed_zoom := -1.0
 var _placed_fp := Vector2.ZERO
@@ -44,8 +44,6 @@ func setup(building: Node2D, data: BuildingData) -> void:
 	name = "StatusBadge"
 	z_index = 30
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	# Repartidos: no todos los badges se releen en el mismo fotograma.
-	_timer = randf() * REFRESH_EVERY
 	refresh()
 
 func get_status() -> int:
@@ -65,6 +63,7 @@ func set_expanded(value: bool) -> void:
 		return
 	_expanded = value
 	_placed_zoom = -1.0
+	place()
 	queue_redraw()
 
 func refresh() -> void:
@@ -104,14 +103,20 @@ func _apply(status: int, reason: String) -> void:
 	_reason = reason
 	visible = shows(status, reason)
 	_placed_zoom = -1.0
+	place()
 	queue_redraw()
 
-func _process(delta: float) -> void:
-	_timer -= delta
-	if _timer <= 0.0:
-		_timer = REFRESH_EVERY
-		refresh()
-	if not visible or _building == null:
+## Sin _process (2026-10-26): la relectura la pide su Building2D desde el reloj
+## unico (Building2DClock, cada ~0,5 s) y la colocacion, ese reloj cuando cambia
+## el zoom, o el propio badge cuando cambia lo que ensena.
+func _ready() -> void:
+	set_process(false)
+	place()
+
+## Coloca el badge en la esquina de la huella, contraescalado al zoom. Solo
+## trabaja si cambio el zoom, la huella (girar, mover) o la seleccion.
+func place() -> void:
+	if not visible or _building == null or not is_inside_tree():
 		return
 	# Solo se recoloca si cambio el zoom, la huella (girar, mover) o la seleccion.
 	var z := _frame_zoom(self)

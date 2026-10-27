@@ -50,6 +50,9 @@ const COLONY_ENTRIES := [
 	# edificio (el Mercado y el Laboratorio, BuildingInfoPanel.SCREENS).
 	["army", "BTN_ARMY", "ArmyPanel"],
 	["skirmish", "BTN_SKIRMISH", "SkirmishPanel"],
+	# Volverse el Imperio (feat/volverse-imperio): el mapa de las islas vecinas,
+	# solo despues de ganar el Ataque Final. Lo monta VictoryScreen como hermano.
+	["archipelago", "BTN_ARCHIPELAGO", "ArchipelagoPanel"],
 	["sandbox", "BTN_SANDBOX", "SandboxPanel"],
 	# El registro de avisos: para repasar lo ultimo que paso (2026-09-28). Antes
 	# era un boton a la vista en el HUD.
@@ -560,7 +563,31 @@ func _title_open() -> bool:
 	var title: Node = _find_sibling("TitleMenu")
 	return title != null and title.has_method("is_open") and title.is_open()
 
+## Espacio: pausa y reanuda (atajo de PC). Vive aqui y no en InputService porque
+## con el arbol en pausa solo este nodo oye. Mismas condiciones que ESC.
+func _space_pause(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.keycode != KEY_SPACE:
+		return false
+	if key.ctrl_pressed or key.alt_pressed or key.meta_pressed or key.shift_pressed:
+		return false
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is LineEdit or focused is TextEdit:
+		return false
+	if _open:
+		if _sub != null:
+			return false
+		resume()
+		return true
+	if can_pause():
+		open_pause()
+		return true
+	return false
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _space_pause(event):
+		get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE):
 		return
 	if _open:
@@ -684,6 +711,8 @@ static func is_colony_entry_available(id: String) -> bool:
 			return GameMode.sandbox_tools()
 		"contracts":
 			return GameMode.contracts_enabled()
+		"archipelago":
+			return EmpireManager.is_active()
 	return true
 
 func _sync_music() -> void:

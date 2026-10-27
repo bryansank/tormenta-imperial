@@ -18,6 +18,8 @@ extends Label3D
 ## Edificios sin nada que hacer (casas, jardines, calzadas) no llevan badge:
 ## una casa no esta "parada", es una casa. Ver `can_work()`.
 
+const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
+
 enum Status { NONE, IDLE, WORKING }
 
 ## Tamano del glifo. ConstructionLabel usa 18 px a 0.005: aqui hace falta mas
@@ -295,6 +297,15 @@ static func camera_scale(depth: float, view_h: float) -> float:
 	var line_world := FONT_SIZE * PIXEL_SIZE
 	return clampf(MAX_SCREEN_LINE * view_h / line_world, 0.0, 1.0)
 
+## Tamano de fuente en cubos (pocos, para no regenerar el texto a cada paso de
+## zoom) que mas se acerca a FONT_SIZE * `s`, con un suelo legible. Pura.
+static func font_size_for_scale(s: float) -> int:
+	var want := FONT_SIZE * s
+	for step in [16, 20, 24, 32]:
+		if want <= float(step):
+			return step
+	return FONT_SIZE
+
 ## Aplica camera_scale con la camara `cam` (`cam_inv`: su transform invertido,
 ## calculado una vez por BuildingPlacer para todos los badges).
 func fit_to_camera(cam: Camera3D, cam_inv: Transform3D) -> void:
@@ -303,6 +314,15 @@ func fit_to_camera(cam: Camera3D, cam_inv: Transform3D) -> void:
 	var s := camera_scale(depth, view_h)
 	_too_close = s <= 0.0
 	if not _too_close:
+		if GraphicsQuality.is_minimal():
+			# Sin MSAA ni mipmaps de fuente, un glifo de 40 px encogido a ~0,3
+			# se vuelve garabato rojo (QA 30 punto 4). Se pide la fuente al
+			# tamano que se va a ver (1:1) y la escala queda cerca de 1.
+			var fs := font_size_for_scale(s)
+			if fs != font_size:
+				font_size = fs
+				outline_size = maxi(2, fs / 4)
+			s = s * float(FONT_SIZE) / float(fs)
 		scale = Vector3.ONE * s
 	visible = _want_visible and not _too_close
 

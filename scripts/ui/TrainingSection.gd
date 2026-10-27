@@ -174,6 +174,10 @@ static func make_unit_row(unit_id: String, card_open: bool, with_word: bool,
 	title_row.add_theme_constant_override("h_separation", 8)
 	var name_label := CT.label(Tr.t(def.get("name", unit_id)), "button", CT.text("window", not unlocked))
 	name_label.name = "UnitName"
+	# A dos lineas si no cabe ("Lancha torpedera" en la ficha estrecha).
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.custom_minimum_size.x = 90
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(name_label)
 	var owned_label := CT.label(Tr.t("LBL_ARMY_OWNED") % ArmyManager.get_count(unit_id), "number", CT.tone_color("positive"))
 	owned_label.name = "Owned"

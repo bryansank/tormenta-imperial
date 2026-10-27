@@ -108,8 +108,10 @@ static func _static_init() -> void:
 
 const STYLES := ["classic", "cartoon"]
 ## El estilo con el que arranca el juego. Fase 2 del rediseno (feat/ui2-hud,
-## 2026-10-18): "cartoon" de serie, con la superficie mixta y Baloo 2 + Nunito
-## Sans (CartoonTheme). "classic" queda como respaldo interno:
+## 2026-10-18): "cartoon" de serie, con la superficie mixta. Desde 2026-10-25
+## "cartoon" pinta la piel dieselpunk "D · Mezcla sobria" (Big Shoulders
+## Display + IBM Plex Sans Condensed, CartoonTheme). "classic" queda como
+## respaldo interno:
 ## `-- --ui-style=classic` o use_style("classic").
 const STYLE_DEFAULT := "cartoon"
 static var STYLE := "classic"
@@ -154,55 +156,58 @@ const PALETTE_NAMES := ["SURFACE", "NEUTRAL", "ACCENT", "TEXT", "TEXT_DIM", "TEX
 	"POSITIVE", "DANGER", "WARNING", "INFO"]
 
 ## Valores de serie de lo que una paleta puede cambiar: los diez colores de la
-## paleta y la leyenda de recursos. Todo lo demas se deriva (ver _derive()).
+## paleta y la leyenda de recursos. Todo lo demas se deriva (ver _derive() y,
+## en la piel de serie, CartoonTheme._surface()). Paleta de la piel dieselpunk
+## "D · Mezcla sobria" (Bryan, 2026-10-25; docs/24-paleta.md).
 const _BASE := {
-	"SURFACE": Color(0.1, 0.11, 0.09),        # Superficie de panel
-	"NEUTRAL": Color(0.15, 0.16, 0.13),       # Botones y bordes neutros
-	"ACCENT": Color(0.77, 0.59, 0.16),        # Laton
-	"TEXT": Color(0.91, 0.86, 0.78),          # Pergamino
-	"TEXT_DIM": Color(0.72, 0.66, 0.52),      # Laton viejo
-	"TEXT_BRIGHT": Color(1.0, 0.95, 0.85),    # Resaltado
-	"POSITIVE": Color(0.29, 0.55, 0.25),      # Verde militar
-	"DANGER": Color(0.55, 0.23, 0.16),        # Rojo oxido
-	"WARNING": Color(0.8, 0.53, 0.13),        # Ambar
-	"INFO": Color(0.29, 0.42, 0.55),          # Azul acero
+	"SURFACE": Color("1c2026"),               # Pizarra: fondo de paneles y HUD
+	"NEUTRAL": Color("252b32"),               # Placa: tarjetas y botones secundarios
+	"ACCENT": Color("c99a45"),                # Laton: filos, titulos, accion principal
+	"TEXT": Color("eeeae1"),                  # Texto (y el papel del tema claro)
+	"TEXT_DIM": Color("aeb5bd"),              # Texto secundario
+	"TEXT_BRIGHT": Color("ffffff"),           # Resaltado
+	"POSITIVE": Color("86c27a"),              # Verde: lo bueno, la luz piloto
+	"DANGER": Color("c9503a"),                # Rojo: lo malo, destruir
+	"WARNING": Color("e5ae3e"),               # Ambar: avisar
+	"INFO": Color("2e4a5e"),                  # Acero azul: abrir / ver
 	"RES_GOLD": Color(1.0, 0.85, 0.2),
 	"RES_STEEL": Color(0.7, 0.75, 0.8),
 	"RES_OIL": Color(0.5, 0.45, 0.55),
 	"RES_WOOD": Color(0.6, 0.4, 0.2),
 }
 
-## Lo que cambia cada paleta sobre _BASE: solo los cuatro semanticos (y dos
+## Lo que cambia cada paleta sobre _BASE: solo tres o cuatro semanticos (y dos
 ## recursos). Aliado/bueno, enemigo/malo y aviso quedan en tonos que esa vision
-## distingue, y ademas separados en luminancia (azul oscuro / bermellon medio /
-## amarillo claro), que es lo que se lee aunque el tono falle. Categorias,
-## ramas, tablero, barra de vida y fases de la Tormenta se derivan de estos.
+## distingue, y ademas separados en luminancia, que es lo que se lee aunque el
+## tono falle. Categorias, ramas, tablero, barra de vida, botones y fases de la
+## Tormenta se derivan de estos.
 const _PALETTE_TOKENS := {
 	"default": {},
+	# Deuteranopia y protanopia: azul (bueno), bermellon (malo), amarillo (aviso).
 	"red_green": {
-		"POSITIVE": Color(0.0, 0.45, 0.70),
-		"DANGER": Color(0.84, 0.37, 0.0),
-		"WARNING": Color(0.94, 0.89, 0.26),
-		"INFO": Color(0.80, 0.47, 0.65),
+		"POSITIVE": Color("5aaef5"),
+		"DANGER": Color("d55e00"),
+		"WARNING": Color("f2e15a"),
 		"RES_WOOD": Color(0.62, 0.36, 0.08),
 		"RES_OIL": Color(0.55, 0.45, 0.75),
 	},
+	# Tritanopia: turquesa (bueno), carmesi (malo), rosa (aviso), acero gris.
 	"tritan": {
-		"POSITIVE": Color(0.0, 0.62, 0.60),
-		"DANGER": Color(0.86, 0.15, 0.30),
-		"WARNING": Color(0.97, 0.55, 0.62),
-		"INFO": Color(0.55, 0.55, 0.60),
+		"POSITIVE": Color("3db5ae"),
+		"DANGER": Color("dc264d"),
+		"WARNING": Color("f59aaa"),
+		"INFO": Color("4a4f5c"),
 	},
 }
 
-## Alto contraste: superficie mas oscura (y opaca, ver _derive()), laton y
-## texto mas claros, sin texto secundario apagado (TEXT_DIM casi como TEXT) y
-## AAA (7:1).
+## Alto contraste (para el estilo clasico; la piel de serie lo resuelve en
+## CartoonTheme._surface()): superficie casi negra y opaca, laton y texto mas
+## claros, sin texto secundario apagado y AAA (7:1).
 const _HIGH_CONTRAST := {
-	"SURFACE": Color(0.03, 0.035, 0.03),
-	"ACCENT": Color(0.98, 0.78, 0.28),
-	"TEXT": Color(0.98, 0.96, 0.92),
-	"TEXT_DIM": Color(0.93, 0.90, 0.84),
+	"SURFACE": Color("0d0e10"),
+	"ACCENT": Color("dcb46a"),
+	"TEXT": Color(1.0, 1.0, 1.0),
+	"TEXT_DIM": Color("e4e4e4"),
 	"TEXT_BRIGHT": Color(1.0, 1.0, 1.0),
 }
 
@@ -675,6 +680,7 @@ static func style_button(btn: Button, bg: Color = BTN, font_size: int = FONT_BUT
 		btn.add_theme_color_override("font_pressed_color", tc["color"])
 		btn.add_theme_constant_override("outline_size", outline_for(font_size) if tc["outline"] else 0)
 		btn.add_theme_color_override("font_outline_color", CartoonTheme.INK)
+		CartoonTheme.caps_button(btn)
 		return
 
 	# Baked metal button, tinted toward `bg`'s hue; falls back to flat if art missing.
@@ -801,11 +807,24 @@ static func make_progress_bar(fill_color: Color = ACCENT, height: int = 18) -> P
 
 	return bar
 
+## Cerrar: la X oscura de la piel (cerrar no es destruir: nunca en rojo). La X
+## es el icono de linea (CartoonIcon "close"), no una letra.
 static func make_close_button(callback: Callable) -> Button:
 	var btn := Button.new()
-	btn.text = "X"
+	btn.name = "CloseButton"
+	btn.tooltip_text = Tr.t("BTN_CLOSE")
 	btn.custom_minimum_size = Vector2(MIN_BTN_H, MIN_BTN_H)
-	style_button(btn, DANGER, FONT_BODY)
+	if is_cartoon():
+		CartoonTheme._btn_states(btn, CartoonTheme.kind_fill("secondary", "window"), int(MIN_BTN_H * 0.5), 0, "window")
+		var holder := CenterContainer.new()
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+		holder.add_child(CartoonTheme.make_glyph("close", roundi(MIN_BTN_H * 0.5),
+			CartoonTheme.pill_text("secondary", CartoonTheme.kind_fill("secondary", "window"))["color"]))
+		btn.add_child(holder)
+	else:
+		btn.text = "X"
+		style_button(btn, BTN, FONT_BODY)
 	btn.pressed.connect(callback)
 	return btn
 
@@ -1287,8 +1306,8 @@ static func _metal_tint(base: Color, boost: float) -> Color:
 ## Textured brass button for one state, with a flat fallback if art is missing.
 static func _button_style(modulate: Color, fb_bg: Color, fb_border: Color, fb_bw: int) -> StyleBox:
 	if is_cartoon():
-		return CartoonTheme.box(fb_bg, CartoonTheme.INK if CartoonTheme.kind("window") == "light" else fb_border,
-			CartoonTheme.BORDER, 18, 10, 0, CartoonTheme.LIP)
+		return CartoonTheme.box(fb_bg, CartoonTheme.btn_edge(fb_bg) if fb_bg != BTN else CartoonTheme.c("window", "CARD_BORDER"),
+			CartoonTheme.BORDER, CartoonTheme.RADIUS_BTN, 10, 0, 0)
 	var tex := _tex_box(TEX_BUTTON, 12, 10, modulate)
 	if tex != null:
 		return tex
@@ -1432,7 +1451,7 @@ static func build_global_theme() -> Theme:
 	# ── Tooltip ──
 	if is_cartoon():
 		t.set_stylebox("panel", "TooltipPanel", CartoonTheme.tooltip_style())
-		t.set_color("font_color", "TooltipLabel", Color("fff5e1"))
+		t.set_color("font_color", "TooltipLabel", CartoonTheme.tooltip_text_color())
 	else:
 		t.set_stylebox("panel", "TooltipPanel", _flat(Color(BG_DARK, 0.97), ACCENT, 1, CORNER, 8))
 		t.set_color("font_color", "TooltipLabel", readable(TEXT_BRIGHT))

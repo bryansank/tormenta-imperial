@@ -13,11 +13,18 @@ extends RefCounted
 ## Metas que escribe (y borra cuando ya no tocan):
 ## - "mill_bonus" (float) en las Granjas con un Molino en pie cerca;
 ## - "well_cover" (float) en los edificios con un Pozo en pie cerca;
-## - "tavern_houses" (int) en las Tabernas: casas en pie en su barrio.
+## - "tavern_houses" (int) en las Tabernas: casas en pie en su barrio;
+## - "diesel_bonus" (float) en los industriales con una Central diesel en
+##   marcha cerca (feat/edificios-economia).
+##
+## Economia (feat/edificios-economia): tambien entrega a EconomyManager los
+## Puertos, Casas de cambio y Centrales en pie, y pone el recorte del spread
+## del Mercado (GameConfig.market_spread_cut) si una Casa de cambio trabaja.
 
 const MILL_META := "mill_bonus"
 const WELL_META := "well_cover"
 const TAVERN_META := "tavern_houses"
+const DIESEL_META := "diesel_bonus"
 
 ## Recalcula todo. Devuelve un resumen (lo usan las pruebas).
 static func refresh() -> Dictionary:
@@ -30,6 +37,10 @@ static func refresh() -> Dictionary:
 	var silos := 0
 	var depots := 0
 	var lighthouse := false
+	var ports: Array = []
+	var exchanges: Array = []
+	var plants: Array = []
+	var industrials: Array = []
 	for info in views:
 		var data: BuildingData = info.get("data")
 		var node: Node = info.get("node")
@@ -53,6 +64,32 @@ static func refresh() -> Dictionary:
 				if up: depots += 1
 			"lighthouse":
 				if up: lighthouse = true
+			"trade_port":
+				if up: ports.append(node)
+			"exchange":
+				if up: exchanges.append(node)
+			"diesel_plant":
+				if up: plants.append(node)
+		if data.id in GameConfig.diesel_plant_targets:
+			industrials.append(info)
+	# Economia: lo que hay en pie, para el barco, el combustible y el interes.
+	var economy: Node = _economy()
+	if economy != null:
+		economy.register_buildings(ports, exchanges, plants)
+	# Casa de cambio -> spread del Mercado (solo si trabaja: carretera y obreros)
+	var exchange_on := false
+	for node in exchanges:
+		if economy != null and economy.is_working(node):
+			exchange_on = true
+	GameConfig.market_spread_cut = GameConfig.exchange_spread_cut if exchange_on else 0.0
+	# Central diesel -> industriales cercanos (solo las que queman combustible)
+	var running: Array = []
+	for view in views:
+		if view.get("node") in plants and economy != null and economy.is_plant_running(view.get("node")):
+			running.append(view)
+	for info in industrials:
+		var near := not running.is_empty() and _any_within(info, running, GameConfig.diesel_plant_radius)
+		_set_meta(info["node"], DIESEL_META, GameConfig.diesel_plant_bonus if near else 0.0)
 	# Molino -> Granjas
 	for f in farms:
 		var near := _any_within(f, mills, GameConfig.windmill_radius)
@@ -79,10 +116,35 @@ static func refresh() -> Dictionary:
 	GameConfig.storm_warning_bonus = GameConfig.lighthouse_warning_bonus if lighthouse else 0.0
 	GameConfig.food_spoil_delay_mult = GameConfig.silo_spoil_delay_mult if silos > 0 else 1.0
 	return {"mills": mills.size(), "wells": wells.size(), "silos": silos, "depots": depots,
-		"lighthouse": lighthouse, "taverns": taverns.size()}
+		"lighthouse": lighthouse, "taverns": taverns.size(), "ports": ports.size(),
+		"exchange": exchange_on, "plants": plants.size(), "plants_running": running.size()}
+
+## EconomyManager (autoload) o null si no esta (escenas de prueba sin el arbol).
+static func _economy() -> Node:
+	var loop := Engine.get_main_loop() as SceneTree
+	if loop == null or loop.root == null:
+		return null
+	return loop.root.get_node_or_null("EconomyManager")
+
+## Los industriales a los que llega una Central diesel en marcha (para la ficha).
+static func diesel_targets_of(plant: Node) -> int:
+	if plant == null or not is_instance_valid(plant):
+		return 0
+	var plant_info := GridManager.get_building_info(plant)
+	if plant_info.is_empty():
+		return 0
+	var n := 0
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info.get("data")
+		if data == null or not (data.id in GameConfig.diesel_plant_targets):
+			continue
+		if _gap(info, plant_info) <= GameConfig.diesel_plant_radius:
+			n += 1
+	return n
 
 ## Partida nueva: nada de lo de arriba sigue en pie.
 static func clear() -> void:
+	GameConfig.market_spread_cut = 0.0
 	GameConfig.storm_warning_bonus = 0.0
 	GameConfig.food_spoil_delay_mult = 1.0
 	ResourceManager.set_side_storage({})

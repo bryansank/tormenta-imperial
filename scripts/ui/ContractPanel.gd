@@ -182,7 +182,8 @@ func refresh() -> void:
 		child.queue_free()
 	_clocks.clear()
 	_waits.clear()
-	for source in BoardScript.SOURCES:
+	# Las tres fuentes y, con Telegrafo, el hilo (ContractManager.slot_ids).
+	for source in ContractManager.slot_ids():
 		_list.add_child(_make_card(source))
 	_footer.text = Tr.t("LBL_CONTRACT_HARD") if GameMode.is_governor() else Tr.t("LBL_CONTRACT_EASY")
 	_footer.visible = not CT.is_phone()
@@ -207,6 +208,8 @@ func _source_color(source: String) -> Color:
 			return CT.sem("DANGER")
 		"neighbors":
 			return CT.sem("POSITIVE")
+		"telegraph":
+			return CT.sem("ACCENT")
 	return CT.sem("INFO")
 
 func _make_card(source: String) -> PanelContainer:
@@ -227,7 +230,12 @@ func _make_card(source: String) -> PanelContainer:
 	# Quien lo pide (pastilla de su color; quien es, al mantener) · reloj.
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 8)
-	var who := CT.badge(Tr.t(ContractManager.source_name_key(source)), color)
+	var who_text: String = Tr.t(ContractManager.source_name_key(source))
+	# El hilo del Telegrafo dice de quien es el encargo que trae.
+	var origin: String = ContractManager.origin_of(source)
+	if origin != source:
+		who_text += " · " + Tr.t(ContractManager.source_name_key(origin))
+	var who := CT.badge(who_text, color)
 	who.mouse_filter = Control.MOUSE_FILTER_PASS
 	who.tooltip_text = Tr.t(ContractManager.source_name_key(source) + "_TIP")
 	who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -236,9 +244,9 @@ func _make_card(source: String) -> PanelContainer:
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(gap)
-	var rep: int = ContractManager.get_reputation(source)
+	var rep: int = ContractManager.get_reputation(origin)
 	if GameMode.is_governor() and rep < 0:
-		var pays := CT.label(Tr.t("LBL_CONTRACT_PAYS") % roundi(ContractManager.get_board().reward_mult(source) * 100.0),
+		var pays := CT.label(Tr.t("LBL_CONTRACT_PAYS") % roundi(ContractManager.get_board().reward_mult(origin) * 100.0),
 			"small", CT.tone_color("warning"))
 		pays.name = "Pays"
 		pays.mouse_filter = Control.MOUSE_FILTER_PASS

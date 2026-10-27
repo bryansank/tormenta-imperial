@@ -22,6 +22,9 @@ const MAX_SEGMENT_CHARS := 26
 ## Ancho del texto del paso a paso: el de la opcion mas larga, entre estos dos.
 const VALUE_MIN_W := 96.0
 const VALUE_MAX_W := 170.0
+## En un telefono en vertical (400 de ancho, con el carril de pestanas al lado).
+const PORTRAIT_SEGMENT_CHARS := 14
+const PORTRAIT_VALUE_MAX_W := 116.0
 
 var selected := -1
 var _items: Array = []
@@ -44,7 +47,10 @@ func setup(options: Array, p_selected: int, height: int = 48, role: String = "wi
 	var chars := 0
 	for o in _items:
 		chars += String(o).length()
-	_stepper = force_stepper or _items.size() > MAX_SEGMENTS or chars > MAX_SEGMENT_CHARS
+	# Telefono en vertical: la fila de pastillas (hasta 343 px) sacaba Ajustes
+	# por la derecha; alli se pasa antes al paso a paso, y este es mas estrecho.
+	var max_chars := PORTRAIT_SEGMENT_CHARS if CT.portrait() else MAX_SEGMENT_CHARS
+	_stepper = force_stepper or _items.size() > MAX_SEGMENTS or chars > max_chars
 	add_theme_constant_override("separation", 6)
 	alignment = BoxContainer.ALIGNMENT_END
 	_rebuild()
@@ -141,4 +147,4 @@ func value_width() -> float:
 	var widest := 0.0
 	for o in _items:
 		widest = maxf(widest, font.get_string_size(String(o), HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x)
-	return clampf(ceilf(widest) + 4.0, VALUE_MIN_W, VALUE_MAX_W)
+	return clampf(ceilf(widest) + 4.0, VALUE_MIN_W, PORTRAIT_VALUE_MAX_W if CT.portrait() else VALUE_MAX_W)

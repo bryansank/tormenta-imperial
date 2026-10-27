@@ -49,6 +49,8 @@ func _ready() -> void:
 	EventBus.mining_started.connect(func(_n, _id): _recalculate_all.call_deferred())
 	EventBus.mining_completed.connect(func(_n, _id): _recalculate_all.call_deferred())
 	EventBus.process_cancelled.connect(func(_n, _id, _r): _recalculate_all.call_deferred())
+	# Explorar un pecio de la costa tambien ocupa trabajadores (ThreatManager.busy_workers).
+	EventBus.threats_changed.connect(func(): _recalculate_all.call_deferred())
 	EventBus.building_demolished.connect(_on_building_demolished)
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
 	# La moral es de esta casa: ArmyManager avisa de la desercion por EventBus y
@@ -63,6 +65,12 @@ func _process(delta: float) -> void:
 
 	# Phase 0 (Foundation): no consumption, no growth — just build freely
 	if ProgressionManager.current_phase < GameConfig.Phase.SETTLEMENT:
+		return
+
+	# Mientras se aprende (tutorial guiado, hasta la primera batalla) la gente no
+	# come ni llega gente nueva: nada interrumpe el tutorial, tampoco el hambre
+	# (tutorial corto, 2026-10-24; TutorialManager.blocks_interruptions).
+	if TutorialManager.blocks_interruptions():
 		return
 
 	# Use gentler timers in early phases (1-2)
@@ -419,7 +427,8 @@ func _recalculate_all() -> void:
 
 	# Second pass: assign workers with priority (first built = first served).
 	# Los que estan sacando vetas a mano no estan en ningun edificio.
-	var mining: int = mini(ProcessManager.busy_mining_workers(), _population)
+	# Y los que exploran un pecio de la costa (feat/amenazas-costa), igual.
+	var mining: int = mini(ProcessManager.busy_mining_workers() + ThreatManager.busy_workers(), _population)
 	_used_workers += mining
 	var remaining_workers := _population - mining
 	for entry in buildings_needing_workers:

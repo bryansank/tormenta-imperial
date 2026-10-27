@@ -35,7 +35,7 @@ Each building is defined as a `.tres` file in `data/buildings/` using the `Build
 
 | ID | Name | Size | Cost G/S/O/W | Workers | Build Time | Produces | Interval |
 |----|------|------|--------------|---------|------------|----------|----------|
-| `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +5 worker room) | — |
+| `nucleo` | Núcleo | 3x3 | Free | 0 | instant | — (manual processes, +10 worker room (5 before 2026-10-24)) | — |
 | `sawmill` | Aserradero | 2x2 | 80/0/0/50 | 2 | 5s | 6 wood (+ planks by hand) | 12s |
 | `farm` | Granja | 2x2 | 40/0/0/30 | 2 | 5s | food, by crop (below) | the crop's |
 | `gold_mine` | Mina de Oro | 2x2 | 120/0/0/80 (**the first: 60/0/0/40**) | 3 | 8s | 8 gold (+ ingots by hand) | 12s |
@@ -152,6 +152,40 @@ still takes from the raw amount. Looks: one procedural mesh per type
 -- --only=windmill,...` bakes `assets/models/toy/<id>.tscn`; then `UtilityToys.create`
 picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 
+### Defensa (1.2, `feat/edificios-defensa-vida`)
+
+Doc 21 §6.3 n.º 11, 12 and 18. Content of 1.2. **The neighbourhood beauty of the
+branch (doc 21 §6.4, D9 = A) did not make the 1.2** (Bryan, 2026-10-25): it was taken
+out whole in `integracion/v1.2b` (metas, `BeautyTrim`, room and morale, the
+`beauty_changed` signal, its tip and texts). Their areas
+are computed by `scripts/buildings/DefenseLifeEffects.gd`, called by
+`ProductionManager._refresh_areas()` right after `UtilityEffects` (grouped and
+deferred) when something is placed, moved, demolished, finished, ruined,
+repaired or upgraded, when the staffing changes (`workers_changed`) and on load —
+never per frame. Results are building metas (`bastion_cover`, `scrap_cover`) and
+three runtime values
+(`GameConfig.defense_cover_cells`, `contract_extra_slots`,
+`contract_duration_mult`), cleared by `DefenseLifeEffects.clear()` from
+`ProductionManager.reset()` (the three new-game paths). Nothing new goes in the
+save except the telegraph's contract slot, inside `"contracts"`. All tunables in
+the `GameConfig` block "Defensa y vida"; their table rows (caps, prereqs, site,
+lot, active fx) are added by `_register_defense_life_buildings()`.
+
+| ID | Name | Size | Cost G/S/O/W + mat. | Workers | Build | Caps (era 1/2/3) | Prereqs | Effect |
+|----|------|------|------|---|---|---|---|---|
+| `bastion` | Bastión | **2x1** | 60/25/0/30 | 0 | 6s | 6/10/14 | foundry + barracks | Buildings within `bastion_radius` (3) **behind** the wall (towards the island centre, `land_bounds()`; flush with the wall also counts) take −`bastion_storm_reduction` (30 %) storm damage; multiplies with the Well (0.7 × 0.8). On defensive boards (Tithe and siege) puts 1 cover cell per `bastion_per_cover_cell` (3) standing bastions, up to `bastion_board_cover_max` (2), in the player's back row: +`bastion_cover_defense` (2) defence for a surface unit standing on it (docs/15 §3, "Cobertura del Bastión") |
+| `scrapyard` | Chatarrería | 2x2 | 160/40/0/90 + 6 planks | 2 | 14s | 1/2/2 | foundry | While staffed: repairs within `scrapyard_radius` (4) cost −`scrapyard_repair_discount` (40 %) (`BuildingHealth.repair_cost`). When a Storm ends (`StormManager._scrap_salvage`), each ruin in its area gives `scrapyard_steel_per_ruin` (12) steel, one part per `scrapyard_ruins_per_part` (2) ruins (max `scrapyard_parts_max` 3 per scrapyard and storm), and the crews lift `scrapyard_brigade_lifts` (1) ruin to `scrapyard_brigade_lift_ratio` (35 %) health, free (`BuildingHealth.lift_ruin`, emits `building_repaired`). **Rank 4** (1.2: no blueprints, see "Unlocks in the 1.2") |
+| `telegraph` | Telégrafo | 2x2 | 200/60/0/80 + 4 beams | 1 | 12s | 1/1/1 | foundry + warehouse | While staffed: +`telegraph_extra_contracts` (1) slot on the contract board (`ContractBoard.WIRE`, "El telégrafo": orders from any open source, stored with `from`; reputation and scale are that source's) and new orders last +`telegraph_duration_bonus` (50 %) (`ctx.duration_mult` in `ContractBoard.build_contract`) |
+
+The info panel's status line says what each one covers (`DefenseLifeEffects.info_line`:
+"Protege 4 edificios de detrás…", "Tras un Bastión: −30 %…").
+
+Looks: one procedural mesh per type (`DefenseToys.gd`) until baked — the bakes
+are in `assets/models/toy/` (`build_toy_models.gd -- --only=bastion,scrapyard,telegraph`:
+1492 / 1208 / 1288 tri); `DefenseToys.create` picks them without touching the
+`.tres`. 2D: `BuildingArt2D._bastion/_scrapyard/_telegraph`. The bastion lot has
+a 0.08 yard and no props.
+
 ### Muelle de pesca (1.1, `feat/muelle-pesca`)
 
 Doc 21 §6.3 n.º 7 del contexto privado (allí era 2 y coste medio; Bryan lo pidió de
@@ -225,6 +259,85 @@ bloque viva solo y no choque con otras ramas que tocan esas tablas.
 
 **El banco de peces** (`fish_shoal`, `DEP_FISH_SHOAL`) es el primer yacimiento de mar:
 ver [02-economy.md](02-economy.md) "Yacimientos de mar".
+
+### Economía de la 1.2: Puerto comercial, Casa de cambio y Central diésel (`feat/edificios-economia`)
+
+Doc 21 §6.3 n.º 13, 14 y 16 del contexto privado; el barco es el §P4 del doc 14.
+Todos 2x2, con carretera como todo, 2 obreros cada uno, sin mejora (no producen:
+`PlacementRules.upgrade_does_something()` los deja fuera). Sus cifras viven en
+`GameConfig`, bloque "Economia (feat/edificios-economia)" al final del archivo:
+`_register_economy_buildings()` añade sus filas a las tablas comunes al crear
+`GameConfig` (topes, requisitos, obra, parcela, efecto), como el Muelle de pesca.
+
+| ID | Nombre | Coste O/A/P/M + mat. | Obreros | Obra | Tope | Requisitos | Qué hace |
+|----|------|------|---|---|---|---|---|
+| `trade_port` | Puerto comercial | 300/100/0/160 + 12 tablones, 6 vigas | 2 | 14 s | 1 | Mercado + Fundición (era 2) | En la costa (`PlacementRules.SHORE_ONLY`) y orientado al agua (`FACES_WATER`, como el Astillero). Cada 6-10 min atraca 90 s el barco del contrabandista con 3 ofertas |
+| `exchange` | Casa de cambio | 350/120/0/100 + 8 lingotes, 4 vigas | 2 | 12 s | 1 | Mercado + Fundición (era 2) | −10 puntos de spread en el Mercado (30 % → 20 %, suelo 8 %); en Gobernador, 1 % de interés por minuto sobre el oro guardado (tope 20) |
+| `diesel_plant` | Central diésel | 320/160/80/60 + 6 vigas, 4 combustible | 2 | 14 s | 2 | Refinería (era 3) | Quema 1 combustible cada 45 s; los aserraderos, minas de oro, fundiciones y refinerías a ≤ 5 casillas rinden +15 % (no se suma entre Centrales) |
+
+**Desbloqueo en la 1.2 (sin Núcleo 1-5 ni planos, `integracion/v1.2b`):** la rama
+del Núcleo y los planos no entró, así que la propuesta "Núcleo N + plano" se cambió por
+era, requisitos y rango (ver "Unlocks in the 1.2" abajo): Puerto = Mercado + Fundición
+(era 2); Casa de cambio = Mercado + Fundición + **rango 6**; Central diésel = Refinería
+(era 3) + **rango 9**. El barco no vende planos menores (`smuggler_plan_chance = 0`).
+
+**Quién lleva qué.**
+- `EconomyManager` (autoload, el último): el reloj del barco (modelo puro
+  `scripts/economy/SmugglerShip.gd`, con su RNG en el guardado), los tratos
+  (`take_offer`), los planos menores comprados, el combustible de las Centrales y el
+  interés. Guardado en la clave `"economy"`; `reset()` en los tres sitios de
+  `GameManager`.
+- `UtilityEffects.refresh()` (al construir, terminar, demoler, arruinar, reparar,
+  cargar y cuando cambian los obreros; nunca por frame): entrega a `EconomyManager`
+  los Puertos, Casas y Centrales en pie, pone `GameConfig.market_spread_cut` si una
+  Casa trabaja y la meta `diesel_bonus` en los industriales cercanos a una Central en
+  marcha. "Trabaja" = en pie, con carretera y con sus obreros.
+- `ProductionManager.get_cycle_yield()` multiplica por `1 + diesel_bonus` solo en vivo
+  (`include_events`): offline no se quema combustible, así que tampoco se cobra.
+- Una Central que no puede pagar su combustible pone `diesel_running = false`, avisa
+  una vez (`NOTIF_DIESEL_NO_FUEL`) y se recalculan las áreas; al volver a pagar, arranca.
+
+**El barco del contrabandista.** Sin Puerto que trabaje no cuenta el reloj. El primero
+llega 75 s después de que el Puerto trabaje; luego, cada 6-10 min (sorteo). Con Ceniza o
+Tormenta espera en alta mar; si llega la Ceniza estando atracado, zarpa antes. Con un
+combate abierto, el reloj espera. Tres huecos de oferta:
+1. **Exclusivo:** repuestos (2-4, 60 de oro cada uno; lo normal es traerlos de las
+   misiones) o, si queda alguno, un **plano menor**: un edificio que abre el rango por
+   encima del de ahora (`rank_rewards`), a 40 de oro por rango (mínimo 120). Nunca un
+   plano obligatorio de misión. Comprado, `RankManager.is_building_unlocked()` lo da
+   por abierto. **En la 1.2 está apagado** (`smuggler_plan_chance = 0`, sin planos):
+   el hueco exclusivo son siempre repuestos.
+2. **Material:** tablones, lingotes, vigas o combustible ya hechos, un poco por encima
+   de lo que cuesta fabricarlos (`smuggler_material_offers`).
+3. **Recursos:** te vende madera/comida/acero/petróleo al 75 % del precio de compra del
+   Mercado, o te compra lo que te sobra a 1,6 × su precio de venta (cifras de 10 en 10).
+
+Cada trato se hace una vez, da `smuggler_rank_xp` (5) de rango y guarda. Al atracar:
+aviso (`NOTIF_SMUGGLER_ARRIVED`) y el efecto `event_positive`.
+
+**Vista.** 3D: `scripts/map/SmugglerShip3D.gd`, hijo de `BuildingPlacer`: una malla
+compartida (`EconomyToys.ship_mesh()`, ~320 triángulos, los dos materiales de la
+maqueta), escondida casi siempre; entra y sale con un Tween de 4,5 s a lo largo de la
+orilla y se mece con otro Tween en bucle (sin `_process`). Atraca a casilla y media del
+frente del Puerto (`EconomyManager.berth_for`). 2D: `scripts/view2d/SmugglerShip2D.gd`,
+la silueta de `BuildingArt2D.draw_smuggler_ship` dibujada una vez. Tocarlo en las dos
+vistas (`EconomyManager.ship_hit`) abre **EL BARCO** (`scripts/ui/SmugglerPanel.gd`,
+creado al pedirlo, no está en las escenas); también **VER EL BARCO** en la ficha del
+Puerto. La ficha de los tres dice su estado (`BuildingInfoPanel.economy_status`).
+
+**Aspecto.** Maquetas propias (sin piezas CC0) en `scripts/buildings/EconomyToys.gd`,
+horneadas por `tools/build_toy_models.gd -- --only=trade_port,exchange,diesel_plant`
+(recetas `tools/toy_recipes/<id>.gd`): Puerto 888 tri (tinglado, muelle y la grúa de
+latón con su caja colgando sobre el agua), Casa de cambio 617 (pórtico con columnas y
+la gran moneda en el frontón), Central 1.092 (chimenea con franjas rojas y volante de
+latón; `FxAnchor` en la boca). `EconomyToys.create()` usa el horneado si existe, sin
+`model_scene` en el `.tres`. 2D: `BuildingArt2D._trade_port`, `_exchange`,
+`_diesel_plant`. Obra y parcela propias en el bloque de `GameConfig`.
+
+**Pruebas (sin correr):** `tests/economy/test_smuggler_ship.gd`,
+`tests/economy/test_economy_buildings.gd`, `tests/ui/test_smuggler_panel.gd`; los
+recuentos de edificios suben a 40 en `test_building_catalog`, `test_building_lot` y
+`test_building_i18n`.
 
 ### Military Buildings
 
@@ -332,6 +445,90 @@ y una o dos piezas de atrezo.
   la franja de `MapGenerator.is_shore_cell()` con banda 1). Motivo `"shore"`,
   aviso `LBL_NEEDS_SHORE`; `PlacementAssist.shore_spots()` pinta en verde los
   sitios validos y la ficha de CONSTRUIR lo dice (`rule_text`).
+
+#### Las dieciocho restantes (feat/decoraciones-y-trafico, 2026-10-18)
+
+El resto del catalogo del doc 21 §6.4 (fila 4.2 del plan), repartido por rango
+segun §6.5. Como las diez de arriba: decoraciones **sin tope**, 2x2 (la Plaza,
+3x3) con su parcela de 0,25 de patio, moral por `morale_bonus`, una malla
+compartida por tipo y dibujadas en lote por `DecorBatch3D`. Las de era 2 cuestan
+acero y las de era 3 petroleo, asi que la tarjeta de CONSTRUIR las bloquea hasta
+que se abre el recurso, como cualquier edificio.
+
+| ID | Nombre | Coste G/S/O/W | Obra | Moral | Se abre | Triangulos (horneada) | Piezas CC0 del horneado |
+|----|--------|---------------|------|-------|---------|-----------------------|-------------------------|
+| `flower_stall` | Puesto de flores | 60/0/0/30 | 3 s | +4 | rango 4 | 510 | todo propio (no hay flores CC0) |
+| `community_garden` | Huerto vecinal | 40/0/0/40 | 3 s | +4 | rango 4 | 416 | todo propio |
+| `small_fountain` | Fuente pequena | 40/10/0/0 | 3 s | +4 | rango 5 | 389 | `ft:fountain-square` |
+| `entrance_arch` | Arco de entrada | 80/20/0/20 | 4 s | +5 | rango 6 | 544 | `ft:pillar-stone` x2, `ft:banner-red` |
+| `bandstand` | Quiosco de musica | 100/20/0/60 | 5 s | +6 | rango 6 | 350 | `ft:roof-point` (a rojo) |
+| `beached_boat` | Bote varado | 40/0/0/40 | 2,5 s | +4 | rango 7 | 370 | `pir:boat-row-large`, `sur:rock-sand-a`; **solo costa** |
+| `gear_garden` | Jardin de engranajes | 90/40/0/10 | 4 s | +6 | rango 7 | 526 | `fac:cog-a`, `fac:cog-c` de pie, a laton |
+| `fair_stage` | Escenario de feria | 120/30/0/80 | 5 s | +7 | rango 8 | 406 | `ft:banner-green` x2 |
+| `fair_tent` | Carpa de feria | 90/20/0/60 | 4 s | +6 | rango 9 | 340 | `sur:tent-canvas` (a crema y rojo) |
+| `pond_bridge` | Estanque con puente | 110/20/0/50 | 5 s | +7 | rango 10 | 550 | todo propio (el puente de KayKit pasa de 604) |
+| `water_mill` | Molino de agua | 120/30/0/90 | 6 s | +7 | rango 10 | 596 | `kk:sack` x2 (la rueda de Fantasy Town pesa 600 sola) |
+| `museum_cannon` | Canon de museo | 80/40/0/0 | 4 s | +6 | **1 Impuesto rechazado** | 470 | `pir:cannon` |
+| `container_mural` | Mural de contenedores | 60/60/0/20 | 4 s | +6 | rango 11 | 340 | todo propio (dos contenedores CC0 no caben) |
+| `clock_tower` | Torre del reloj | 200/60/0/80 | 8 s | +10 | rango 12 | 368 | `ft:roof-high-point` |
+| `wreck_monument` | Pecio monumento | 120/20/0/100 | 6 s | +9 | rango 13 | 516 | todo propio (el pecio CC0 pasa de 2.282); **solo costa** |
+| `storm_column` | Columna de la Tormenta | 250/100/40/0 | 8 s | +12 | **5 Impuestos rechazados** | 236 | `ft:pillar-stone` |
+| `moored_airship` | Dirigible amarrado | 220/80/60/40 | 8 s | +11 | rango 14 | 442 | `pir:barrel` (no hay dirigible CC0) |
+| `governor_plaza` | Plaza del Gobernador (3x3) | 500/150/80/100 + 6 lingotes | 12 s | +18 | rango 18 | 916 | `ft:fountain-square` ampliada |
+
+- **Presupuesto:** <= 600 triangulos por decoracion 2x2 con el borde de contacto
+  (V8) incluido; la Plaza, 3x3, <= 1.500 (`build_toy_models.gd`,
+  `DECOR_BIG_TRI_BUDGET`). Cuatro recetas acabaron todo propias porque la pieza
+  CC0 no cabia con el borde de contacto.
+- **3D:** la version procedural esta en `scripts/buildings/DecorMesh2.gd` (la
+  sirve `DecorMesh`: `handles()`, `mesh_for()`, `build()`); `build(mk, id, cc0)`
+  con `cc0 = true` deja fuera la parte que la receta pone con su pieza CC0.
+  Recetas en `tools/toy_recipes/<id>.gd`; horneadas las dieciocho
+  (`assets/models/toy/<id>_mesh.res` y `.tscn`). Nada se anima: el molino y el
+  dirigible estan quietos (el doc 21 pedia giro y vaiven por shader; queda para
+  cuando el lote tenga un material animado).
+- **2D:** `BuildingArt2D._decor2()` reparte a `_d2_<id>()` (suelo de `_deco_pad`
+  y la pieza exagerada); el mismo dibujo es el icono y el fantasma.
+- **Rango:** las filas no estan escritas dentro de `GameConfig.rank_rewards`: las
+  anade `GameConfig._register_decorations_traffic()` (tabla
+  `decor_rank_unlocks`) a la lista `buildings` de cada rango, sin tocar lo que
+  ya habia. Igual la obra (`construction_style`) y la parcela
+  (`building_lot_style`).
+- **Hazanas:** el Canon de museo y la Columna se abren por Impuestos (Diezmos)
+  rechazados en la partida (`GameConfig.decor_deed_unlocks`,
+  `StormManager.tithes_repelled()`). `PlacementRules.check_rank()` incluye
+  `check_deed()`, asi que el candado es el mismo; la tarjeta de CONSTRUIR dice
+  "Impuestos rechazados: 0/1" (`deed_lock_text()`, `LBL_DEED_TITHES`) en vez de
+  "Rango N". Sandbox las tiene abiertas.
+- **Costa:** el Bote varado y el Pecio monumento piden la costa como las
+  palmeras (`GameConfig.decor_shore_only`, leido por
+  `PlacementRules.needs_shore()`). El Pecio se abre por rango 13 hasta que exista
+  el pecio de las amenazas de costa (doc 21 §3.2).
+- **Pendiente:** el "+comida minima" del Huerto vecinal y el "+moral en
+  festivales" del Escenario (doc 21 §6.4) no estan: hoy dan solo moral. La
+  belleza del barrio (casas bonitas) no entro en la 1.2.
+
+### Unlocks in the 1.2 (no Núcleo 1-5, no blueprints)
+
+Decision of Bryan (2026-10-25): the Núcleo levels and the blueprints are postponed, so
+the era caps of `building_limits_by_era` stay and the 1.2 buildings that asked for a
+Núcleo level or a blueprint open by era, requisites and rank. Block "Integracion de la
+1.2" at the end of `GameConfig` (`V12_RANK_BUILDINGS`, `_register_v12_unlocks()`):
+
+| Building | Branch proposal | 1.2 |
+|---|---|---|
+| Trade port | Núcleo 3 | Market + Foundry (era 2) |
+| Scrapyard | mission blueprint | Foundry (era 2) + **rank 4** |
+| Exchange house | Núcleo 3 + blueprint | Market + Foundry (era 2) + **rank 6** |
+| Diesel plant | Núcleo 4 + blueprint | Refinery (era 3) + **rank 9** |
+| Bastion, Telegraph | — | their requisites (Foundry + Barracks / Warehouse) |
+
+Why these ranks: the rank curve (100 + 60·(n−1) XP per step) puts rank 4 around the
+first Foundry, rank 6 around the second era's Market trades and rank 9 inside era 3,
+so each opens about when its era does without arriving before it. Unmeasured with the
+line probe. `combat_blueprint_buildings` keeps only the military branch's two
+(no `.tres`, never offered); nobody calls `CombatManager.blueprint_locked()` yet.
+Tests: `tests/buildings/test_v12_unlocks.gd`.
 
 The road is still a decoration in data, but it is the backbone of the map: see "Road
 network" below.
@@ -443,7 +640,7 @@ under construction the label above the building gives the percentage and the tim
 | tower | 6 | 6 | 6 | **No sube.** 4 torres ya dan el 60 % de mitigación (`storm_tower_mitigation_max`) y hasta 4 dotaciones salen al tablero (`storm_tower_garrison_max`). El rango 16 sigue dando +1 |
 | market, laboratory, headquarters | 1 | 1 | 1 | Únicos |
 | barracks | — | — | — | **Sin tope** desde 2026-10-18 (antes 3/4/5): el freno está en el ejército, ver abajo |
-| garden, fountain, statue, road y las diez decoraciones baratas (`lamp_post` … `palm_trees`) | — | — | — | Sin tope |
+| garden, fountain, statue, road, las diez decoraciones baratas (`lamp_post` … `palm_trees`) y las dieciocho restantes (`flower_stall` … `governor_plaza`) | — | — | — | Sin tope |
 
 Los huecos del rango van encima: casas +2 en los rangos 10 y 17 (era 3: 24), torre +1 en
 el 16.
@@ -971,4 +1168,5 @@ solido de la paleta (`vertex_color_is_srgb`).
 - `scripts/buildings/LotPlan.gd` — rule: lot ground, trim, props and exaggerated element (both views); `scripts/buildings/BuildingLot.gd` — the 3D lot; `scripts/buildings/LotMesh.gd` — one vertex-coloured mesh per lot
 - `scripts/buildings/SiteMesh.gd` — 3D construction phases, upgrade scaffold and ruin in the toy palette (one static mesh each); `scripts/buildings/ToyTones.gd` — palette-derived tones for everything around the buildings
 - `scripts/buildings/SiteFx.gd` — construction-site animation shaders (crane, hook, pennant) for both views; site style/layout in `BuildingLook.gd`
+- `scripts/buildings/EconomyToys.gd` — Puerto comercial, Casa de cambio, Central diésel y el barco del contrabandista en maqueta; `scripts/services/EconomyManager.gd` + `scripts/economy/SmugglerShip.gd` — el barco, los tratos, el combustible y el interés (1.2)
 - `scenes/buildings/BuildingPlacer.tscn` — placement/move/demolish logic

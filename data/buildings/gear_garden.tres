@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BuildingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/buildings/BuildingData.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "gear_garden"
+display_name = "Jardín de engranajes"
+description = "Engranajes de latón engranados entre setos. Orgullo del taller."
+grid_size = Vector2i(2, 2)
+cost_gold = 90
+cost_steel = 40
+cost_oil = 0
+cost_wood = 10
+build_time = 4.0
+produces_gold = 0
+produces_steel = 0
+produces_oil = 0
+produces_wood = 0
+production_interval = 0.0
+workers_required = 0
+morale_bonus = 6
+mesh_height = 2.3
+mesh_color = Color(0.8, 0.62, 0.25, 1)
+max_health = 90
+is_decoration = true

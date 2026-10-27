@@ -315,6 +315,13 @@ func _relayout() -> void:
 	var rows: int = ceili(float(shown) / float(_grid.columns))
 	var wanted: float = float(rows) * (CARD_MIN_H + 10.0) + 30.0
 	_scroll.custom_minimum_size = Vector2(0, clampf(wanted, CARD_MIN_H, maxf(CARD_MIN_H, vp.y - 320.0)))
+	# Con Gobernador abierto el resto pide mas de 300: en un telefono de 360 de
+	# alto la tarjeta salia 9 px por arriba y por abajo. El scroll cede lo que
+	# falte (los modos se arrastran).
+	var rest: float = _card.get_combined_minimum_size().y - _scroll.custom_minimum_size.y
+	var room: float = vp.y - ModalKit.EDGE * 2.0 - rest
+	if _scroll.custom_minimum_size.y > room:
+		_scroll.custom_minimum_size.y = maxf(56.0, room)
 
 # ── Pasos ────────────────────────────────────────────────────────────
 

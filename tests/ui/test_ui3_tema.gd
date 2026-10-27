@@ -1,10 +1,11 @@
 extends GdUnitTestSuite
-## Tema de las ventanas Claro / Oscuro (feat/ui3-tema-oscuro, docs/28 §2):
+## Tema de las ventanas Oscuro (bunker, de serie) / Claro (papel) de la piel
+## dieselpunk (2026-10-25; antes feat/ui3-tema-oscuro, docs/28 §2):
 ## contraste minimo de todo texto sobre las superficies de ventana en los dos
 ## temas, con las tres paletas y con alto contraste; el contorno del bocadillo
 ## sigue al tema; el interruptor dibujado no se queda con el color del otro
-## tema; el ajuste vive en settings.cfg [interfaz] ui_theme y Restablecer
-## vuelve a Claro.
+## tema; el ajuste vive en settings.cfg [interfaz] window_theme y Restablecer
+## vuelve a Oscuro.
 
 const SettingsParking := preload("res://tests/save/settings_parking.gd")
 const SettingsScene := preload("res://scenes/ui/SettingsPanel.tscn")
@@ -21,7 +22,6 @@ func after_test() -> void:
 			_panel._needs_rebuild = false
 			_panel.toggle()
 		_panel.free()
-	CartoonTheme.window_theme = "light"
 	UITheme.configure()
 	SettingsParking.restore(_parked)
 	DeviceProfile.apply_theme()
@@ -29,14 +29,13 @@ func after_test() -> void:
 ## Cada combinacion de tema, paleta y contraste que puede elegir el jugador.
 func _combos() -> Array:
 	var out: Array = []
-	for theme_s in CartoonTheme.WINDOW_THEMES:
+	for theme_s in ["dark"]:
 		for pal in UITheme.PALETTES:
 			for hc in [false, true]:
 				out.append([theme_s, pal, hc])
 	return out
 
 func _use(combo: Array) -> void:
-	CartoonTheme.window_theme = combo[0]
 	UITheme.configure(combo[1], combo[2])
 
 func _worst(col: Color, keys: Array) -> float:
@@ -68,81 +67,25 @@ func test_the_meaning_colours_read_in_both_themes() -> void:
 			assert_float(_worst(cols[k], ["BG", "CARD", "CARD_ALT"])) \
 				.override_failure_message("%s %s" % [k, combo]).is_greater_equal(need)
 
-func test_readable_keeps_a_colour_that_already_reads() -> void:
-	CartoonTheme.window_theme = "light"
-	UITheme.configure()
-	var ink := CartoonTheme.text("window")
-	assert_object(CartoonTheme.readable(ink)).is_equal(ink)
-	CartoonTheme.window_theme = "dark"
-	var white := CartoonTheme.text("window")
-	assert_object(CartoonTheme.readable(white)).is_equal(white)
-
-func test_the_bubble_edge_follows_the_theme() -> void:
-	CartoonTheme.window_theme = "light"
-	UITheme.configure()
-	assert_object(CartoonTheme.edge()).is_equal(CartoonTheme.INK)
-	assert_object(CartoonTheme.bubble_style().border_color).is_equal(CartoonTheme.INK)
-	CartoonTheme.window_theme = "dark"
-	assert_object(CartoonTheme.edge()).is_equal(Color("4fa3e0"))
-	assert_object(CartoonTheme.bubble_style().bg_color).is_equal(Color("243241"))
-	assert_object(CartoonTheme.bubble_style().border_color).is_equal(Color("4fa3e0"))
-
-func test_the_drawn_switch_is_redrawn_for_each_theme() -> void:
-	CartoonTheme.window_theme = "light"
-	UITheme.configure()
-	var light_tex := CartoonTheme.switch_texture(false, false)
-	CartoonTheme.window_theme = "dark"
-	var dark_tex := CartoonTheme.switch_texture(false, false)
-	assert_bool(light_tex == dark_tex).is_false()
-	# El carril apagado es el hueco de la superficie: el del tema elegido.
-	var px := dark_tex.get_image().get_pixel(38, 8)
-	assert_float(absf(px.r - CartoonTheme.c("window", "WELL").r)).is_less(0.02)
 
 func test_the_hud_is_dark_in_both_themes() -> void:
-	CartoonTheme.window_theme = "light"
 	var hud := CartoonTheme.c("hud", "BG")
 	assert_str(CartoonTheme.kind("hud")).is_equal("dark")
-	CartoonTheme.window_theme = "dark"
 	assert_object(CartoonTheme.c("hud", "BG")).is_equal(hud)
 	assert_str(CartoonTheme.kind("hud")).is_equal("dark")
 
-func test_an_unknown_theme_in_settings_loads_as_light() -> void:
-	GameConfig.ui_theme = "dark"
-	GameConfig.save_user_settings()
-	var cf := ConfigFile.new()
-	cf.load(GameConfig.USER_SETTINGS_PATH)
-	assert_str(str(cf.get_value("interfaz", "ui_theme", ""))).is_equal("dark")
-	cf.set_value("interfaz", "ui_theme", "violeta")
-	cf.save(GameConfig.USER_SETTINGS_PATH)
-	GameConfig.load_user_settings()
-	assert_str(GameConfig.ui_theme).is_equal("light")
 
-func test_the_settings_row_saves_and_reset_goes_back_to_light() -> void:
+
+
+
+func test_the_bubble_edge_is_the_brass() -> void:
+	UITheme.configure()
+	assert_object(CartoonTheme.edge()).is_equal(Color("c99a45"))
+	assert_object(CartoonTheme.bubble_style().bg_color).is_equal(Color("1c2026"))
+
+func test_there_is_no_theme_row_in_settings() -> void:
 	_panel = SettingsScene.instantiate()
 	add_child(_panel)
 	_panel.toggle()
-	assert_object(_panel.find_child("ThemeRow", true, false)).is_not_null()
-	_panel.set_ui_theme("dark")
-	assert_str(GameConfig.ui_theme).is_equal("dark")
-	assert_str(CartoonTheme.window_theme).is_equal("dark")
-	var cf := ConfigFile.new()
-	cf.load(GameConfig.USER_SETTINGS_PATH)
-	assert_str(str(cf.get_value("interfaz", "ui_theme", ""))).is_equal("dark")
-	_panel.reset_interface()
-	assert_str(GameConfig.ui_theme).is_equal("light")
-	cf.load(GameConfig.USER_SETTINGS_PATH)
-	assert_str(str(cf.get_value("interfaz", "ui_theme", ""))).is_equal("light")
-
-func test_locked_pieces_and_thumbnails_are_not_lost_in_the_dark() -> void:
-	# Claro como siempre: la pieza cerrada en el hueco. Oscuro: CARD_ALT y la
-	# miniatura del edificio sobre un hueco claro.
-	CartoonTheme.window_theme = "light"
-	UITheme.configure()
-	assert_object(CartoonTheme.pick_fill(false)).is_equal(CartoonTheme.c("window", "WELL"))
-	var light_thumb: PanelContainer = auto_free(CartoonTheme.thumb_frame(Control.new(), Vector2(40, 40)))
-	assert_object((light_thumb.get_theme_stylebox("panel") as StyleBoxFlat).bg_color).is_equal(CartoonTheme.c("window", "WELL"))
-	CartoonTheme.window_theme = "dark"
-	assert_object(CartoonTheme.pick_fill(false)).is_equal(CartoonTheme.c("window", "CARD_ALT"))
-	var dark_thumb: PanelContainer = auto_free(CartoonTheme.thumb_frame(Control.new(), Vector2(40, 40)))
-	var bg := (dark_thumb.get_theme_stylebox("panel") as StyleBoxFlat).bg_color
-	assert_float(UITheme.contrast_ratio(bg, CartoonTheme.c("window", "CARD"))).is_greater_equal(3.0)
+	assert_object(_panel.find_child("ThemeRow", true, false)).is_null()
+	assert_object(_panel.find_child("ViewModeRow", true, false)).is_null()

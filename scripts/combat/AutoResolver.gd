@@ -5,8 +5,9 @@ class_name AutoResolver
 ## cuando el Diezmo cae y el jugador tiene el tablero ocupado con una
 ## expedicion: el mismo modelo, las mismas reglas, ningun calculo aparte.
 ##
-## Puro y determinista: no emite senales, no toca autoloads y no tira dados
-## (ni Encounter ni CombatAI lo hacen). Mismo tablero, mismo resultado. Todos los
+## Puro y determinista: no emite senales, no toca autoloads y no tira dados por su
+## cuenta. El azar del dano es el del Encounter, con su generador sembrado
+## (feat/ritmo-colono): mismo tablero y misma semilla, mismo resultado. Todos los
 ## eventos que el modelo va devolviendo se acumulan y se entregan al final, para
 ## que quien llame decida que hacer con ellos (constitucion, principios I y IV).
 

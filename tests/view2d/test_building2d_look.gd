@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 ## error.
 
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
+const Building2DClock := preload("res://scripts/view2d/Building2DClock.gd")
 const Art := preload("res://scripts/view2d/BuildingArt2D.gd")
 const LookRule := preload("res://scripts/buildings/BuildingLook.gd")
 
@@ -66,10 +67,11 @@ func _spawn(id: String) -> Node2D:
 	add_child(b)
 	return b
 
-## Building2D mira su estado cada CHECK_FRAMES fotogramas (repartidos entre
-## edificios): se espera algo mas que eso.
+## Building2D mira su estado en una ronda de Building2DClock (ROUND_SECONDS
+## de tiempo real, repartida entre edificios): se espera algo mas que eso.
 func _settle() -> void:
-	for i in Building2D.CHECK_FRAMES + 2:
+	await get_tree().create_timer(Building2DClock.ROUND_SECONDS + 0.1).timeout
+	for i in 3:
 		await get_tree().process_frame
 
 func test_construction_shows_the_phase_of_its_progress() -> void:
@@ -77,7 +79,11 @@ func test_construction_shows_the_phase_of_its_progress() -> void:
 	var b: Node2D = Building2D.new()
 	b.setup(data)
 	add_child(b)
-	# 10 % hecho: fase de valla.
+	# 10 % hecho: fase de valla. La obra se queda quieta mientras se mira: la
+	# ronda de Building2DClock dura 0,5 s reales y, con la obra corta del modo
+	# dev, la velocidad x2 o el tic acumulado que deje otra suite, pasaba de la
+	# valla (fallaba solo en la suite entera). after_test lo vuelve a encender.
+	ProductionManager.set_process(false)
 	ProductionManager.register_building(b, data, GameConfig.get_build_time(data.build_time) * 0.9)
 	await _settle()
 	assert_int(b.get_look()["look"]).is_equal(LookRule.Look.CONSTRUCTION)

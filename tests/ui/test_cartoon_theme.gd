@@ -35,16 +35,17 @@ func test_cartoon_is_the_default_and_classic_stays_available() -> void:
 func test_switching_to_cartoon_and_back_restores_the_classic_tokens() -> void:
 	UITheme.use_style("classic")
 	var before := UITheme.SURFACE
-	UITheme.use_style("cartoon", "mixed", "baloo_nunitosans")
+	UITheme.use_style("cartoon", "mixed", CartoonTheme.DEFAULT_COMBO)
 	assert_bool(UITheme.is_cartoon()).is_true()
-	# Las ventanas son claras: la superficie de los tokens viejos es la crema.
+	# La superficie de los tokens viejos es la de las ventanas (bunker o papel).
 	assert_object(UITheme.SURFACE).is_equal(CartoonTheme.c("window", "BG"))
 	UITheme.use_style("classic")
 	assert_object(UITheme.SURFACE).is_equal(before)
 
-func test_chosen_pair_is_baloo_and_nunito_sans() -> void:
-	assert_str(CartoonTheme.DEFAULT_COMBO).is_equal("baloo_nunitosans")
-	UITheme.use_style("cartoon", "mixed", "baloo_nunitosans")
+## Piel dieselpunk (2026-10-25): Big Shoulders Display + IBM Plex Sans Condensed.
+func test_chosen_pair_is_big_shoulders_and_plex() -> void:
+	assert_str(CartoonTheme.DEFAULT_COMBO).is_equal("bigshoulders_plex")
+	UITheme.use_style("cartoon", "mixed", "bigshoulders_plex")
 	assert_object(CartoonTheme.title_font()).is_not_null()
 	assert_object(CartoonTheme.body_font()).is_not_null()
 	assert_object(UITheme.title_font()).is_equal(CartoonTheme.title_font())
@@ -52,7 +53,9 @@ func test_chosen_pair_is_baloo_and_nunito_sans() -> void:
 func test_every_combo_has_its_font_files_and_licence() -> void:
 	for id in CartoonTheme.COMBO_ORDER:
 		var c: Dictionary = CartoonTheme.COMBOS[id]
-		for key in ["title", "body"]:
+		for key in ["title", "body", "bold"]:
+			if not c.has(key):
+				continue
 			var path: String = c[key]
 			assert_bool(FileAccess.file_exists(path)).override_failure_message("falta " + path).is_true()
 			assert_bool(FileAccess.file_exists(path.get_base_dir() + "/OFL.txt")) \
@@ -73,12 +76,6 @@ func test_text_reads_on_both_surfaces_in_every_palette_and_contrast() -> void:
 					assert_float(UITheme.contrast_ratio(CartoonTheme.text(role, true), bg)) \
 						.override_failure_message("texto tenue " + msg).is_greater_equal(4.5)
 
-func test_old_panels_get_dark_text_on_the_cream_windows() -> void:
-	UITheme.use_style("cartoon", "mixed")
-	# Un panel viejo que pide texto claro: readable() lo oscurece sobre la crema.
-	var fixed := UITheme.readable(Color(0.95, 0.9, 0.8))
-	assert_float(UITheme.contrast_ratio(fixed, CartoonTheme.c("window", "BG"))).is_greater_equal(4.5)
-
 func test_phone_sizes_keep_their_floor_and_touch_side() -> void:
 	CartoonTheme.phone = true
 	for level in CartoonTheme.SIZES_PHONE:
@@ -90,7 +87,8 @@ func test_phone_sizes_keep_their_floor_and_touch_side() -> void:
 
 func test_buttons_follow_intent_colours() -> void:
 	UITheme.use_style("cartoon", "mixed")
-	assert_object(CartoonTheme.kind_fill("primary")).is_equal(CartoonTheme.sem("POSITIVE"))
+	# Piel dieselpunk: la accion principal es laton (con su luz piloto).
+	assert_object(CartoonTheme.kind_fill("primary")).is_equal(CartoonTheme.sem("ACCENT"))
 	assert_object(CartoonTheme.kind_fill("open")).is_equal(CartoonTheme.sem("INFO"))
 	assert_object(CartoonTheme.kind_fill("warn")).is_equal(CartoonTheme.sem("WARNING"))
 	assert_object(CartoonTheme.kind_fill("danger")).is_equal(CartoonTheme.sem("DANGER"))

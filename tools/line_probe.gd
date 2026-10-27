@@ -20,8 +20,11 @@ extends SceneTree
 ##   --hours=N       tope de horas de juego por partida (8)
 ##   --active=1      el jugador tambien exprime los procesos manuales
 ##   --log=1         imprime cada accion del jugador
-##   --tutorial=0    no levanta el Laboratorio de la era 1 que pide el tutorial
-##                   guiado (por defecto si, como el jugador que lo sigue)
+##   --tutorial=1    levanta el Laboratorio en la era 1, como pedia el tutorial
+##                   guiado hasta 2026-10-24 (el tutorial corto ya no lo pide:
+##                   por defecto, no)
+##   --tier=governor el nivel Gobernador (por defecto Colono). Colono juega menos
+##                   misiones y pide menos material para el CG (feat/ritmo-colono)
 ##   --extras=1      (o --player=completo) el jugador ademas levanta lo nuevo de
 ##                   la 1.1 cuando aporta (Muelle de pesca, Molino, Silo, Taberna,
 ##                   Carpinteria, Pozo, Faro, Deposito de combustible, Astillero,

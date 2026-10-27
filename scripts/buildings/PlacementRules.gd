@@ -173,16 +173,18 @@ static func on_land(cell: Vector2i, size: Vector2i) -> bool:
 
 # ── Costa (feat/decoraciones-remates) ─────────────────────────────────
 
-## Lo que solo se planta en la costa: las palmeras y el Astillero (aire y mar:
-## los barcos salen al agua). Motivo del veredicto y su aviso (LBL_NEEDS_SHORE),
+## Lo que solo se planta en la costa: las palmeras, el Astillero (aire y mar:
+## los barcos salen al agua) y el Puerto comercial (el barco del contrabandista
+## atraca delante). Motivo del veredicto y su aviso (LBL_NEEDS_SHORE),
 ## el mismo en 3D y en 2D.
-const SHORE_ONLY := ["palm_trees", "shipyard"]
+const SHORE_ONLY := ["palm_trees", "shipyard", "trade_port"]
 const SHORE_REASON := "shore"
 const NEIGHBORS8 := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
 
 static func needs_shore(building_id: String) -> bool:
-	return building_id in SHORE_ONLY
+	# Mas las decoraciones de costa de feat/decoraciones-y-trafico (bote, pecio).
+	return building_id in SHORE_ONLY or building_id in GameConfig.decor_shore_only
 
 ## ¿Es `cell` tierra pegada al agua (contando diagonales)? La misma franja que
 ## MapGenerator.is_shore_cell() con map_shore_band = 1: el agua de dentro de la
@@ -202,11 +204,12 @@ static func touches_shore(cell: Vector2i, size: Vector2i) -> bool:
 			return true
 	return false
 
-## Lo que se orienta solo al agua al colocarlo: el Astillero tiene la darsena en
+## Lo que se orienta solo al agua al colocarlo: el Astillero (y el Puerto
+## comercial, con su muelle) tiene la darsena en
 ## su lado de delante (+Z del modelo 3D, +y local del dibujo 2D). El fantasma se
 ## gira para que mire al agua mas cercana; el jugador aun puede girarlo a mano
 ## (entonces deja de girarse solo hasta el proximo edificio).
-const FACES_WATER := ["shipyard"]
+const FACES_WATER := ["shipyard", "trade_port"]
 ## Hasta cuantas celdas fuera de la huella se busca el agua.
 const FACE_WATER_REACH := 4
 ## Lados del mundo en orden de giro: N (-y), E (+x), S (+y), O (-x).
@@ -295,10 +298,30 @@ static func check_building_limit(building_id: String) -> bool:
 ## El rango del gobernador abre decoraciones y edificios opcionales
 ## (GameConfig.rank_rewards). Sandbox lo tiene todo abierto.
 static func check_rank(building_id: String) -> bool:
-	return RankManager.is_building_unlocked(building_id)
+	return RankManager.is_building_unlocked(building_id) and check_deed(building_id)
+
+## Las decoraciones que se abren por hazana y no por rango (Canon de museo,
+## Columna de la Tormenta: Impuestos rechazados, GameConfig.decor_deed_unlocks).
+## Sandbox las tiene abiertas. Va con check_rank: el mismo candado.
+static func check_deed(building_id: String) -> bool:
+	if not GameConfig.decor_deed_unlocks.has(building_id) or GameMode.all_unlocked():
+		return true
+	return GameConfig.decor_deed_met(building_id, StormManager.tithes_repelled())
+
+## Lo que falta de la hazana, corto ("Impuestos rechazados: 0/1"), o "" si no
+## tiene o ya se cumple. Lo ensena la tarjeta de CONSTRUIR en vez de "Rango N".
+static func deed_lock_text(building_id: String) -> String:
+	if check_deed(building_id):
+		return ""
+	var need := int((GameConfig.decor_deed_unlocks[building_id] as Dictionary).get("tithes_repelled", 0))
+	return Tr.t("LBL_DEED_TITHES") % [mini(StormManager.tithes_repelled(), need), need]
 
 ## "Necesitas rango 5": lo que dice el detalle de CONSTRUIR y el aviso al colocar.
+## Si lo que falta es una hazana, la hazana.
 static func rank_lock_text(building_id: String) -> String:
+	var deed := deed_lock_text(building_id)
+	if deed != "":
+		return deed
 	return Tr.t("LBL_RANK_NEEDED") % RankManager.building_rank(building_id)
 
 static func check_prerequisites(building_id: String) -> bool:
@@ -1244,9 +1267,12 @@ static func demolish(building: Node) -> Dictionary:
 		if not stranded.is_empty():
 			return {"blocked": move_first_message(stranded), "stranded": stranded}
 	var cell: Vector2i = info["origin_cell"]
-	var cost := data.get_cost()
-	for type in cost:
-		ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
+	# Uno levantado gratis en el tutorial no devuelve nada: si no, levantarlo y
+	# derribarlo seria oro regalado (2026-10-24, TutorialManager.is_free_build).
+	if not bool(building.get_meta("tutorial_free", false)):
+		var cost := data.get_cost()
+		for type in cost:
+			ResourceManager.add(type, int(cost[type] * GameConfig.demolish_refund_ratio))
 	ProductionManager.unregister(building)
 	# Demoler con algo en curso ya no lo quema: el proceso se cancela como
 	# cualquier otro y devuelve su parte (la Tasa de Corrupcion).
@@ -1278,6 +1304,9 @@ static func serialize_building(building: Node) -> Dictionary:
 	# El jugador le retiro los trabajadores: se guarda solo si es asi.
 	if bool(building.get_meta("workers_off", false)):
 		entry["workers_off"] = true
+	# Levantado gratis en el tutorial: derribarlo no devuelve nada.
+	if bool(building.get_meta("tutorial_free", false)):
+		entry["tutorial_free"] = true
 	# Solo se guarda si esta tocado: un save viejo sin la clave significa
 	# "entero", que es exactamente lo que queremos por defecto.
 	if building.has_meta("health"):

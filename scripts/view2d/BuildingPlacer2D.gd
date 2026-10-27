@@ -16,6 +16,10 @@ extends Node2D
 enum State { IDLE, PLACING, MOVING }
 
 const WorkerWalkers := preload("res://scripts/map/WorkerWalkers.gd")
+## El barco del contrabandista y su panel (feat/edificios-economia).
+const SmugglerShip2D := preload("res://scripts/view2d/SmugglerShip2D.gd")
+const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
+const RoadTraffic := preload("res://scripts/map/RoadTraffic.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
@@ -59,6 +63,11 @@ func _ready() -> void:
 	var walkers: Node = WorkerWalkers.new()
 	walkers.setup(walkers_layer, true)
 	add_child(walkers)
+	add_child(SmugglerShip2D.new())
+	# Los camiones de los extractores al almacen (solo vista, feat/decoraciones-y-trafico).
+	var traffic: Node = RoadTraffic.new()
+	traffic.setup(walkers_layer, true)
+	add_child(traffic)
 	EventBus.building_selected_for_placement.connect(_on_building_selected)
 	EventBus.building_placement_cancelled.connect(_cancel)
 	EventBus.request_move_building.connect(_on_move_requested)
@@ -223,6 +232,8 @@ func handle_click(screen_pos: Vector2) -> void:
 	var cell := screen_to_cell(screen_pos)
 	match _state:
 		State.IDLE:
+			if _try_open_ship(screen_pos):
+				return
 			if not _try_collect_icon(screen_pos):
 				_try_select(cell)
 		State.PLACING:
@@ -342,6 +353,9 @@ func _on_building_selected(data: Resource) -> void:
 	_auto_face = true
 	_state = State.PLACING
 	_create_ghost()
+	# Gratis en el tutorial (2026-10-24): se dice al cogerlo, junto al fantasma.
+	if _current_data != null and _current_data.id != Rules.ROAD_ID and _current_data.is_tutorial_free():
+		_show_feedback(Tr.t("LBL_TUTORIAL_FREE"))
 
 ## Intenta plantar el edificio en curso en `cell`. Devuelve el nodo o null.
 func try_place(cell: Vector2i) -> Node:
@@ -523,10 +537,25 @@ func _cancel() -> void:
 
 # ── Seleccion ─────────────────────────────────────────────────────────
 
+## Un toque sobre el barco del contrabandista atracado abre su panel
+## (feat/edificios-economia). Devuelve si lo toco.
+func _try_open_ship(screen_pos: Vector2) -> bool:
+	if not EconomyManager.is_ship_docked():
+		return false
+	var world := View2D.px_to_world(View2D.screen_to_px(get_viewport().get_canvas_transform(), screen_pos))
+	if not EconomyManager.ship_hit(world):
+		return false
+	SmugglerPanelScript.open_in(get_tree())
+	return true
+
 func _try_select(cell: Vector2i) -> void:
 	var node := GridManager.get_building_at(cell) if GridManager.is_valid_cell(cell) else null
 	if node == null:
 		EventBus.building_deselected.emit()
+		# Una marca de amenaza en la costa (feat/amenazas-costa): su tarjeta.
+		var threat_id: int = ThreatManager.threat_at_cell(cell)
+		if threat_id > 0:
+			EventBus.threat_clicked.emit(threat_id)
 		return
 	var info := GridManager.get_building_info(node)
 	# Con algo que recoger, el toque recoge; si no cupo nada, selecciona.

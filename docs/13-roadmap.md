@@ -224,6 +224,35 @@ colony), and by updating `CLAUDE.md`, docs/03, docs/15, docs/23 and this file.
 | `balance/campana-4-6h` | A 4-6 h campaign measured with the irregular island; ¿QUÉ HACER? suggests upgrading a producer when the pool is full | Open, not integrated |
 | `feat/ensenar-combate` | Teaching the combat (covers 1.4-1.5: guided fight, unit cards, previews) | 🚧 branch open, not integrated yet |
 
+### Version 1.2 integrated (`integracion/v1.2b`, 2026-10-25)
+
+Bryan chose what goes into the 1.2. **In:** defence buildings (Bastion, Scrapyard,
+Telegraph), economy buildings (Trade port with the smuggler's ship, Exchange house,
+Diesel plant), the other 18 decorations and the trucks, the coastal threats, and
+Volverse el Imperio behind a **new ending with a choice** (sign the Tax book and take
+the archipelago, or burn it and keep a free island; docs/06 "Final con elección").
+**Out, postponed (their code not merged):** Núcleo 1-5 and blueprints
+(`feat/nucleo-y-planos`), Infirmary / Forge doctrines / Firing range
+(`feat/edificios-militares`) and the neighbourhood beauty (taken out of
+`feat/edificios-defensa-vida`). Without blueprints, the Scrapyard, Exchange and Diesel
+plant open by era + rank (4 / 6 / 9; docs/03 "Unlocks in the 1.2"). The new panels
+(smuggler, threat card, archipelago, the book) use CartoonTheme (docs/28 §20).
+**State:** integrated on `integracion/v1.2b`, full suite green, not merged into
+`main` (Bryan merges). Balance of the new content still unmeasured with the line probe.
+
+### Version 1.2: Volverse el Imperio (`feat/volverse-imperio`)
+
+Owner's decision (2026-10-18): after **winning** the Final Audit the game goes on, on
+the same island. The Storm stops and now you collect: an archipelago of six
+neighbouring islands, each with its crest, difficulty, a short chain of land / sea /
+air missions (pure domain, a boss in the Ash Citadel) and, once conquered, your flag
+over it, a periodic tribute and a unique reward (a decoration before its rank, flag
+pieces or a title). The victory screen becomes "Ahora el Imperio eres tú" with a
+button to the archipelago, and WHAT TO DO? proposes the next conquest. Not in
+Constructor or Sandbox. Detail: [06-progression-victory.md](06-progression-victory.md)
+§Volverse el Imperio, [15-combat.md](15-combat.md) §14. **State:** 🚧 branch pushed,
+tests written and not run, values not measured.
+
 ## ❓ Open balance decisions
 
 Measured by the balance line and left to the owner

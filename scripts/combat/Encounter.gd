@@ -51,6 +51,19 @@ var terrain: Dictionary = {}
 ## en un tablero sin agua). No pelean, no mueren, no cuentan: se quedan "en el
 ## puerto". Normalmente vacio: quien compone los bandos ya evita mandarlas.
 var reserve: Array = []
+## Cobertura (Bastion, feat/edificios-defensa-vida): casilla -> defensa de mas
+## para quien este encima (solo de superficie: un avion no se esconde detras de
+## un parapeto). Vacio = sin cobertura, el tablero de siempre. Solo la ponen los
+## tableros de defensa (Impuesto y asedio) con algun Bastion en pie.
+var cover: Dictionary = {}
+## El azar del dano (feat/ritmo-colono, docs/15 §3 "El dano y su azar"): un
+## generador PROPIO, sembrado. create() lo siembra con una semilla sacada del
+## tablero tal como empieza (bandos, vida, casillas), asi que el mismo tablero da
+## el mismo combate; quien quiera otra noche (un reintento, otro Impuesto) llama
+## seed_rng() con su semilla antes de start(). Misma semilla y mismas jugadas =
+## mismo combate. Nunca randf() global.
+var rng := RandomNumberGenerator.new()
+var rng_seed: int = 0
 
 # ── Construction ─────────────────────────────────────────────────────
 
@@ -78,7 +91,46 @@ static func create(p_units: Array, p_index: int, p_is_boss: bool, p_is_defense: 
 	# Despues de desplegar: lo que se quedo en reserva no cuenta para la retirada.
 	for unit in Rules.living_units(e.units, ENEMY):
 		e.enemy_start_hp += unit.hp
+	e.seed_rng(e.board_seed())
 	return e
+
+## Pone `cells` como casillas de cobertura con `bonus` de defensa cada una.
+## Se llama tras create(); no mueve a nadie (el despliegue ya esta hecho y las
+## dotaciones de torre suelen quedar encima, en la fila de atras).
+func set_cover(cells: Array, bonus: int) -> void:
+	cover.clear()
+	if bonus <= 0:
+		return
+	for c in cells:
+		cover[c as Vector2i] = bonus
+
+## La defensa de mas que da la casilla `cell` (0 sin cobertura).
+func cover_at(cell: Vector2i) -> int:
+	return int(cover.get(cell, 0))
+
+## La defensa de mas de `unit` donde esta ahora: la de su casilla si es de
+## superficie, 0 si vuela o no esta en el tablero.
+func cover_for(unit: CombatUnit) -> int:
+	if unit == null or cover.is_empty() or unit.position.x < 0 or unit.layer() == "air":
+		return 0
+	return cover_at(unit.position)
+
+## El dano que haria `attacker` a `target` en este tablero (cobertura incluida).
+func damage_between(attacker: CombatUnit, target: CombatUnit) -> int:
+	return Rules.damage(attacker, target, cover_for(target))
+## La semilla que sale del tablero tal como empieza: indice, jefe, defensa y cada
+## unidad (tipo, bando, vida, escala y casilla). Pura: el mismo tablero, la misma.
+func board_seed() -> int:
+	var parts: Array = [index, is_boss, is_defense]
+	for unit in units:
+		parts.append([unit.unit_id, unit.side, unit.hp, snappedf(unit.scale, 0.001), unit.position])
+	var value: int = hash(parts)
+	return value if value != 0 else 1
+
+## Siembra el azar del dano. Llamar antes de start() (o de AutoResolver.resolve).
+func seed_rng(value: int) -> void:
+	rng_seed = value if value != 0 else 1
+	rng.seed = rng_seed
 
 ## ¿Hay agua en este tablero?
 func has_water() -> bool:
@@ -383,7 +435,12 @@ func attack(uid: int, target_uid: int) -> Array:
 		return []
 	var attacker := get_unit(uid)
 	var target := get_unit(target_uid)
-	var dealt: int = Rules.damage(attacker, target)
+	# El golpe sale del rango con la tirada de este tablero (rng sembrado), con la
+	# cobertura de la casilla del blanco (Bastion). Con combat_damage_spread = 0 el
+	# rango es un solo numero y no se tira nada.
+	var cover_bonus: int = cover_for(target)
+	var span: Vector2i = Rules.damage_range(attacker, target, cover_bonus)
+	var dealt: int = span.x if span.x == span.y else Rules.rolled_damage(attacker, target, rng.randf(), cover_bonus)
 	target.take_damage(dealt)
 	attacker.has_acted = true
 	var events: Array = [{"e": "unit_attacked", "attacker": uid, "target": target_uid, "damage": dealt}]

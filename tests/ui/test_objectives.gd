@@ -40,8 +40,13 @@ func before_test() -> void:
 		"storm": StormManager.get_save_data(),
 		"tech": TechTreeManager.get_save_data(),
 		"tutorial": TutorialManager.get_save_data(),
+		"campaigns": CombatManager.get_campaigns_save_data(),
+		# Las misiones ganadas aqui dan XP de rango: se devuelve al acabar.
+		"rank": RankManager.get_save_data(),
 	}
 	TechTreeManager.reset()
+	# Ninguna campana empezada (feat/ritmo-colono: sus piezas cierran capitulos).
+	CombatManager.load_campaigns_save_data({"seed": 11})
 	# La primera escaramuza ya ganada: estos casos prueban la linea de siempre. Los
 	# que hablan de ella la vuelven a abrir (test_first_sortie_*).
 	TutorialManager.first_sortie_done = true
@@ -96,8 +101,17 @@ func after_test() -> void:
 	ResourceManager.set_amounts(amounts)
 	PopulationManager.load_save_data(_saved["population"])
 	TutorialManager.load_save_data(_saved["tutorial"])
+	CombatManager.load_campaigns_save_data(_saved["campaigns"])
+	RankManager.load_save_data(_saved["rank"])
 
 # ── Utilleria ────────────────────────────────────────────────────────
+
+## Las tres campanas ganadas: sus piezas del CG nivel 3 en casa (feat/ritmo-colono).
+func _with_all_pieces() -> void:
+	var progress := {}
+	for d in GameConfig.CAMPAIGN_DOMAINS:
+		progress[d] = GameConfig.campaign_base_count(String(d))
+	CombatManager.load_campaigns_save_data({"seed": 11, "progress": progress})
 
 ## Planta un edificio en la rejilla (sin placer ni mapa: Objectives solo cuenta
 ## por GridManager) y reparte obreros como en partida.
@@ -191,6 +205,13 @@ func _take(step: Dictionary) -> void:
 			# Sale y la gana: lo que cuenta aqui es que el panel pase pagina.
 			assert_bool(bool(CombatManager.can_launch({String(step["id"]): 1})["ok"])).is_true()
 			EventBus.expedition_ended.emit(Expedition.RESULT_WON, {}, {})
+		"campaign":
+			# La mision que toca, ganada (feat/ritmo-colono: los capitulos piden las
+			# piezas de los jefes antes del CG nivel 3). Sin descanso: aqui se
+			# prueba el camino, no el reloj.
+			var domain: String = String(step["id"])
+			var book: CampaignBook = CombatManager.get_campaign_book()
+			CombatManager._publish_campaign_events(book.finish(domain, book.next_mission(domain), true, 0.0, 0.0))
 		"make":
 			# Como entrenar: el taller termina al instante. Se paga la receta que
 			# _give puso en la bolsa y entra lo que el paso pide (el jugador repetiria
@@ -225,7 +246,7 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 	var guard := 0
 	while not ProgressionManager.is_final_audit_pending():
 		guard += 1
-		if guard > 120:
+		if guard > 260:
 			assert_bool(false).override_failure_message(
 				"el panel dio vueltas sin llegar al asedio; ultimos pasos: %s" % str(visited.slice(-8))).is_true()
 			return
@@ -254,7 +275,9 @@ func test_following_the_panel_walks_the_whole_line_to_the_siege() -> void:
 		"build:market",
 		"build:warehouse", "build:foundry", "train:artillery", "train:artillery",
 		"build:refinery", "build:tower", "build:tower", "build:headquarters",
-		"upgrade:headquarters", "train:vehicle", "upgrade:headquarters"]
+		# feat/ritmo-colono: los tanques del final, antes de las campanas (y del CG 2).
+		"build:shipyard", "build:aerodrome", "train:vehicle", "campaign:land", "upgrade:headquarters",
+		"upgrade:headquarters"]
 	var cursor := 0
 	for entry in visited:
 		if cursor < expected.size() and entry == expected[cursor]:
@@ -344,13 +367,20 @@ func test_a_ruined_producer_is_repaired_before_anything_else() -> void:
 ## La mejora que no cabe en la bolsa no se pide a ciegas: primero el almacen.
 func test_an_upgrade_that_does_not_fit_asks_for_a_warehouse_first() -> void:
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
-	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
-			"refinery", "tower", "tower", "headquarters"]:
+	# Cuatro Granjas desde que el Nucleo da sitio a 10 (2026-10-24): mas bocas.
+	for id in ["sawmill", "farm", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house", "sawmill", "warehouse", "foundry", "barracks",
+			"refinery", "tower", "tower", "headquarters", "shipyard", "aerodrome"]:
 		_build(id)
 	for i in range(Objectives.GARRISON_UNITS):
 		_add_unit("artillery")
 	# Comida para unos ciclos: sin ella el paso seria comprarla (2026-10-04).
-	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 400})
+	# 600 desde que el Nucleo da sitio a 10 (2026-10-24): hay mas bocas.
+	ResourceManager.set_amounts({"gold": 0, "wood": 0, "steel": 0, "oil": 0, "food": 600})
+	# Las piezas de las campanas (feat/ritmo-colono) ya en casa: lo que se prueba
+	# es la bolsa del CG nivel 2, no las campanas (ni los tanques) que van antes.
+	_with_all_pieces()
+	for i in range(Objectives.SIEGE_VEHICLES):
+		_add_unit("vehicle")
 	# Era 3 con un almacen: 1000 + 500 = 1500, y la mejora a nivel 2 cuesta 2000.
 	var step: Dictionary = Objectives.next_step()
 	assert_str(String(step["kind"])).is_equal("build")
@@ -490,10 +520,15 @@ func _panel_says(node: Node, text: String) -> bool:
 ## cinco almacenes en pie, el panel manda al arbol a por holgura en vez de dejar al
 ## jugador cuadrando los cuatro recursos al centimo.
 func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
+	# Es la cuenta de Gobernador: en Colono (feat/ritmo-colono) el CG pide tres
+	# cuartos de la bolsa y no hace falta holgura.
+	var saved_tier: int = GameMode.tier
+	GameMode.tier = GameMode.Tier.GOVERNOR
+	_with_all_pieces()
 	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
 	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "gold_mine", "gold_mine", "house", "house", "house", "house", "house", "sawmill",
 			"warehouse", "warehouse", "warehouse", "warehouse", "warehouse", "foundry", "barracks",
-			"refinery", "tower", "tower", "headquarters"]:
+			"refinery", "tower", "tower", "headquarters", "shipyard", "aerodrome"]:
 		_build(id)
 	_first("headquarters").set_meta("level", 2)
 	for i in range(Objectives.SIEGE_VEHICLES):
@@ -523,12 +558,14 @@ func test_the_last_upgrade_sends_you_to_the_storage_techs_first() -> void:
 	assert_int(int(step.get("level", 0))).override_failure_message(str(seen) + str(step)).is_equal(3)
 	# Y con la holgura, la mejora ya no es el 100% de la bolsa.
 	assert_int(Objectives._cost_total(Objectives.step_cost(step))).is_less(ResourceManager.get_storage_cap())
+	GameMode.tier = saved_tier
 
 # ── Los modos ────────────────────────────────────────────────────────
 
 ## En Constructor no hay Diezmo ni asedio: el panel no pide guarnicion ni
 ## blindados, y el nivel 3 del Cuartel General es la meta. En Sandbox no hay
 ## objetivo. docs/20-modos-de-juego.md.
+
 func test_the_builder_skips_the_army_and_the_sandbox_has_no_goal() -> void:
 	var saved_mode: int = GameMode.current
 	var saved_result: String = GameMode.run_result
@@ -716,36 +753,50 @@ func test_the_panel_says_what_is_missing_and_how_to_get_it() -> void:
 
 # ── Tres campanas (feat/tres-campanas) ───────────────────────────────
 
-## Con el Cuartel General a nivel 3 y las campanas por hacer, el panel no se
-## queda en "mundo libre": pide la primera campana (aqui, sin Cuartel, su
-## edificio) y la ruta tiene su fila.
-func test_after_hq3_without_the_campaigns_the_panel_asks_for_them() -> void:
+## Las piezas en la linea (feat/ritmo-colono): con el Cuartel General en pie y
+## los seis tanques en casa, lo siguiente son las campanas (Tierra primero: es lo que le queda al capitulo II).
+## Aqui, sin tropa en casa, el panel pide tropa de su medio; la ruta tiene la fila
+## de la pieza y la puerta dice que piezas faltan.
+func test_with_the_hq_standing_the_panel_asks_for_the_pieces() -> void:
 	var saved_mode: int = GameMode.current
 	GameMode.begin_run(GameMode.Mode.CAMPAIGN)
-	var saved_campaigns: Dictionary = CombatManager.get_campaigns_save_data()
-	CombatManager.load_campaigns_save_data({})
-	ProgressionManager.milestones_completed["hq_max"] = true
+	ProgressionManager.current_phase = GameConfig.Phase.EXPANSION
+	for id in ["sawmill", "farm", "farm", "farm", "gold_mine", "market", "house", "house", "house", "house",
+			"warehouse", "foundry", "barracks", "refinery", "tower", "tower", "headquarters", "shipyard", "aerodrome"]:
+		_build(id)
+	for i in range(Objectives.GARRISON_UNITS):
+		_add_unit("artillery")
+	# Antes de las campanas, los seis tanques del final.
+	assert_str(String(Objectives._first_open_line_step().get("id", ""))).is_equal("vehicle")
+	for i in range(Objectives.SIEGE_VEHICLES):
+		_add_unit("vehicle")
+	ResourceManager.set_amounts({"gold": 2000, "wood": 500, "steel": 500, "oil": 300, "food": 400})
+	assert_str(String(Objectives._first_open_line_step().get("kind", ""))).is_equal("campaign")
+	assert_array(Objectives.gate_domains()).is_equal(["land", "sea", "air"])
 	var gate: Dictionary = Objectives.campaign_gate_step()
 	assert_dict(gate).is_not_empty()
-	assert_str(String(gate["why"])).is_equal("OBJ_WHY_CAMPAIGN_BUILDING")
-	assert_str(String(gate["id"])).is_equal("barracks")
 	assert_str(String(Objectives.next_step()["kind"])).is_not_equal("sandbox")
+	var want: String = Tr.t("OBJ_ROUTE_PIECE") % (Tr.t("PIECE_FROM_BOSS") % [CombatManager.piece_name("land"),
+		Tr.t("CAMP_NAME_LAND")])
 	var found := false
 	for row in Objectives.route():
-		if String(row["text"]) == Tr.t("OBJ_ROUTE_CAMPAIGNS") % 0:
+		if String(row["text"]) == want:
 			found = true
+			assert_bool(bool(row["current"])).is_true()
 	assert_bool(found).is_true()
-	assert_str(Objectives.final_gate_text()).contains(Tr.t("CAMP_NAME_SEA"))
-	CombatManager.load_campaigns_save_data(saved_campaigns)
+	assert_str(Objectives.final_gate_text()).contains(Tr.t("PIECE_SHORT_SEA"))
+	# Con las tres piezas, la linea sigue por el CG nivel 2.
+	_with_all_pieces()
+	assert_str(String(Objectives._first_open_line_step().get("kind", ""))).is_equal("upgrade")
 	GameMode.current = saved_mode
 
-## Con las tres campanas hechas la puerta no pide nada mas que el CG nivel 3.
+## Con las tres piezas la puerta no pide nada mas que el CG nivel 3.
 func test_with_the_three_campaigns_done_only_the_hq_is_missing() -> void:
 	var saved_campaigns: Dictionary = CombatManager.get_campaigns_save_data()
 	CombatManager.load_campaigns_save_data({"progress": {
-		"land": GameConfig.campaign_mission_count("land"),
-		"sea": GameConfig.campaign_mission_count("sea"),
-		"air": GameConfig.campaign_mission_count("air")}})
+		"land": GameConfig.campaign_base_count("land"),
+		"sea": GameConfig.campaign_base_count("sea"),
+		"air": GameConfig.campaign_base_count("air")}})
 	var missing: Array = ProgressionManager.final_audit_missing()
 	assert_array(missing).contains_exactly([Tr.t("AUDIT_NEEDS_HQ3")])
 	assert_dict(Objectives.campaign_gate_step()).is_empty()
