@@ -60,8 +60,10 @@ func _ready() -> void:
 	if UITheme.is_cartoon():
 		release_fade_sec = 0.0
 	_setup_ui()
-	EventBus.building_selected_for_placement.connect(func(_d): _set_placing(true))
-	EventBus.request_move_building.connect(func(_b): _set_placing(true))
+	EventBus.building_selected_for_placement.connect(func(d): _set_placing(true, rotates(d)))
+	EventBus.request_move_building.connect(func(b):
+		var info := GridManager.get_building_info(b) if b != null and is_instance_valid(b) else {}
+		_set_placing(true, rotates(info.get("data"))))
 	EventBus.building_placement_cancelled.connect(func(): _set_placing(false))
 	# Tras colocar, el placer emite building_placement_cancelled si no se sigue
 	# en serie (PlacementRules.keeps_placing): ahi se esconde la pareja.
@@ -113,12 +115,17 @@ var _zoom_box: Control = null
 ## subia por encima de la cruceta y su fila de girar la camara quedaba debajo de
 ## CONSTRUIR: mientras se coloca esa fila se esconde (la camara se sigue girando
 ## con dos dedos) y vuelve al terminar.
-func _set_placing(placing: bool) -> void:
+func _set_placing(placing: bool, can_rotate: bool = true) -> void:
 	_placing = placing
-	_rotate_building_btn.visible = placing
+	# La carretera no gira (su forma sale de las vecinas): sin R (QA telefono M3).
+	_rotate_building_btn.visible = placing and can_rotate
 	_cancel_placement_btn.visible = placing
 	set_opacity(_opacity)
 	_apply_visibility()
+
+## ¿Tiene sentido girar este edificio al colocarlo? Todo menos la carretera.
+static func rotates(data: Variant) -> bool:
+	return not (data is BuildingData and (data as BuildingData).id == "road")
 
 func is_placing_shown() -> bool:
 	return _cancel_placement_btn.visible

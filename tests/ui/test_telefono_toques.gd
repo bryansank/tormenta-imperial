@@ -39,6 +39,23 @@ func test_placement_buttons_stay_opaque_while_placing() -> void:
 	osc._set_placing(false)
 	assert_float(rot.modulate.a).is_equal_approx(0.45, 0.001)
 
+## QA telefono M3: la carretera no gira; al colocarla no sale R.
+func test_no_rotate_button_for_roads() -> void:
+	var osc = auto_free(OSC.new())
+	add_child(osc)
+	var road: BuildingData = load("res://data/buildings/road.tres")
+	var house: BuildingData = load("res://data/buildings/house.tres")
+	assert_bool(OSC.rotates(road)).is_false()
+	assert_bool(OSC.rotates(house)).is_true()
+	# Lo que hace la senal building_selected_for_placement (sin emitirla: otros
+	# oyentes de la suite empezarian a colocar).
+	osc._set_placing(true, OSC.rotates(road))
+	assert_bool(osc._rotate_building_btn.visible).is_false()
+	assert_bool(osc._cancel_placement_btn.visible).is_true()
+	osc._set_placing(true, OSC.rotates(house))
+	assert_bool(osc._rotate_building_btn.visible).is_true()
+	osc._set_placing(false)
+
 func test_help_rows_and_color_swatches_are_48() -> void:
 	var b := CT.list_button("help", "Titulo", true)
 	assert_float(b.custom_minimum_size.y).is_greater_equal(48.0)
