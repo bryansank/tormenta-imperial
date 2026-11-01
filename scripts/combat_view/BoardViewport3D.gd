@@ -4,7 +4,7 @@ extends SubViewportContainer
 ## traduccion de toques y clics a casillas.
 ##
 ## Un toque (o clic) que no arrastra es una casilla: `cell_pressed`. La rueda y el
-## pellizco acercan un poco (Board3D.ZOOM_MIN..MAX). Con raton, la casilla bajo
+## pellizco (gesto del sistema o dos dedos) acercan un poco (Board3D.ZOOM_MIN..MAX). Con raton, la casilla bajo
 ## el puntero se marca y el tooltip dice quien hay (`tooltip_provider`). Nada
 ## de esto decide: BattleScreen recibe la casilla y llama a CombatManager igual
 ## que con el tablero 2D.
@@ -22,6 +22,13 @@ var tooltip_provider: Callable
 var _press_pos := Vector2.ZERO
 var _pressed := false
 var _hover_enabled := true
+## Dedos apoyados (indice -> posicion) y distancia entre dos al empezar a
+## pellizcar. Android no manda InputEventMagnifyGesture: el pellizco del
+## tablero se mide aqui con dos dedos (QA tablet n. 6).
+var _touches := {}
+var _pinch_dist := 0.0
+## Hubo pellizco en este toque: al soltar no cuenta como casilla.
+var _pinched := false
 
 func _init() -> void:
 	name = "Board3DView"
@@ -65,7 +72,7 @@ func _gui_input(event: InputEvent) -> void:
 					board.set_hover(board.pick_cell(_to_viewport(mb.position)))
 			elif _pressed:
 				_pressed = false
-				if mb.position.distance_to(_press_pos) <= TAP_SLOP:
+				if not _pinched and mb.position.distance_to(_press_pos) <= TAP_SLOP:
 					var cell: Vector2i = board.pick_cell(_to_viewport(mb.position))
 					if cell.x >= 0:
 						cell_pressed.emit(cell)
@@ -78,6 +85,27 @@ func _gui_input(event: InputEvent) -> void:
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			board.zoom_by(1.05)
 			accept_event()
+	elif event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			_touches[st.index] = st.position
+		else:
+			_touches.erase(st.index)
+		_pinch_dist = _two_finger_distance()
+		if _touches.size() >= 2:
+			_pinched = true
+		elif _touches.is_empty():
+			_pinched = false
+	elif event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		_touches[sd.index] = sd.position
+		if _touches.size() == 2:
+			var d := _two_finger_distance()
+			if _pinch_dist > 0.0 and d > 0.0:
+				# Separar los dedos acerca (como la rueda hacia arriba).
+				board.zoom_by(_pinch_dist / d)
+			_pinch_dist = d
+			accept_event()
 	elif event is InputEventMagnifyGesture:
 		var mg := event as InputEventMagnifyGesture
 		if mg.factor > 0.0:
@@ -87,6 +115,13 @@ func _gui_input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		if mm.device != InputEvent.DEVICE_ID_EMULATION:
 			board.set_hover(board.pick_cell(_to_viewport(mm.position)))
+
+## Distancia entre los dos dedos apoyados, o 0 si no hay exactamente dos.
+func _two_finger_distance() -> float:
+	if _touches.size() != 2:
+		return 0.0
+	var pts: Array = _touches.values()
+	return (pts[0] as Vector2).distance_to(pts[1] as Vector2)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_MOUSE_EXIT and board != null:

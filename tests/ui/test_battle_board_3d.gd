@@ -329,3 +329,39 @@ func test_the_board_has_its_own_speed_button_and_x2_shortens_the_animations() ->
 	assert_str(btn.text).is_equal("x2")
 	assert_float(board._tempo()).is_equal_approx(slow * 0.5, 0.001)
 	GameConfig.set_game_speed(1.0)
+
+## QA tablet n. 6: Android no manda el gesto de pellizco; el tablero 3D lee dos
+## dedos. Separarlos acerca y el toque no cuenta como casilla.
+func test_two_fingers_pinch_the_3d_board() -> void:
+	var view: SubViewportContainer = auto_free(load("res://scripts/combat_view/BoardViewport3D.gd").new())
+	view.size = Vector2(400, 400)
+	add_child(view)
+	await await_idle_frame()
+	var pressed: Array = []
+	view.cell_pressed.connect(func(c): pressed.append(c))
+	var before: float = view.board._zoom
+	var t0 := InputEventScreenTouch.new()
+	t0.index = 0
+	t0.pressed = true
+	t0.position = Vector2(150, 200)
+	view._gui_input(t0)
+	var t1 := InputEventScreenTouch.new()
+	t1.index = 1
+	t1.pressed = true
+	t1.position = Vector2(250, 200)
+	view._gui_input(t1)
+	var drag := InputEventScreenDrag.new()
+	drag.index = 1
+	drag.position = Vector2(350, 200)
+	view._gui_input(drag)
+	assert_float(view.board._zoom).is_less(before)
+	# Al soltar, el clic emulado del primer dedo no elige casilla.
+	var down := InputEventMouseButton.new()
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	down.position = Vector2(150, 200)
+	view._gui_input(down)
+	var up := down.duplicate() as InputEventMouseButton
+	up.pressed = false
+	view._gui_input(up)
+	assert_array(pressed).is_empty()
