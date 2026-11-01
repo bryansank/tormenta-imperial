@@ -19,6 +19,9 @@ const GLYPHS := ["build", "army", "missions", "market", "research", "help", "men
 	"settings", "upgrade", "move", "demolish", "close", "lock", "star", "clock",
 	"sound", "music", "screen", "controls", "access", "game", "anchor", "plane",
 	"tank", "raid", "check", "storm", "plus", "minus", "back", "next", "workers_off", "sun", "wrench",
+	# Belleza del barrio (feat/belleza-barrio): la ficha de belleza de las casas
+	# y las decoraciones.
+	"flower",
 	# Materiales del taller (feat/recetas-tarjetas): no tienen PNG como los
 	# recursos; la tarjeta de receta los pide con CartoonTheme.res_glyph().
 	"mat_planks", "mat_ingots", "mat_beams", "mat_fuel"]
@@ -310,6 +313,15 @@ static func draw_glyph(ci: CanvasItem, r: Rect2, id: String, tint: Color = Color
 			_arc(ci, r, 11.9, 8.6, 5.6, PI * 1.02, PI * 1.97, m)
 			_arc(ci, r, 17.2, 12.4, 4.1, -PI * 0.5, PI * 0.5, m)
 			_pl(ci, r, [12.8, 11.5, 10, 16.5, 13.5, 16.5, 11.2, 21], a)
+		"flower":
+			# Cinco petalos de linea alrededor de un boton de laton, con tallo y hoja.
+			for i in 5:
+				var ang := -PI * 0.5 + TAU * float(i) / 5.0
+				_ring(ci, r, 12 + cos(ang) * 4.2, 9 + sin(ang) * 4.2, 2.6, m)
+			_dot(ci, r, 12, 9, 2.0, a)
+			_pl(ci, r, [12, 15.5, 12, 21.5], m)
+			_fill(ci, r, _ell(15.2, 18.2, 2.6, 1.3), Color(a, 0.45))
+			_pl(ci, r, _ell(15.2, 18.2, 2.6, 1.3), m, true, 0.8)
 		"sun":
 			_ring(ci, r, 12, 12, 4.5, m)
 			for i in 8:

@@ -69,7 +69,7 @@ holds a service's state of its own.
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 167 signals in 36 categories (incl. `game_load_progress` and `shortcut_pressed`) (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 168 signals in 36 categories (incl. `game_load_progress` and `shortcut_pressed`) (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9). PC shortcuts (`feat/atajos-pc`): it filters the keys and emits `EventBus.shortcut_pressed` (B build, M missions, H help in BottomBar; Space in PauseMenu; Enter/D/E on the board), and `InputService.hint()` adds the key to tooltips on PC |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -359,10 +359,8 @@ GameConfig is created. Baked toy model `assets/models/toy/fishing_dock.tscn`; 2D
 "Yacimientos de mar", docs/03 "Muelle de pesca".
 
 **Defensa (1.2, `feat/edificios-defensa-vida`, doc 21 §6.3 n.º 11, 12, 18):** the
-Bastion, Scrapyard and Telegraph rows. **The neighbourhood beauty of that branch did
-not make the 1.2** (Bryan, 2026-10-25): no `beauty*` metas, no `BeautyTrim`, no extra
-room or morale for houses, no `beauty_changed` signal (`tests/buildings/test_v12_unlocks.gd`
-and `test_defense_life.gd` check it stays out). Areas in
+Bastion, Scrapyard and Telegraph rows. The neighbourhood beauty of that branch was left
+out of the 1.2 and came back in `feat/belleza-barrio` (next paragraph). Areas in
 `scripts/buildings/DefenseLifeEffects.gd` (called right after `UtilityEffects` from
 `ProductionManager._refresh_areas()`, on build/demolish/finish/ruin/repair/upgrade/
 staffing, never per frame; metas `bastion_cover`, `scrap_cover`; runtime
@@ -376,6 +374,27 @@ unchanged (docs/15 §3). **Telegraph** slot: `ContractBoard.WIRE` (saved in
 shows what each one covers in its status line (`DefenseLifeEffects.info_line`).
 Looks: `DefenseToys.gd` + bakes in `assets/models/toy/`; 2D
 `BuildingArt2D._bastion/_scrapyard/_telegraph`. Detail: docs/03 "Defensa".
+
+**Neighbourhood beauty (`feat/belleza-barrio`, doc 21 §6.4):** every standing
+decoration gives the Houses within `beauty_radius` (3) tiles **as much beauty as its
+morale** (`GameConfig.beauty_of()`: `morale_bonus` x the upgrade morale multiplier;
+roads give none; `beauty_values` overrides one id, empty by default). A House with
+`beauty_levels` 10 / 25 is pretty / elegant: `beauty_room` +1 / +2 room and
+`beauty_morale` +2 / +4 morale points, added by `PopulationManager._recalculate_all()`.
+Computed in `DefenseLifeEffects.refresh_beauty()` (part of the grouped, deferred
+`refresh()`, never per frame) into house metas `beauty`, `beauty_level`, `beauty_room`,
+`beauty_morale`; on a change, `PopulationManager.recalculate()` and
+`EventBus.beauty_changed`. **Not saved** (derived from what is built);
+`PopulationManager.load_save_data()` spreads it before its count so nobody is evicted
+on load. Views: 3D `scripts/buildings/BeautyTrim.gd` (hung on the house model by
+`BuildingPlacer._sync_beauty()`), 2D `BuildingArt2D.draw_beauty()` (level in the
+`Building2D` signature). Info panel: a flower chip with the number
+(`BuildingInfoPanel.beauty_chip()`, detail in its tooltip / hold). While placing a
+decoration or a House, both placers paint the zone and the houses (or decorations) it
+touches (`DefenseLifeEffects.zone_rect` / `ring_cells` / `zone_partners`, token
+`UITheme.BEAUTY`), recomputed only when the ghost changes cell. No Núcleo levels or
+blueprints involved. Tip `beauty` on the first pretty house. Detail: docs/03 "Belleza
+del barrio"; tests `tests/buildings/test_neighbourhood_beauty.gd`.
 
 **Economy buildings (1.2, feat/edificios-economia, doc 21 §6.3 n.º 13, 14, 16; doc 14
 §P4):** `trade_port`, `exchange`, `diesel_plant`. Numbers in the GameConfig block

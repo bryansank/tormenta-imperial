@@ -32,6 +32,7 @@ func test_every_v12_building_has_a_cap_row() -> void:
 	for id in V12_BUILDINGS:
 		assert_bool(GameConfig.building_limits.has(id)).override_failure_message(id).is_true()
 
-func test_the_neighbourhood_beauty_and_the_core_levels_are_not_here() -> void:
-	assert_bool("beauty_levels" in GameConfig).is_false()
+## La belleza del barrio volvio (feat/belleza-barrio) sin depender de ellos:
+## los niveles del Nucleo siguen fuera.
+func test_the_core_levels_are_not_here() -> void:
 	assert_bool("core_level_unlocks" in GameConfig).is_false()

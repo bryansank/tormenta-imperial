@@ -111,6 +111,9 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_completed)
 	EventBus.workers_changed.connect(func(_u, _t): if _workers_btn != null and _panel.visible: _refresh_workers_toggle())
 	EventBus.building_upgrade_completed.connect(_on_upgrade_completed)
+	# Belleza del barrio (feat/belleza-barrio): la ficha de belleza de la casa o
+	# la decoracion abierta se repinta (solo las fichas de cifra, sin moverse).
+	EventBus.beauty_changed.connect(_on_beauty_changed)
 	# El boton MEJORAR y su "por que" siguen a lo que hay.
 	EventBus.resource_changed.connect(func(_t, _a, _d): _on_resources_changed())
 	EventBus.building_selected_for_placement.connect(func(_d): _hide_panel())
@@ -575,26 +578,7 @@ func _show_building_panel() -> void:
 	_level_label.tooltip_text = level_line(_selected_data, level)
 	_refresh_status_line()
 
-	# Lo que hace (con el multiplicador de nivel): fichas de cifra.
-	for child in _production_box.get_children():
-		_production_box.remove_child(child)
-		child.free()
-	var prod := production_amounts(_selected_data, level)
-	if not prod.is_empty():
-		var interval := GameConfig.get_production_interval(_selected_data.production_interval)
-		for res_id in prod:
-			var chip := CT.stat_chip("res:" + String(res_id), "+%d" % int(prod[res_id]),
-				Tr.t("FMT_EVERY") % TextKit.short_time(interval), "window", CT.positive_text())
-			_production_box.add_child(chip)
-	if _selected_data.workers_required > 0:
-		_production_box.add_child(CT.stat_chip("res:workers", str(_selected_data.workers_required), Tr.t("UI2C_CHIP_WORK"), "window"))
-	if _selected_data.population_capacity > 0:
-		var room: int = _selected_data.population_capacity if _selected_data.is_core else \
-			int(_selected_data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, level))
-		_production_box.add_child(CT.stat_chip("res:workers", "+%d" % room, Tr.t("UI2C_CHIP_ROOM"), "window"))
-	if _selected_data.morale_bonus > 0:
-		_production_box.add_child(CT.stat_chip("res:morale", "+%d" % _selected_data.morale_bonus, Tr.t("UI2C_CHIP_MORALE"), "window"))
-	_production_container.visible = _production_box.get_child_count() > 0
+	_refresh_chips(level, is_building)
 
 	_deposit_uses_label.visible = false
 	_harvest.show_for(_selected_node, _selected_data)
@@ -632,6 +616,67 @@ func _show_building_panel() -> void:
 	(func(): CT.sync_ribbon_pad(_win)).call_deferred()
 	set_process(true)
 	UIManager.open_panel(self)
+
+## Lo que hace (con el multiplicador de nivel): fichas de cifra. Tambien la de
+## belleza (feat/belleza-barrio), que se repinta sola con EventBus.beauty_changed.
+func _refresh_chips(level: int, is_building: bool) -> void:
+	for child in _production_box.get_children():
+		_production_box.remove_child(child)
+		child.free()
+	var prod := production_amounts(_selected_data, level)
+	if not prod.is_empty():
+		var interval := GameConfig.get_production_interval(_selected_data.production_interval)
+		for res_id in prod:
+			var chip := CT.stat_chip("res:" + String(res_id), "+%d" % int(prod[res_id]),
+				Tr.t("FMT_EVERY") % TextKit.short_time(interval), "window", CT.positive_text())
+			_production_box.add_child(chip)
+	if _selected_data.workers_required > 0:
+		_production_box.add_child(CT.stat_chip("res:workers", str(_selected_data.workers_required), Tr.t("UI2C_CHIP_WORK"), "window"))
+	if _selected_data.population_capacity > 0:
+		var room: int = _selected_data.population_capacity if _selected_data.is_core else \
+			int(_selected_data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, level))
+		# Una casa bonita o elegante tiene sitio de mas (feat/belleza-barrio).
+		if is_instance_valid(_selected_node) and not is_building:
+			room += int(_selected_node.get_meta(DefenseLifeScript.BEAUTY_ROOM_META, 0))
+		_production_box.add_child(CT.stat_chip("res:workers", "+%d" % room, Tr.t("UI2C_CHIP_ROOM"), "window"))
+	if _selected_data.morale_bonus > 0:
+		_production_box.add_child(CT.stat_chip("res:morale", "+%d" % _selected_data.morale_bonus, Tr.t("UI2C_CHIP_MORALE"), "window"))
+	var beauty := beauty_chip(_selected_node, _selected_data, is_building)
+	if beauty != null:
+		_production_box.add_child(beauty)
+	_production_container.visible = _production_box.get_child_count() > 0
+
+## La ficha de belleza (feat/belleza-barrio): icono de flor y un numero. En una
+## Casa, sus puntos y debajo "Sencilla / Bonita / Elegante"; en una decoracion,
+## "+N" de belleza. Al mantener pulsado (o pasar el raton), el detalle: lo que
+## gana la casa y cuanto le falta, o a cuantas casas llega la decoracion. Nada
+## en obras ni en lo que no cuenta. Publico para los tests.
+static func beauty_chip(node: Node, data: BuildingData, is_building: bool = false) -> Control:
+	if node == null or data == null or is_building or not is_instance_valid(node):
+		return null
+	if not DefenseLifeScript.takes_part(data):
+		return null
+	var chip: Control
+	if data.id == DefenseLifeScript.HOUSE_ID:
+		var lvl := DefenseLifeScript.beauty_level(node)
+		var caption: String = Tr.t(["LBL_BEAUTY_WORD_PLAIN", "LBL_BEAUTY_WORD_PRETTY", "LBL_BEAUTY_WORD_ELEGANT"][clampi(lvl, 1, 3) - 1])
+		chip = CT.stat_chip("flower", str(DefenseLifeScript.beauty_points(node)), caption, "window",
+			CT.positive_text() if lvl > 1 else Color(0, 0, 0, 0))
+		chip.tooltip_text = DefenseLifeScript.house_detail(node)
+	else:
+		chip = CT.stat_chip("flower", "+%d" % GameConfig.beauty_of(data, int(node.get_meta("level", 1))),
+			Tr.t("UI2C_CHIP_BEAUTY"), "window")
+		chip.tooltip_text = DefenseLifeScript.deco_detail(node, data)
+	chip.name = "BeautyChip"
+	return chip
+
+func _on_beauty_changed() -> void:
+	if _panel == null or not _panel.visible or _is_deposit or _selected_data == null \
+			or _selected_node == null or not is_instance_valid(_selected_node):
+		return
+	if not DefenseLifeScript.takes_part(_selected_data):
+		return
+	_refresh_chips(int(_selected_node.get_meta("level", 1)), ProductionManager.is_constructing(_selected_node))
 
 ## El estado en una palabra (o dos): en obras, sin carretera, sin trabajadores,
 ## retirados, sin veta o trabajando. Lo mismo que dice su placa en el mapa.
@@ -797,6 +842,7 @@ const SCREENS := {
 const SCREEN_GLYPHS := {"market": "market", "laboratory": "research", "trade_port": "anchor"}
 const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
 const UtilityEffectsScript := preload("res://scripts/buildings/UtilityEffects.gd")
+const DefenseLifeScript := preload("res://scripts/buildings/DefenseLifeEffects.gd")
 
 ## La linea de estado de los edificios de economia; oculta en los demas.
 func _refresh_economy() -> void:

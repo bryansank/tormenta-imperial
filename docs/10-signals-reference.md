@@ -467,8 +467,10 @@ Con un Telégrafo en pie (1.2) hay un cuarto hueco, `source = "telegraph"`
 | Signal | Params | Emitted By | Consumed By |
 |--------|--------|------------|-------------|
 | `scrap_salvaged` | `steel: int, parts: int, lifted: int` | StormManager (`_scrap_salvage`, al acabar la Tormenta) | *(no listener: el aviso va por `notification_posted`)* |
+| `beauty_changed` | — | ProductionManager (`_refresh_areas`, cuando `DefenseLifeEffects.refresh()` dice que alguna casa cambió de puntos o de nivel de belleza) | BuildingPlacer (`_sync_beauty`: adornos `BeautyTrim` en 3D), BuildingInfoPanel (repinta la ficha de belleza), TutorialManager (tarjeta `beauty` con la primera casa bonita) |
 
-La belleza del barrio de la rama (`beauty_changed`) no entró en la 1.2.
+`beauty_changed` es de la belleza del barrio (`feat/belleza-barrio`): se sacó de la 1.2
+y volvió sola. La 2D no la escucha: lee la meta `beauty_level` en la firma de `Building2D`.
 
 ## Economía (1.2)
 

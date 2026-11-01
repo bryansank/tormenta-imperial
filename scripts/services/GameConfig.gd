@@ -3939,8 +3939,8 @@ func _register_fishing_dock() -> bool:
 # ══════════════════════════════════════════════════════════════════════
 # ── Defensa y vida (feat/edificios-defensa-vida, doc 21 §6.3 n.º 11, 12, 18 y §6.4) ──
 # ══════════════════════════════════════════════════════════════════════
-# Bastion (tramo de muro 2x1), Chatarreria y Telegrafo. La belleza del barrio
-# de la rama original no entro en la 1.2 (decision de Bryan): quitada.
+# Bastion (tramo de muro 2x1), Chatarreria, Telegrafo y la belleza del barrio
+# (la belleza se saco de la 1.2 y volvio en feat/belleza-barrio, 2026-11-01).
 # Como el bloque de los utiles: las areas se calculan al construir, terminar,
 # demoler, arruinar, reparar o mejorar (DefenseLifeEffects.refresh, agrupado y
 # diferido por ProductionManager), nunca por frame, y quedan como metas en los
@@ -3996,6 +3996,51 @@ var telegraph_extra_contracts := 1
 var telegraph_duration_bonus := 0.5
 ## Espera hasta el primer encargo por el hilo, desde que el Telegrafo esta en pie.
 var telegraph_first_delay := 60.0
+
+## Belleza del barrio (feat/belleza-barrio, doc 21 §6.4): cada decoracion en
+## pie da belleza a las Casas que tiene a `beauty_radius` casillas o menos (borde
+## a borde). Una decoracion da TANTA belleza como moral (su morale_bonus; la
+## carretera, nada), asi que el jugador lo lee con el mismo numero; mejorada,
+## mas (upgrade_morale_multiplier). `beauty_values` solo cambia eso para un id
+## concreto: vacia, ninguna decoracion nueva necesita tocarla.
+var beauty_radius := 3
+var beauty_values := {}
+## Umbrales de belleza de una casa: nivel 2 "bonita" y nivel 3 "elegante"
+## (por debajo, nivel 1, la casa de siempre). Un Jardin y una Fuente al lado
+## (5 + 7 = 12) ya la hacen bonita; elegante pide una plaza entera.
+var beauty_levels := [10, 25]
+## Lo que gana una casa por nivel de belleza [1, 2, 3]: sitios de mas para vivir
+## y puntos de moral (se suman a los de las decoraciones: cada 10 puntos, +1 de
+## moral por tic). No viaja en el save: sale de lo que hay construido.
+var beauty_room := [0, 1, 2]
+var beauty_morale := [0, 2, 4]
+
+## La belleza que da una decoracion de `data` a nivel `level` (0 si no da).
+func beauty_of(data: BuildingData, level: int = 1) -> int:
+	if data == null or data.id == "road":
+		return 0
+	var base := 0
+	if beauty_values.has(data.id):
+		base = int(beauty_values[data.id])
+	elif data.is_decoration:
+		base = data.morale_bonus
+	if base <= 0:
+		return 0
+	return maxi(1, roundi(float(base) * level_mult(upgrade_morale_multiplier, level)))
+
+## El nivel de belleza (1..3) de una casa con `points` de belleza alrededor.
+func beauty_level_for(points: int) -> int:
+	var lvl := 1
+	for i in beauty_levels.size():
+		if points >= int(beauty_levels[i]):
+			lvl = i + 2
+	return mini(lvl, 3)
+
+func beauty_room_for(level: int) -> int:
+	return int(beauty_room[clampi(level, 1, beauty_room.size()) - 1])
+
+func beauty_morale_for(level: int) -> int:
+	return int(beauty_morale[clampi(level, 1, beauty_morale.size()) - 1])
 
 ## Runtime (lo pone DefenseLifeEffects; nunca se guarda ni se toca a mano).
 ## Casillas de cobertura que el Bastion pone en el proximo tablero de defensa.

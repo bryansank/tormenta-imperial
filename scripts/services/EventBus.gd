@@ -569,6 +569,12 @@ signal contract_board_changed()
 ## de acero, `parts` repuestos y `lifted` edificios levantados.
 @warning_ignore("unused_signal")
 signal scrap_salvaged(steel: int, parts: int, lifted: int)
+## La belleza de algun barrio cambio (DefenseLifeEffects.refresh): una casa subio
+## o bajo de puntos o de nivel (feat/belleza-barrio). La 3D repone los adornos de
+## las casas (BeautyTrim); la 2D lo lee de la meta `beauty_level` en su firma; la
+## ficha abierta se repinta.
+@warning_ignore("unused_signal")
+signal beauty_changed()
 # ── Economia (feat/edificios-economia) ──
 ## EconomyManager publica el barco del contrabandista (Puerto comercial), el
 ## combustible de las Centrales diesel y el interes de la Casa de cambio.

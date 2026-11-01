@@ -170,6 +170,9 @@ const ENTRIES := {
 		"title": "HELP_T_SCRAPYARD", "body": "HELP_B_SCRAPYARD", "target": ""},
 	"telegraph": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
 		"title": "HELP_T_TELEGRAPH", "body": "HELP_B_TELEGRAPH", "target": ""},
+	# Belleza del barrio (feat/belleza-barrio): sale con la primera casa bonita.
+	"beauty": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
+		"title": "HELP_T_BEAUTY", "body": "HELP_B_BEAUTY", "target": ""},
 	# Economia (feat/edificios-economia): salen al terminar el primero de cada uno.
 	"trade_port": {"kind": "tip", "cat": CAT_ECONOMY, "basic": true,
 		"title": "HELP_T_TRADE_PORT", "body": "HELP_B_TRADE_PORT", "target": ""},

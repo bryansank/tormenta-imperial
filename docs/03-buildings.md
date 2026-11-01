@@ -154,10 +154,9 @@ picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
 
 ### Defensa (1.2, `feat/edificios-defensa-vida`)
 
-Doc 21 §6.3 n.º 11, 12 and 18. Content of 1.2. **The neighbourhood beauty of the
-branch (doc 21 §6.4, D9 = A) did not make the 1.2** (Bryan, 2026-10-25): it was taken
-out whole in `integracion/v1.2b` (metas, `BeautyTrim`, room and morale, the
-`beauty_changed` signal, its tip and texts). Their areas
+Doc 21 §6.3 n.º 11, 12 and 18. Content of 1.2. The neighbourhood beauty of the
+same branch was left out of the 1.2 and came back on its own in `feat/belleza-barrio`
+(2026-11-01): see "Belleza del barrio" below. Their areas
 are computed by `scripts/buildings/DefenseLifeEffects.gd`, called by
 `ProductionManager._refresh_areas()` right after `UtilityEffects` (grouped and
 deferred) when something is placed, moved, demolished, finished, ruined,
@@ -179,6 +178,61 @@ lot, active fx) are added by `_register_defense_life_buildings()`.
 
 The info panel's status line says what each one covers (`DefenseLifeEffects.info_line`:
 "Protege 4 edificios de detrás…", "Tras un Bastión: −30 %…").
+
+### Belleza del barrio (`feat/belleza-barrio`, 2026-11-01)
+
+Doc 21 §6.4 (D9 = A). Nació en `feat/edificios-defensa-vida` (9fc6215), se sacó de la
+1.2 al integrar (95bd79a) y vuelve sola, adaptada al código de hoy. **No depende del
+Núcleo 1-5 ni de planos.** En una frase para el jugador: *cada decoración da belleza a
+las casas cercanas; con 10 la casa es bonita y con 25, elegante.*
+
+- **Quién da:** cada decoración en pie (no en obras ni en ruina) da a las Casas que
+  tiene a `beauty_radius` (3) casillas o menos, borde a borde, **tanta belleza como
+  moral** (`morale_bonus`; la carretera, nada). Mejorada, más
+  (`upgrade_morale_multiplier`: ×1,5 / ×2). Así las 28 decoraciones cuentan sin tabla
+  propia: `GameConfig.beauty_values` (vacía) solo cambia el valor de un id concreto.
+  Ejemplos: Seto y Banco 1, Jardín 5, Fuente 7, Estatua 10, Plaza del gobernador 18.
+- **Quién recibe:** las Casas en pie y con carretera. Suma de lo que les llega:
+  `beauty_levels` [10, 25] → nivel 1 sencilla, 2 **bonita**, 3 **elegante**. Un Jardín
+  y una Fuente al lado (5 + 7) ya la hacen bonita.
+- **Qué gana:** `beauty_room` [0, 1, 2] sitios para vivir y `beauty_morale` [0, 2, 4]
+  puntos de moral (los mismos puntos que suman las decoraciones: cada 10, +1 de moral
+  por tic). Los suma `PopulationManager._recalculate_all()` desde las metas.
+- **Cálculo:** `DefenseLifeEffects.refresh_beauty()`, dentro del `refresh()` que
+  `ProductionManager._refresh_areas()` agrupa y difiere (colocar, mover, derribar,
+  terminar, arruinar, reparar, mejorar, obreros, cargar). Nunca por frame. Deja en la
+  casa las metas `beauty` (puntos), `beauty_level` (2..3; sin meta = 1), `beauty_room`
+  y `beauty_morale`; si algo cambió, `PopulationManager.recalculate()` y
+  `EventBus.beauty_changed`. **No va en el save**: sale de lo construido. Al cargar,
+  `PopulationManager.load_save_data()` reparte la belleza antes de su recuento para
+  que la gente de las casas bonitas no se quede fuera.
+- **Se ve en el mapa:** 3D, `scripts/buildings/BeautyTrim.gd` (jardineras con flores,
+  setos y matas en la bonita; además hiedra, dos farolas encendidas y banderines en la
+  elegante; una malla por nivel y medida, cacheada, hija del modelo, puesta por
+  `BuildingPlacer._sync_beauty()` con `beauty_changed`, al terminar, mejorar, reparar y
+  cargar). 2D, `BuildingArt2D.draw_beauty()` (setos y flores; farolas y banderines),
+  con el nivel en la firma de `Building2D`.
+- **Ficha (icono + número):** `BuildingInfoPanel.beauty_chip()`: una ficha de cifra con
+  la flor (`CartoonIcon` "flower"). En una Casa, sus puntos y debajo "Casa sencilla /
+  bonita / elegante" (en verde si es bonita o elegante); en una decoración, "+N
+  Belleza". El detalle sale al mantener pulsado o pasar el ratón: lo que gana la casa
+  y cuánto le falta para subir (`house_detail`), o a cuántas casas llega la decoración
+  (`deco_detail`). La ficha de sitios de la Casa ya cuenta el sitio de más. Se
+  repinta con `beauty_changed`.
+- **Al colocar:** con una decoración o una Casa en la mano, los dos colocadores pintan
+  la zona de belleza: el contorno de las casillas a 3 y, rellenas, las casas que
+  alcanzaría la decoración (o las decoraciones que le darían a la Casa)
+  (`DefenseLifeEffects.zone_rect` / `ring_cells` / `zone_partners`; 3D un MultiMesh
+  "BeautyZone", 2D un Node2D). Se recalcula al cambiar de casilla, nunca por frame.
+  Color: token `UITheme.BEAUTY` (latón aclarado, distinto del verde de "puedes
+  ponerlo aquí").
+- **Ayuda:** la tarjeta `beauty` (HelpCatalog + `TutorialManager.TIPS`) sale con la
+  primera casa bonita.
+- **Respecto al original:** la belleza de cada decoración ya no es una tabla de 13
+  valores con un "moral / 2" de reserva, sino su moral (se lee con el mismo número; la
+  Estatua sigue en 10, el Jardín pasa de 4 a 5, la Fuente de 6 a 7); la ficha es icono
+  + número en lugar de una línea de texto; y se añade la zona al colocar.
+  Pruebas: `tests/buildings/test_neighbourhood_beauty.gd`.
 
 Looks: one procedural mesh per type (`DefenseToys.gd`) until baked — the bakes
 are in `assets/models/toy/` (`build_toy_models.gd -- --only=bastion,scrapyard,telegraph`:
@@ -505,8 +559,8 @@ que se abre el recurso, como cualquier edificio.
   `PlacementRules.needs_shore()`). El Pecio se abre por rango 13 hasta que exista
   el pecio de las amenazas de costa (doc 21 §3.2).
 - **Pendiente:** el "+comida minima" del Huerto vecinal y el "+moral en
-  festivales" del Escenario (doc 21 §6.4) no estan: hoy dan solo moral. La
-  belleza del barrio (casas bonitas) no entro en la 1.2.
+  festivales" del Escenario (doc 21 §6.4) no estan: hoy dan solo moral. Ademas de
+  moral, todas dan belleza a las casas cercanas (ver "Belleza del barrio").
 
 ### Unlocks in the 1.2 (no Núcleo 1-5, no blueprints)
 

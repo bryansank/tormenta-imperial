@@ -25,6 +25,7 @@ const View2D := preload("res://scripts/view2d/View2D.gd")
 const Building2D := preload("res://scripts/view2d/Building2D.gd")
 ## Dedo, casillas validas y boton ✓: lo mismo que en 3D (docs/21 §Tactil).
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
+const DefenseLife := preload("res://scripts/buildings/DefenseLifeEffects.gd")
 const GraphicsQuality := preload("res://scripts/services/GraphicsQuality.gd")
 ## Salto y polvo de obra terminada (V1).
 const Fx := preload("res://scripts/buildings/BuildingFx.gd")
@@ -50,6 +51,11 @@ var _buildings_container: Node2D
 var _assist: Node = null
 var _spot_highlight: Node2D = null
 var _spot_cells: Array = []
+## La zona de belleza del fantasma (feat/belleza-barrio): su rectangulo y las
+## casillas de las casas (o decoraciones) que toca.
+var _beauty_zone: Node2D = null
+var _beauty_rect := Rect2i()
+var _beauty_cells: Array = []
 
 func _ready() -> void:
 	_buildings_container = Node2D.new()
@@ -282,6 +288,44 @@ func update_ghost(cell: Vector2i) -> void:
 	_ghost.set("ghost_valid", ok)
 	_ghost.set_meta("rotation_steps", _rotation_steps)
 	_ghost.queue_redraw()
+	_show_beauty_zone(cell, size)
+
+## La zona de belleza del fantasma: el contorno de las casillas a
+## `beauty_radius` y, rellenas, las casas (o decoraciones) que toca. Como en la
+## 3D: al cambiar de casilla, nunca por frame.
+func _show_beauty_zone(origin: Vector2i, size: Vector2i) -> void:
+	var data := _current_data
+	if data == null or _state == State.IDLE or not GridManager.is_valid_cell(origin) \
+			or not DefenseLife.takes_part(data):
+		if _beauty_zone != null:
+			_beauty_zone.visible = false
+		return
+	var moving: Node = _moving_building if _state == State.MOVING else null
+	var lvl: int = int(moving.get_meta("level", 1)) if moving != null else 1
+	_beauty_rect = DefenseLife.zone_rect(origin, size)
+	_beauty_cells = DefenseLife.zone_partners(data, origin, size, moving, lvl)["cells"]
+	if _beauty_zone == null:
+		_beauty_zone = Node2D.new()
+		_beauty_zone.name = "BeautyZone"
+		# Con las casillas validas: encima del suelo, debajo de los edificios.
+		_beauty_zone.z_index = 1
+		_beauty_zone.draw.connect(_draw_beauty_zone)
+		add_child(_beauty_zone)
+	_beauty_zone.visible = true
+	_beauty_zone.queue_redraw()
+
+func _draw_beauty_zone() -> void:
+	if _beauty_rect.size.x <= 0 or _beauty_rect.size.y <= 0:
+		return
+	var r := View2D.footprint_rect_px(_beauty_rect.position, _beauty_rect.size)
+	_beauty_zone.draw_rect(r, Color(UITheme.BEAUTY, 0.10), true)
+	_beauty_zone.draw_rect(r.grow(-1.0), Color(UITheme.BEAUTY, 0.85), false, 2.5)
+	for c in _beauty_cells:
+		var cr := View2D.footprint_rect_px(c, Vector2i.ONE).grow(-2.0)
+		_beauty_zone.draw_rect(cr, Color(UITheme.BEAUTY, 0.5), true)
+
+func get_beauty_zone() -> Node2D:
+	return _beauty_zone
 
 func _create_ghost() -> void:
 	_cleanup_ghost()
@@ -298,6 +342,8 @@ func _cleanup_ghost() -> void:
 	if _ghost:
 		_ghost.queue_free()
 		_ghost = null
+	if _beauty_zone != null:
+		_beauty_zone.visible = false
 	_show_grid_overlay(false)
 	if _assist:
 		_assist.end()

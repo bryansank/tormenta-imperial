@@ -56,7 +56,12 @@ func _mark_areas_dirty() -> void:
 func _refresh_areas() -> void:
 	_areas_dirty = false
 	UtilityEffects.refresh()
-	DefenseLifeEffects.refresh()
+	var defense: Dictionary = DefenseLifeEffects.refresh()
+	if bool(defense.get("beauty_changed", false)):
+		# Belleza del barrio: los sitios y la moral de las casas bonitas los suma
+		# el recuento de la gente; las vistas y la ficha se enteran por la senal.
+		PopulationManager.recalculate()
+		EventBus.beauty_changed.emit()
 
 ## Pide el recuento de areas (agrupado y diferido). Lo usa EconomyManager
 ## cuando cambian los obreros: una Central, un Puerto o una Casa de cambio sin

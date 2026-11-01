@@ -25,6 +25,8 @@ const SmugglerShip3D := preload("res://scripts/map/SmugglerShip3D.gd")
 const SmugglerPanelScript := preload("res://scripts/ui/SmugglerPanel.gd")
 const RoadTraffic := preload("res://scripts/map/RoadTraffic.gd")
 const Assist := preload("res://scripts/buildings/PlacementAssist.gd")
+const DefenseLife := preload("res://scripts/buildings/DefenseLifeEffects.gd")
+const BeautyTrim := preload("res://scripts/buildings/BeautyTrim.gd")
 ## Obra por fases, ruina y humo de "trabajando" (docs/03, "Aspecto en el mapa").
 const LookVisual := preload("res://scripts/buildings/BuildingLookVisual.gd")
 ## Icono flotante de "listo para recoger" (2026-10-04).
@@ -75,6 +77,8 @@ var _buildings_container: Node3D
 var _assist: Node = null
 ## Casillas donde cabe el extractor en curso, en verde sobre el suelo.
 var _spot_highlight: MultiMeshInstance3D = null
+## La zona de belleza del fantasma (feat/belleza-barrio): contorno y vecinos.
+var _beauty_zone: MultiMeshInstance3D = null
 ## Un solo reloj para releer el aspecto de TODOS los edificios (paso de fase,
 ## humo encendido/apagado). Las senales repintan al momento.
 var _look_timer := 0.0
@@ -148,6 +152,15 @@ func _ready() -> void:
 	EventBus.construction_completed.connect(_on_construction_done)
 	# Lo recogido vuela a la bolsa del HUD (V2).
 	EventBus.production_collected.connect(_on_production_collected)
+	# Belleza del barrio (feat/belleza-barrio): los adornos de las casas bonitas
+	# y elegantes (BeautyTrim). Tambien tras mejorar o terminar una casa (su
+	# modelo cambia de escala o aparece) y al cargar (la belleza se reparte antes
+	# de que nadie avise). Nunca por frame.
+	EventBus.beauty_changed.connect(_sync_beauty)
+	EventBus.building_upgrade_completed.connect(func(_n: Node, _l: int) -> void: _sync_beauty.call_deferred())
+	EventBus.construction_completed.connect(func(_n: Node) -> void: _sync_beauty.call_deferred())
+	EventBus.building_repaired.connect(func(_n: Node) -> void: _sync_beauty.call_deferred())
+	EventBus.game_load_completed.connect(func() -> void: _sync_beauty.call_deferred())
 	GameManager.register_placer(self)
 	_assist = Assist.new()
 	_assist.name = "PlacementAssist"
@@ -495,6 +508,7 @@ func _set_preview_cell(cell: Vector2i) -> void:
 		var rotated_size := _get_rotated_size()
 		var world_pos := GridManager.building_center(cell, rotated_size)
 		_preview_node.global_position = Vector3(world_pos.x, 0.0, world_pos.z)
+		_show_beauty_zone(cell)
 
 		# Same verdict for placing and moving: the ghost goes red wherever the
 		# click would be refused, deposit rule included.
@@ -868,6 +882,8 @@ func _cleanup_preview() -> void:
 		_preview_meshes.clear()
 	_hide_grid_overlay()
 	_hover_cell = Vector2i(-1, -1)
+	if _beauty_zone != null:
+		_beauty_zone.visible = false
 	if _assist:
 		_assist.end()
 
@@ -1275,6 +1291,73 @@ func assist_show_cells(cells: Array) -> void:
 
 func get_spot_highlight() -> MultiMeshInstance3D:
 	return _spot_highlight
+
+# ── Belleza del barrio (feat/belleza-barrio) ──────────────────────────
+
+## Pone a cada casa los adornos de su nivel de belleza (meta `beauty_level` de
+## DefenseLifeEffects). Solo al cambiar la belleza o el modelo, nunca por frame;
+## la malla de cada nivel y medida es una sola para todo el mapa.
+func _sync_beauty() -> void:
+	for info in GridManager.buildings_view():
+		var data: BuildingData = info.get("data")
+		var node: Node = info.get("node")
+		if data == null or data.id != DefenseLife.HOUSE_ID or node == null or not is_instance_valid(node):
+			continue
+		BeautyTrim.apply(node, DefenseLife.beauty_level(node))
+
+## La zona de belleza del fantasma: el contorno de las casillas a
+## `beauty_radius` y, rellenas, las casas (o decoraciones) que toca. Se pinta
+## al cambiar de casilla (`_set_preview_cell`), nunca por frame; sin nada que
+## ver con la belleza (o sin fantasma), se esconde.
+func _show_beauty_zone(origin: Vector2i) -> void:
+	var data := _current_data
+	if data == null or _state == State.IDLE or not GridManager.is_valid_cell(origin) \
+			or not DefenseLife.takes_part(data):
+		if _beauty_zone != null:
+			_beauty_zone.visible = false
+		return
+	var size := _get_rotated_size()
+	var moving: Node = _moving_building if _state == State.MOVING else null
+	var lvl: int = int(moving.get_meta("level", 1)) if moving != null else 1
+	var ring: Array = DefenseLife.ring_cells(DefenseLife.zone_rect(origin, size))
+	var partners: Array = DefenseLife.zone_partners(data, origin, size, moving, lvl)["cells"]
+	if _beauty_zone == null:
+		_beauty_zone = MultiMeshInstance3D.new()
+		_beauty_zone.name = "BeautyZone"
+		_beauty_zone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		var plane := PlaneMesh.new()
+		plane.size = Vector2.ONE * GridManager.cell_size * 0.92
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		plane.material = mat
+		mm.mesh = plane
+		_beauty_zone.multimesh = mm
+		add_child(_beauty_zone)
+	var mm2 := _beauty_zone.multimesh
+	mm2.instance_count = ring.size() + partners.size()
+	var edge := Color(UITheme.BEAUTY, 0.42)
+	var fill := Color(UITheme.BEAUTY, 0.62)
+	var i := 0
+	for c in ring:
+		var w := GridManager.cell_to_world(c)
+		mm2.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(w.x, 0.05, w.z)))
+		mm2.set_instance_color(i, edge)
+		i += 1
+	for c in partners:
+		var w := GridManager.cell_to_world(c)
+		mm2.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(w.x, 0.08, w.z)))
+		mm2.set_instance_color(i, fill)
+		i += 1
+	_beauty_zone.visible = true
+
+func get_beauty_zone() -> MultiMeshInstance3D:
+	return _beauty_zone
 
 func get_assist() -> Node:
 	return _assist

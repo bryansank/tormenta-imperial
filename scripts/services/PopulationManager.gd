@@ -1,5 +1,6 @@
 extends Node
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
+const DefenseLife := preload("res://scripts/buildings/DefenseLifeEffects.gd")
 ## Manages population, workers, morale, and resource consumption.
 ## Population lives in houses. Workers are assigned to production buildings.
 ## Population consumes resources each tick. Low supply = morale drop.
@@ -360,6 +361,13 @@ func _restaff() -> void:
 		return
 	_recalculate_all()
 
+## Recuento publico: lo pide ProductionManager cuando cambia la belleza de un
+## barrio (sitios y moral de las casas bonitas, feat/belleza-barrio).
+func recalculate() -> void:
+	if GridManager.get_all_buildings().is_empty():
+		return
+	_recalculate_all()
+
 func _recalculate_all() -> void:
 	var old_max := _max_population
 	var old_workers := _used_workers
@@ -409,6 +417,11 @@ func _recalculate_all() -> void:
 		_max_population += int(data.population_capacity * GameConfig.level_mult(GameConfig.upgrade_capacity_multiplier, lvl)) \
 			if not data.is_core else data.population_capacity
 		_morale_bonus += int(data.morale_bonus * GameConfig.level_mult(GameConfig.upgrade_morale_multiplier, lvl))
+		# Belleza del barrio (feat/belleza-barrio): una casa bonita o elegante da
+		# sitio y moral de mas. Las metas las pone DefenseLifeEffects.
+		if node != null and is_instance_valid(node) and data.id == DefenseLife.HOUSE_ID:
+			_max_population += int(node.get_meta(DefenseLife.BEAUTY_ROOM_META, 0))
+			_morale_bonus += int(node.get_meta(DefenseLife.BEAUTY_MORALE_META, 0))
 		# Los trabajadores retirados por el jugador (o sin veta) no se asignan:
 		# quedan libres para otro edificio.
 		var off: bool = node != null and is_instance_valid(node) and bool(node.get_meta("workers_off", false))
@@ -499,6 +512,10 @@ func load_save_data(data: Dictionary) -> void:
 	_morale = data.get("morale", GameConfig.morale_start)
 	# Un guardado anterior a la hambruna no trae contador: empieza a cero.
 	_unpaid_ticks = int(data.get("unpaid_ticks", 0))
+	# La belleza no va en el save: se reparte antes del recuento para que los
+	# sitios de las casas bonitas cuenten y la gente que vivia en ellas no se
+	# quede fuera al cargar.
+	DefenseLife.refresh_beauty()
 	_recalculate_all()
 
 func reset() -> void:

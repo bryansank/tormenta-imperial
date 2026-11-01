@@ -232,13 +232,25 @@ Diesel plant), the other 18 decorations and the trucks, the coastal threats, and
 Volverse el Imperio behind a **new ending with a choice** (sign the Tax book and take
 the archipelago, or burn it and keep a free island; docs/06 "Final con elección").
 **Out, postponed (their code not merged):** Núcleo 1-5 and blueprints
-(`feat/nucleo-y-planos`), Infirmary / Forge doctrines / Firing range
-(`feat/edificios-militares`) and the neighbourhood beauty (taken out of
-`feat/edificios-defensa-vida`). Without blueprints, the Scrapyard, Exchange and Diesel
+(`feat/nucleo-y-planos`) and Infirmary / Forge doctrines / Firing range
+(`feat/edificios-militares`). The neighbourhood beauty, taken out of
+`feat/edificios-defensa-vida` then, is no longer postponed: it came back on its own in
+`feat/belleza-barrio` (below). Without blueprints, the Scrapyard, Exchange and Diesel
 plant open by era + rank (4 / 6 / 9; docs/03 "Unlocks in the 1.2"). The new panels
 (smuggler, threat card, archipelago, the book) use CartoonTheme (docs/28 §20).
 **State:** integrated on `integracion/v1.2b`, full suite green, not merged into
 `main` (Bryan merges). Balance of the new content still unmeasured with the line probe.
+
+### Neighbourhood beauty (`feat/belleza-barrio`, 2026-11-01)
+
+Owner's decision: the beauty left out of the 1.2 goes in, adapted to today's code and
+without the Núcleo levels or blueprints. Every decoration gives the Houses within 3
+tiles as much beauty as its morale; at 10 a House is pretty (+1 room, more morale), at
+25 elegant (+2). Seen on the house in 3D (`BeautyTrim`) and 2D (`draw_beauty`), in the
+info panel as a flower chip with the number (detail on hold), and as a zone while
+placing a decoration or a House, in both views. Not saved (derived from what is
+built). Detail: [03-buildings.md](03-buildings.md) "Belleza del barrio". **State:** 🚧
+branch pushed, tests written and not run, thresholds not measured with the line probe.
 
 ### Version 1.2: Volverse el Imperio (`feat/volverse-imperio`)
 
@@ -276,8 +288,9 @@ Measured by the balance line and left to the owner
    Campaña got two tiers (Colono / Gobernador). The New Game dialog offers only Campaña
    (`GameMode.OFFERED`).
 6. ❓ **The rest of the redesign** (later phases): the Regency's order each calm with a
-   storm barometer, map threats that grow if ignored, contracts, unit doctrines, beauty
-   points per neighbourhood. Proposed, not decided beyond phase 1 (a Núcleo with levels
+   storm barometer, map threats that grow if ignored, contracts, unit doctrines (the
+   beauty points per neighbourhood are decided and built: `feat/belleza-barrio`).
+   Proposed, not decided beyond phase 1 (a Núcleo with levels
    was turned down in favour of limits by era).
 
 Also pending on the balance side: a human playtest with real timings (checklist in
@@ -294,7 +307,8 @@ food, collecting and the irregular island: its timings need a new run of
 - ⬜ Later redesign phases (1.1-1.2): the Regency's order and barometer, map threats and
   raids, exclusive loot beyond phase 1, contracts, 18 new useful buildings and 28 more
   decorations, a regiment (name, colours, emblem, paint) and doctrines, a practice
-  range, beauty per neighbourhood, traffic on the roads, bigger buttons
+  range, traffic on the roads, bigger buttons (beauty per neighbourhood: in
+  `feat/belleza-barrio`)
 - 💤 Night with a gameplay effect (today `DayClock.is_night()` is read by nobody but the
   light, the walkers and the sound)
 - 💤 Towers with an attack of their own on the base map

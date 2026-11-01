@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## Defensa y vida (feat/edificios-defensa-vida, doc 21 §6.3 n.º 11, 12, 18 y
-## §6.4): Bastion, Chatarreria y Telegrafo (la belleza del barrio no entro en
-## la 1.2). Fija que cada edificio siga la receta de "Adding a New Building",
+## §6.4): Bastion, Chatarreria y Telegrafo (la belleza del barrio volvio en
+## feat/belleza-barrio: tests/buildings/test_neighbourhood_beauty.gd). Fija que cada edificio siga la receta de "Adding a New Building",
 ## que las reglas puras (cobertura del tablero, "detras del muro", hilo del Telegrafo)
 ## digan lo que dicen los docs y que un tablero sin bastion siga igual.
 ##
@@ -249,11 +249,3 @@ func test_clear_resets_the_runtime_values() -> void:
 	assert_int(GameConfig.defense_cover_cells).is_equal(0)
 	assert_int(GameConfig.contract_extra_slots).is_equal(0)
 	assert_float(GameConfig.contract_duration_mult).is_equal(1.0)
-
-
-# ── Sin belleza del barrio (no entro en la 1.2) ───────────────────────
-
-func test_the_neighbourhood_beauty_is_not_in_this_version() -> void:
-	assert_bool("beauty_levels" in GameConfig).is_false()
-	assert_bool(EventBus.has_signal("beauty_changed")).is_false()
-	assert_bool(ResourceLoader.exists("res://scripts/buildings/BeautyTrim.gd")).is_false()

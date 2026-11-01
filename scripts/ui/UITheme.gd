@@ -79,6 +79,10 @@ static var BOARD_TARGET: Color
 # superficie tirando a laton. Derivados de la paleta como los de arriba.
 static var BOARD_WATER: Color
 static var BOARD_SHORE: Color
+# Belleza del barrio (feat/belleza-barrio): la zona del fantasma al colocar una
+# decoracion o una Casa, y su ficha. Laton aclarado: se distingue del verde de
+# "puedes ponerlo aqui".
+static var BEAUTY: Color
 
 static func _static_init() -> void:
 	_apply_tokens(resolve_tokens("default", false, 1.0))
@@ -288,6 +292,7 @@ static func _apply_tokens(d: Dictionary) -> void:
 	BOARD_TARGET = d["BOARD_TARGET"]
 	BOARD_WATER = d["BOARD_WATER"]
 	BOARD_SHORE = d["BOARD_SHORE"]
+	BEAUTY = d["BEAUTY"]
 
 ## Los tokens que saldrian con esas opciones, sin aplicarlos. Puro: los tests y
 ## la vista previa de Ajustes lo usan para comparar paletas.
@@ -335,6 +340,7 @@ static func _derive(d: Dictionary, hc: bool) -> void:
 	d["BOARD_TARGET"] = (d["DANGER"] as Color).darkened(0.15)
 	d["BOARD_WATER"] = (d["INFO"] as Color).darkened(0.5)
 	d["BOARD_SHORE"] = surface.lerp(accent, 0.22)
+	d["BEAUTY"] = accent.lightened(0.25)
 
 ## Tamano de letra escalado, nunca por debajo de 11 px (legible en movil).
 static func scaled_font(base_px: int, scale: float) -> int:

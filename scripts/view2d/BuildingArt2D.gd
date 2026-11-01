@@ -4054,3 +4054,44 @@ static func _d2_governor_plaza(ci: CanvasItem, r: Rect2) -> void:
 			var bed: Vector2 = c + Vector2(sx * 0.29, sy * 0.41) * m
 			_shaded_disc(ci, bed, m * 0.05, GREEN)
 			_d2_flowers(ci, bed, m * 0.03, 3, int(sx + sy + 3))
+
+
+## La belleza de una casa (feat/belleza-barrio, como BeautyTrim en 3D), sin
+## girar (quien la llama ya quito el giro), sobre la huella `fp`: nivel 2,
+## setos en las esquinas de abajo y una fila de flores; nivel 3, ademas, dos
+## farolas encendidas y una guirnalda de banderines arriba. Pocas ordenes de
+## dibujo y solo al repintar (la firma del edificio lleva el nivel).
+static func draw_beauty(ci: CanvasItem, fp: Vector2, level: int) -> void:
+	if level <= 1:
+		return
+	var hx := fp.x * 0.5 - 5.0
+	var y := fp.y * 0.5 - 5.0
+	# Setos en las dos esquinas de abajo.
+	for sx in [-1.0, 1.0]:
+		var c := Vector2(sx * (hx - 3.0), y - 1.0)
+		ci.draw_rect(Rect2(c - Vector2(5, 3.5), Vector2(10, 7)).grow(1.0), OUTLINE)
+		ci.draw_rect(Rect2(c - Vector2(5, 3.5), Vector2(10, 7)), LEAF_DARK)
+		ci.draw_rect(Rect2(c - Vector2(4, 3.5), Vector2(8, 2)), LEAF)
+	# Flores en fila entre los setos.
+	var n := 5
+	for i in n:
+		var x := -hx * 0.5 + float(i) * hx / float(n - 1)
+		var col := IMPERIAL_RED if i % 2 == 0 else MARBLE
+		_dot(ci, Vector2(x, y), 2.6, OUTLINE)
+		_dot(ci, Vector2(x, y), 1.8, col)
+	if level < 3:
+		return
+	# Farolas encendidas junto a los setos.
+	for sx in [-1.0, 1.0]:
+		var b := Vector2(sx * (hx - 12.0), y + 1.0)
+		ci.draw_line(b, b - Vector2(0, 9), OUTLINE, 2.6)
+		ci.draw_line(b, b - Vector2(0, 9), IRON, 1.4)
+		_dot(ci, b - Vector2(0, 10), 3.6, Color(GLOW, 0.35))
+		_dot(ci, b - Vector2(0, 10), 2.0, GLOW)
+	# Guirnalda de banderines en lo alto de la huella.
+	var gy := -fp.y * 0.5 + 6.0
+	ci.draw_line(Vector2(-hx * 0.8, gy), Vector2(hx * 0.8, gy), Color(OIL_BLACK, 0.7), 1.0)
+	for i in 6:
+		var x := -hx * 0.7 + float(i) * hx * 1.4 / 5.0
+		var col := BRASS if i % 2 == 0 else IMPERIAL_RED
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(x - 2.5, gy), Vector2(x + 2.5, gy), Vector2(x, gy + 4.0)]), col)
