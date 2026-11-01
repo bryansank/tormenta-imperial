@@ -14,11 +14,14 @@
 #
 # Uso:
 #   tools/package_release.sh [--exe RUTA] [--apk RUTA] [--out DIR]
-#                            [--version X.Y.Z] [--only windows|android]
+#                            [--version X.Y.Z] [--only windows|android] [--sign]
 # Por defecto: --exe build/windows/TormentaImperial.exe,
 #              --apk build/android/TormentaImperial-debug.apk, --out dist,
 #              version = config/version de project.godot.
 # Las rutas relativas se resuelven desde la raíz del proyecto.
+# --sign: antes de meter el .exe en el zip lo firma con tools/sign_windows.sh (en su
+# sitio: build/ y el zip llevan el mismo binario). Sin certificado en el entorno solo
+# avisa y el zip sale igual, sin firmar (docs/19-exportar.md, "Firma de Windows").
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,6 +30,7 @@ APK="build/android/TormentaImperial-debug.apk"
 OUT="dist"
 VERSION=""
 ONLY=""
+SIGN=0
 
 die() { echo "package_release: $*" >&2; exit 1; }
 
@@ -37,7 +41,8 @@ while [ $# -gt 0 ]; do
 		--out) OUT="${2:?falta la carpeta de --out}"; shift 2 ;;
 		--version) VERSION="${2:?falta el valor de --version}"; shift 2 ;;
 		--only) ONLY="${2:?falta windows o android}"; shift 2 ;;
-		-h|--help) sed -n '2,21p' "${BASH_SOURCE[0]}"; exit 0 ;;
+		--sign) SIGN=1; shift ;;
+		-h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
 		*) die "argumento desconocido: $1 (ver --help)" ;;
 	esac
 done
@@ -136,6 +141,9 @@ MADE=()
 if [ "$ONLY" != "android" ]; then
 	[ -f "$EXE" ] || die "no existe el .exe: $EXE (exporta primero o pasa --exe)"
 	[ "$(magic "$EXE")" = "MZ" ] || die "$EXE no parece un ejecutable de Windows"
+	if [ "$SIGN" = 1 ]; then
+		bash "$ROOT/tools/sign_windows.sh" --exe "$EXE" || die "no se pudo firmar $EXE"
+	fi
 	name="TormentaImperial-$VERSION-windows"
 	stage_common "$STAGE/$name" tools/dist/LEEME-windows.txt
 	cp "$EXE" "$STAGE/$name/TormentaImperial.exe"

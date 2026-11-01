@@ -2,8 +2,9 @@
 
 Cómo sacar de este proyecto un `TormentaImperial.exe` que otra persona pueda
 descargar y jugar, qué viaja dentro, qué se queda fuera y qué falta para publicarlo.
-Android (tableta primero) está en la sección 11; la lista de comprobación de una
-publicación (GitHub Releases y enlaces directos), en la 12; qué pesa el paquete y cómo
+Android (tableta primero) está en la sección 11, con el AAB y Google Play en la 11.10;
+la firma del .exe y SmartScreen, en la 8.1-8.2; la lista de comprobación de una
+publicación (GitHub Releases, enlaces directos y la prueba interna de Play), en la 12; qué pesa el paquete y cómo
 adelgazarlo, en la 13.
 
 Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11 (RTX 3060, Vulkan).
@@ -122,8 +123,9 @@ Con extensión `.zip` Godot escribe el paquete como zip, y se lista con cualquie
 | `debug/export_console_wrapper` | `0` | no genera el `.console.exe` extra |
 | `script_export_mode` | binario comprimido | scripts tokenizados, no texto plano |
 | `application/*` | "Tormenta Imperial", "Bryan Key", © 2026 | metadatos que Windows enseña en Propiedades |
-| `application/file_version` | vacío → `config/version` (0.9.0) | la versión vive en un solo sitio: `project.godot` |
+| `application/file_version`, `product_version` | `0.9.0.0` | Windows solo admite cuatro números: es la parte numérica de `config/version` (`0.9-beta`). Al cambiar de versión se cambian a mano; `test_export_guards.gd` comprueba que empiecen por esa parte |
 | `application/icon` | vacío → `icon.svg` del proyecto | ver abajo |
+| `codesign/enable` | `false` | la firma se hace después, fuera de Godot (§8.2), con el certificado solo por entorno |
 | `export_path` | `build/windows/TormentaImperial.exe` | relativa: una absoluta filtraría la máquina de quien exporta |
 
 **Icono y metadatos sin rcedit.** Godot 4.7 reescribe los recursos del .exe él mismo
@@ -366,19 +368,87 @@ hash de `THIRD-PARTY-NOTICES.md` §1:
    de referencia: enlace fijo, historial de versiones y sumas de control.
 3. **Enlace directo** (Drive, WhatsApp, una web propia): el mismo zip de la release,
    nunca uno distinto. Decidido el 2026-10-12: **sin itch.io ni tiendas** por ahora.
+4. **Preparado, sin publicar (2026-11-01, rama `build/distribucion-tiendas`):** lo
+   técnico para itch.io (el mismo zip de Windows, y el de Android), Steam (el mismo
+   .exe; la ficha y la cuenta son del dueño) y **Google Play solo para amigos**
+   (prueba interna con el AAB, §11.10). Nada de eso se ha subido a ningún sitio.
 
 El paso a paso de una publicación está en §12.
 
-### SmartScreen y el aviso de "editor desconocido"
+### 8.1 SmartScreen y el aviso de "editor desconocido"
 
-El .exe **no está firmado**. En la primera ejecución Windows enseña "Windows protegió
-su PC"; el jugador tiene que pulsar *Más información → Ejecutar de todas formas*.
-Algunos antivirus marcan de más los ejecutables de Godot sin firma. Opciones:
+Mientras el .exe **no esté firmado**, en la primera ejecución Windows enseña "Windows
+protegió su PC"; el jugador tiene que pulsar *Más información → Ejecutar de todas
+formas*. Algunos antivirus marcan de más los ejecutables de Godot sin firma. Lo que
+hay, de menos a más trabajo:
 
-- decirlo en la página de descarga y en el LEEME (lo habitual en juegos indie);
-- firmar con un certificado de firma de código (OV o EV; EV quita el aviso antes)
-  y activar `codesign/enable` en el preset con `signtool`;
-- la reputación de SmartScreen también crece sola con descargas.
+| Opción | Coste | Qué quita |
+|---|---|---|
+| Decirlo en la página y en el LEEME (ya está en `tools/dist/LEEME-windows.txt`) | 0 | nada, pero el jugador sabe qué hacer. Lo habitual en juegos indie gratis |
+| Firmar con un certificado **OV** (§8.2) | ~200-400 USD/año **(verificar)** | el "editor desconocido": sale "Bryan Key". El aviso de SmartScreen **sigue** hasta que el certificado gana reputación con descargas |
+| Firmar con un certificado **EV** | ~300-600 USD/año **(verificar)** | lo mismo que OV. Desde 2024 Microsoft ya **no** da reputación inmediata a EV: no compensa para un juego gratis |
+| Azure Trusted Signing / Artifact Signing (firma en la nube de Microsoft) | ~10 USD/mes **(verificar)** | como OV. Para particulares solo en algunos países (EE. UU. y Canadá al lanzarse): **verificar** si admite residentes en Venezuela |
+| **Microsoft Store** como particular (0 USD) o **Steam** | 0 / 100 USD | la tienda entrega el binario y el aviso no aparece (tormenta-imperial-contexto/24 §3.3) |
+
+Recomendación para "solo amigos": no pagar certificado todavía; avisar en el LEEME y
+en la página. Si el juego se reparte a desconocidos, Microsoft Store (gratis) quita el
+aviso antes que cualquier certificado.
+
+### 8.2 Firma de Windows (`tools/sign_windows.ps1` / `.sh`)
+
+La firma se hace **después** de exportar y **antes** de empaquetar, con `signtool`
+(Authenticode SHA-256 y sello de tiempo RFC 3161, para que la firma siga valiendo
+cuando el certificado caduque). No se usa el `codesign/*` del preset: así el
+certificado no pasa nunca por `export_presets.cfg` ni por
+`.godot/export_credentials.cfg`.
+
+El certificado solo llega por variables de entorno de la sesión que firma:
+
+| Variable | Qué lleva |
+|---|---|
+| `TI_WINDOWS_SIGN_THUMBPRINT` | la huella SHA-1 de un certificado instalado en el almacén de Windows. Es lo normal hoy: desde junio de 2023 los certificados OV y EV se entregan en un token USB o en un HSM en la nube, no como fichero |
+| `TI_WINDOWS_SIGN_PFX` | alternativa: ruta a un `.pfx`/`.p12` (certificados antiguos, o uno autofirmado para probar el script) |
+| `TI_WINDOWS_SIGN_PASSWORD` | la contraseña del `.pfx`, si la tiene |
+| `TI_WINDOWS_SIGN_TIMESTAMP` | servidor de sello de tiempo; por defecto `http://timestamp.digicert.com` (cada CA da el suyo) |
+| `TI_SIGNTOOL` | ruta a `signtool.exe` si no está en el PATH ni en `Windows Kits\10\bin` |
+
+```powershell
+# Firmar solo el .exe (sin certificado: avisa y sale con 0; con -Required, falla)
+powershell -ExecutionPolicy Bypass -File tools\sign_windows.ps1 -Exe build\windows\TormentaImperial.exe
+# Firmar y empaquetar de una vez
+powershell -ExecutionPolicy Bypass -File tools\package_release.ps1 -Sign
+```
+
+```bash
+bash tools/package_release.sh --sign     # en Git Bash delega en el .ps1 (signtool)
+bash tools/sign_windows.sh --required    # en Linux/macOS usa osslsigncode con un .pfx
+```
+
+- `signtool.exe` viene con el **Windows SDK** (instalar solo el componente *Windows SDK
+  Signing Tools for Desktop Apps*). No hace falta Visual Studio.
+- El script firma el .exe **en su sitio**, así `build/` y el zip llevan el mismo
+  binario, y comprueba la firma con `signtool verify /pa`.
+- El PCK embebido no estorba: Godot 4 lo guarda en una sección propia del ejecutable y
+  `signtool` añade el certificado al final sin tocarla. Aun así, tras la primera firma
+  real, abrir el .exe firmado una vez (prólogo y una partida nueva) antes de repartirlo.
+- La contraseña de un `.pfx` llega a `signtool` por línea de comandos (otro proceso
+  de la misma sesión podría verla): firmar en una máquina propia y borrar la variable
+  después (`Remove-Item Env:TI_WINDOWS_SIGN_PASSWORD`). Con token USB no hay contraseña
+  en el entorno: el propio token la pide.
+- Comprobar a mano: *Propiedades → Firmas digitales* del .exe, o
+  `Get-AuthenticodeSignature build\windows\TormentaImperial.exe`.
+
+### 8.3 Itch.io y Steam (preparado, sin publicar)
+
+- **itch.io:** se sube el mismo `TormentaImperial-<versión>-windows.zip` (y el de
+  Android) que sale de `package_release`; no hace falta otro build. Textos, etiquetas,
+  clasificación y capturas: `tormenta-imperial-contexto/20_PAGINA_ITCH.md`. Para
+  "solo amigos": página en *Draft* y luego *Restricted* con enlace secreto.
+- **Steam:** el mismo .exe (embebido, x86_64) vale como *depot* de Windows; Steam no
+  necesita el LEEME ni el zip, pero las licencias (`LICENSE`, `THIRD-PARTY-NOTICES.md`,
+  `GODOT-COPYRIGHT.txt`, `licenses/fonts/`) tienen que ir en el depot igual. La
+  cuenta de Steamworks (100 USD por juego), la ficha y SteamPipe son del dueño.
+  Steam no exige firma, y el aviso de SmartScreen no sale al lanzar desde Steam.
 
 ---
 
@@ -389,7 +459,7 @@ Algunos antivirus marcan de más los ejecutables de Godot sin firma. Opciones:
   Vulkan no arranca; habría que exportar con el renderer Compatibility (OpenGL) o
   activar el fallback a D3D12, y el look cambia.
 - No hay pantalla de opciones de resolución más allá de pantalla completa (F11).
-- Sin firma de código (ver arriba).
+- Sin firma de código todavía: el script está listo (§8.2), falta el certificado.
 - El guardado en la nube (`CloudSaveManager`) sigue sin cablear: en el exportado solo
   existe la partida local.
 - El smoke test es de arranque y un minuto de partida; no sustituye una partida entera
@@ -404,7 +474,7 @@ Algunos antivirus marcan de más los ejecutables de Godot sin firma. Opciones:
 | **Linux** (x86_64) | Sí | Preset "Linux" con las mismas exclusiones; las plantillas ya están instaladas. Probar en una distro real (Vulkan/Mesa). Distribuir como `.tar.gz` o en itch.io. |
 | **macOS** | Con trabajo | Preset "macOS" (plantilla universal incluida). Para que Gatekeeper lo deje abrir hace falta firmar y **notarizar** con una cuenta de Apple Developer (99 USD/año) y, en la práctica, un Mac. Sin eso el jugador tiene que forzar la apertura. |
 | **Web (HTML5)** | No con este editor | Godot 4 .NET **no exporta a Web**. Haría falta el editor estándar 4.7 y sus plantillas. Además: Forward+ no existe en Web (solo Compatibility/WebGL2), así que habría que revisar luces, niebla y materiales; `user://` pasa a IndexedDB; el audio necesita un clic del jugador antes de sonar; y para hilos hay que servir con cabeceras COOP/COEP (itch.io tiene la casilla "SharedArrayBuffer"). Es la vía de mayor alcance para una demo, pero es un port, no un clic. |
-| **Android** | Sí (APK de depuración) | Preset "Android" listo: ver §11. Falta el keystore de release, el AAB y la cuenta de Google Play. |
+| **Android** | Sí (APK y AAB) | Presets "Android" (APK) y "Android Release (AAB)" (Google Play) listos: ver §11. Falta el keystore de release y la cuenta de Google Play (§11.10). |
 | **iOS** | No sin Mac | Requiere Xcode y cuenta de Apple Developer. |
 
 ---
@@ -418,11 +488,11 @@ Medido el 2026-09-27 con Godot 4.7-stable mono en Windows 11.
 
 | Qué | Valor |
 |---|---|
-| Preset | `Android` en `export_presets.cfg` (sin secretos); `Android QA (emulador)` para el emulador (11.8) |
+| Preset | `Android` en `export_presets.cfg` (sin secretos); `Android QA (emulador)` para el emulador (11.8); `Android Release (AAB)` para Google Play (11.10) |
 | Salida | `build/android/TormentaImperial-debug.apk` |
 | Tamaño | 38,9 MB el APK (73 MB son `libgodot_android.so` sin comprimir; ~10 MB el juego). El 2026-10-14: 41,8 MB en depuración y **39,9 MB en release** (§13) |
-| Paquete | `com.bryankey.tormentaimperial`, versionCode `900`, versionName `0.9.0` |
-| SDK | minSdk 24 (Android 7), targetSdk 36 |
+| Paquete | `com.bryankey.tormentaimperial`, versionCode `10001`, versionName `0.9-beta` (§11.6) |
+| SDK | minSdk 24 (Android 7), targetSdk 36 (lo que trae la plantilla de 4.7; el AAB lo fija explícito) |
 | ABI | `arm64-v8a` (todas las tabletas y teléfonos de los últimos años) |
 | Orientación | apaisado con sensor (`userLandscape` en el manifiesto: gira 180° y respeta el bloqueo de rotación) |
 | Permisos | ninguno |
@@ -448,7 +518,7 @@ Lo que pide la documentación de Godot 4.7:
 | platform-tools | 35.0.0 o más | `sdkmanager` |
 | build-tools | 35.0.1 | `sdkmanager` |
 | platform | android-35 | `sdkmanager` |
-| NDK r28b + CMake 3.10.2 | — | **solo** para la build con Gradle (AAB); el APK precompilado no los usa |
+| build-tools 36.1.0, platform android-36, NDK `29.0.14206865` | — | **solo** para la build con Gradle (AAB): son las versiones que pide `config.gradle` de la plantilla de 4.7 (AGP 8.6.1, compileSdk 36, Java 17). El APK precompilado no los usa |
 
 Comprobar los SHA-256 que publica cada página antes de descomprimir. Con el SDK en
 `%LOCALAPPDATA%\Android\Sdk` (el sitio por defecto de Android Studio):
@@ -459,6 +529,8 @@ $env:JAVA_HOME = "<carpeta del JDK 17>"
 $sm = "$env:LOCALAPPDATA\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat"
 & $sm --licenses                       # aceptar todas
 & $sm "platform-tools" "build-tools;35.0.1" "platforms;android-35"
+# Solo para el AAB (build con Gradle, §11.10):
+& $sm "build-tools;36.1.0" "platforms;android-36" "ndk;29.0.14206865"
 ```
 
 Después, en el editor: *Editor → Configuración del editor → Exportar → Android*:
@@ -536,8 +608,8 @@ portero, y se retira solo).
 | Opción | Valor | Por qué |
 |---|---|---|
 | `package/unique_name` | `com.bryankey.tormentaimperial` | identificador en la tienda. Se puede cambiar **hasta la primera publicación**; después es para siempre |
-| `version/code` | `900` | entero que Play exige creciente. Regla: `mayor*10000 + menor*100 + parche` (0.9.0 → 900, 1.0.0 → 10000). Subirlo a mano con cada release |
-| `version/name` | vacío → `config/version` | la versión legible vive solo en `project.godot` |
+| `version/code` | `10001` | entero que Android y Play exigen creciente. **Historia:** se llegó a repartir `10000` (cuando el proyecto decía 1.0.0) y la 0.9-beta subió a `10001` para poder instalarse encima. La regla vieja `mayor*10000 + menor*100 + parche` ya no sirve (daría 900, menor). **Regla desde la 0.9-beta: +1 en cada build que se reparte o se sube a Play**, igual en los tres presets Android; nunca baja |
+| `version/name` | `0.9-beta` | igual a `config/version` de `project.godot`; `test_export_guards.gd` lo comprueba en los tres presets |
 | `gradle_build/use_gradle_build` | `false` | plantillas precompiladas: no hace falta NDK ni Gradle para un APK |
 | `architectures/arm64-v8a` | `true` (el resto `false`) | armeabi-v7a solo sirve para tabletas muy viejas de 32 bits y suma ~25 MB; Play acepta solo-64 bits |
 | `screen/immersive_mode` | `true` | sin barra de estado ni de navegación |
@@ -615,27 +687,196 @@ apagar `ssao_enabled` en móvil. El MSAA 2x se mantiene. Falta medir rendimiento
 tableta real de gama media, que es lo que decide si Mobile basta o hay que bajar a
 Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
 
-### 11.10 Google Play
+### 11.10 Google Play (AAB, solo para amigos)
 
-1. **Cuenta de desarrollador** (pago único de 25 USD). Las cuentas personales nuevas
-   tienen que pasar una prueba cerrada con testers (hoy: 12 personas durante 14 días)
-   antes de poder publicar en producción.
-2. **AAB, no APK.** Play solo acepta Android App Bundle. Hace falta la build con Gradle:
-   *Proyecto → Instalar plantilla de compilación de Android* (crea `android/build/`,
-   que se versiona o se regenera), `gradle_build/use_gradle_build=true`,
-   `gradle_build/export_format=1` (AAB) y el NDK r28b + CMake del cuadro de 11.3.
-3. **Firma:** keystore de release (11.4) como *upload key*, con *Play App Signing*
-   activado (Google guarda la clave final).
-4. **targetSdk:** Play exige un nivel reciente cada año; la plantilla de 4.7 ya apunta a 36.
-5. Ficha: icono 512×512, gráfico destacado 1024×500, capturas de tableta de 7" y 10",
-   política de privacidad (URL; el juego no recoge datos, pero la ficha la pide),
-   cuestionario de clasificación por edades y formulario de seguridad de datos.
+Preparado el 2026-11-01 (rama `build/distribucion-tiendas`). **Nada se ha subido**: la
+cuenta, el keystore de release y la ficha son del dueño (lista al final de esta
+sección). El objetivo de hoy es una **prueba interna** para amigos, no producción.
+
+#### 11.10.1 El preset `Android Release (AAB)`
+
+Play solo acepta Android App Bundle (`.aab`), y Godot solo genera AAB con la **build
+con Gradle**. Por eso es un preset aparte; el `Android` de siempre (APK precompilado,
+§11.6) no cambia.
+
+| Opción | Valor | Por qué |
+|---|---|---|
+| `export_path` | `build/android/TormentaImperial.aab` | relativa, dentro de `build/` (fuera de git) |
+| `gradle_build/use_gradle_build` | `true` | obligatorio para AAB |
+| `gradle_build/export_format` | `1` (AAB) | `0` sería APK |
+| `gradle_build/gradle_build_directory` | vacío → `res://android` | donde instala la plantilla (abajo) |
+| `gradle_build/min_sdk` / `target_sdk` | `24` / `36` | los de la plantilla de 4.7, escritos a la vista. Play pide **API 35 como mínimo** a apps nuevas y actualizaciones desde el 31/08/2025 y sube un nivel cada agosto (36 desde agosto de 2026, **verificar** en Play Console al subir). `test_export_guards.gd` exige ≥ 35 |
+| `architectures` | solo `arm64-v8a` | Play **no** exige 32 bits, solo que haya 64 bits. `armeabi-v7a` no le costaría peso al jugador (el AAB reparte por ABI), pero son tabletas viejas sin Vulkan fiable y sin probar: se deja fuera |
+| `version/code` / `version/name` | `10001` / `0.9-beta` | los mismos que el APK (§11.6). Play rechaza un AAB con un `versionCode` ya subido, **también en la prueba interna**: +1 en cada subida |
+| `package/unique_name` | `com.bryankey.tormentaimperial` | el mismo que el APK. En Play queda fijo para siempre tras la primera subida |
+| `keystore/*` | vacío | la *upload key* sale de `GODOT_ANDROID_KEYSTORE_RELEASE_{PATH,USER,PASSWORD}` (§11.4, §12.5) |
+| `permissions/*`, `exclude_filter`, pantalla | iguales que `Android` | el test lo comprueba |
+
+**16 KB de página de memoria.** Desde el 01/11/2025 Play exige que las apps que
+apuntan a Android 15+ funcionen con páginas de 16 KB. Las librerías de Godot 4.5+ ya
+vienen alineadas; tras subir, mirarlo en *Play Console → Explorador de app bundles*
+(avisa si una librería no cumple).
+
+#### 11.10.2 La plantilla de compilación de Android
+
+La build con Gradle necesita el código fuente de la app Android dentro del proyecto.
+Se instala **una vez por checkout y por versión de Godot**:
+
+- Editor: *Proyecto → Instalar plantilla de compilación de Android*.
+- Línea de comandos, junto con el export (no hace falta abrir el editor):
+
+  ```bash
+  "$GODOT" --headless --path . --install-android-build-template \
+      --export-release "Android Release (AAB)" build/android/TormentaImperial.aab
+  ```
+
+Crea `android/build/` (descomprime `android_source.zip` de las plantillas de 4.7; lleva
+su propio `.gdignore`, así que Godot no lo importa ni lo mete en el paquete) y
+`android/.build_version`. En este repo **`/android/` está en `.gitignore`**: no se
+modifica a mano, es igual en cualquier máquina y tiene que coincidir exactamente con
+la versión del editor. Al cambiar de Godot: borrar `android/` y volver a instalarla.
+
+**¿Cambia algo del preset `Android`?** No. Los presets con
+`use_gradle_build=false` (`Android` y `Android QA (emulador)`) siguen usando las
+plantillas precompiladas y no leen `android/`. Lo único nuevo son las herramientas de
+la tabla de §11.3 (build-tools 36.1.0, android-36, NDK 29) y que la primera build con
+Gradle descarga Gradle y sus dependencias (hace falta internet esa vez; luego quedan
+en `%USERPROFILE%\.gradle`).
+
+Exportar (con la *upload key* en el entorno, §12.5):
+
+```powershell
+& $GODOT --headless --path . --export-release "Android Release (AAB)" build/android/TormentaImperial.aab
+```
+
+Sin keystore de release, `--export-debug` produce un AAB firmado con la clave de
+depuración: vale para comprobar que la build con Gradle funciona, **no** para subirlo a
+Play.
+
+**Probado el 2026-11-01** (Godot 4.7-stable mono, Windows 11, JDK 17, SDK con
+build-tools 36.1.0 y android-36, **sin** NDK instalado), en un worktree limpio con
+`override.cfg` propio: `--install-android-build-template --export-debug "Android
+Release (AAB)"` terminó sin errores en ~8 min (la mayor parte, la primera build de
+Gradle) y dejó un AAB de **43,9 MB**:
+
+- `base/lib/arm64-v8a/` con `libgodot_android.so` y `libc++_shared.so`, y nada más
+  de otras ABI;
+- el juego va en un *asset pack* de instalación (`assetPackInstallTime/`, 1.202
+  ficheros), sin nada de `addons/beckett`, `addons/gdUnit4`, `tests/`, `tools/`,
+  `docs/` ni `.md` (solo el portero `BeckettGate.gdc`, como en el APK);
+- el manifiesto fusionado dice `package="com.bryankey.tormentaimperial"`,
+  `versionCode=10001`, `versionName=0.9-beta`, `minSdk 24`, `targetSdk 36`,
+  `userLandscape` y **ningún** `uses-permission`.
+
+Sin el NDK la build terminó igual. Aun así conviene instalarlo (`ndk;29.0.14206865`,
+la versión que declara la plantilla): el plugin de Gradle lo usa para quitar símbolos
+de depuración de las `.so`. Falta exportar el de release con la *upload key* real y
+subirlo a Play.
+
+#### 11.10.3 Firma: *upload key* y Play App Signing
+
+- El keystore de release de §11.4 / §12.5 es la **upload key**. En las apps nuevas,
+  *Play App Signing* es obligatorio: Google guarda la clave con la que se firma lo que
+  baja el jugador, y la tuya solo sirve para subir. Si se pierde, Google puede cambiar
+  la upload key (con verificación); la de firma no se pierde.
+- **Ojo con el APK por enlace directo:** lo que instala Play va firmado con la clave
+  de Google, no con la tuya. Un amigo que tenga el APK de enlace directo (firmado con
+  tu clave o con la de depuración) tendrá que **desinstalarlo antes** de instalar desde
+  Play, y perderá la partida. Avisarlo al invitar.
+- Para repartir el mismo binario fuera de Play, Play Console deja descargar el APK
+  universal firmado por Google (*Explorador de app bundles → Descargas*).
+
+#### 11.10.4 Prueba para amigos
+
+| Vía de Play | Para quién | Revisión | Notas |
+|---|---|---|---|
+| **Prueba interna** | hasta 100 testers por lista de correos (cuentas de Google) | sin revisión completa; disponible en minutos | **La recomendada hoy.** Cada amigo acepta la invitación con un enlace y descarga desde Play |
+| Prueba cerrada | listas o grupos de Google | sí | Obligatoria antes de producción para cuentas personales nuevas: **12 testers durante 14 días seguidos** (tormenta-imperial-contexto/24 §3.1) |
+| Producción | todo el mundo | sí | Fuera de alcance por ahora |
+
+Aunque sea prueba interna, Play pide rellenar casi todo el *Contenido de la app*
+antes de la primera publicación (**verificar** qué exige al crear la versión).
+
+#### 11.10.5 Checklist de Google Play
+
+**Cuenta y app**
+
+- [ ] Cuenta de desarrollador personal (25 USD, tarjeta internacional a nombre
+      propio, verificación de identidad). Venezuela está admitida para registrarse.
+- [ ] Crear la app: nombre "Tormenta Imperial", idioma por defecto español, **Juego**,
+      **Gratis** (una app gratis no puede pasar a ser de pago después).
+- [ ] Correo de contacto **público** para la ficha: uno dedicado al juego, no uno personal.
+
+**Ficha (Presencia en la tienda)**
+
+- [ ] Nombre (≤ 30 caracteres): `Tormenta Imperial`.
+- [ ] Descripción breve (≤ 80): "Construye tu colonia, sostén su economía y resiste la
+      Tormenta Imperial." EN: "Build your colony, keep its economy running and weather
+      the Imperial Storm."
+- [ ] Descripción completa (≤ 4000): la de `tormenta-imperial-contexto/20_PAGINA_ITCH.md`
+      §2/§3, **actualizada a lo que trae la versión** (la de ese documento es de la
+      0.9.0 de octubre: 16 edificios, vista 2D visible...). Pasa por
+      `docs/25-marco-legal.md` §4: gestión y estrategia primero; el combate como defensa.
+- [ ] Icono 512×512 PNG de 32 bits (de `icon.svg` o `assets/branding/logo.png`).
+- [ ] Gráfico destacado 1024×500 PNG/JPG sin transparencia (recorte de `keyart.png`).
+- [ ] Capturas: mínimo 2 de teléfono, y de **tableta de 7" y de 10"** para salir como
+      app de tableta (16:9, entre 320 y 3840 px). Mismo criterio que 20_PAGINA_ITCH §9:
+      colonia, economía y Tormenta; como mucho una del tablero.
+- [ ] Categoría: *Juegos → Estrategia*. Etiquetas sin nada bélico (20_PAGINA_ITCH §8).
+
+**Contenido de la app (declaraciones)**
+
+- [ ] **Política de privacidad** (URL pública, p. ej. GitHub Pages): ver el texto
+      propuesto abajo.
+- [ ] **Acceso a la app:** toda la funcionalidad disponible sin credenciales.
+- [ ] **Anuncios:** no contiene anuncios.
+- [ ] **Clasificación de contenido (IARC):** categoría *Juego*. Respuestas honestas
+      (20_PAGINA_ITCH §8): violencia **de fantasía, leve**, sin sangre, contra unidades
+      genéricas y una institución ficticia; sin lenguaje soez, miedo, sexo, drogas ni
+      apuestas; **sin interacción entre usuarios**, sin compartir ubicación, sin compras
+      digitales. Lo esperable es PEGI 7 / ESRB E10+ (**verificar** el resultado; si sale
+      más alto, revisar textos y capturas antes de seguir).
+- [ ] **Público objetivo:** 9-12 y 13-15 (y 16+ si se quiere). Incluir menores de 13
+      activa la **política de Familias**: sin anuncios, sin datos, sin SDK de terceros
+      que recojan nada, contenido apto. Hoy el juego cumple todo eso: **mantenerlo**
+      (tormenta-imperial-contexto/24 §4).
+- [ ] **Seguridad de los datos:** "No se recogen datos" y "No se comparten datos".
+      Godot no lleva analíticas ni anuncios, el manifiesto no pide ningún permiso
+      (§11.6) y no hay red. Sin cuentas, así que no aplica el borrado de cuenta.
+- [ ] **App de noticias / gobierno / salud / financiera:** no.
+- [ ] Sin compras dentro de la app ni pagos de ningún tipo.
+
+**Versión**
+
+- [ ] `config/version` y `version/name` iguales; `version/code` +1 respecto a la última
+      subida (§11.6). `tests/build/test_export_guards.gd` comprueba que los tres
+      presets Android compartan código y nombre.
+- [ ] Notas de la versión en ES y EN (≤ 500 caracteres), mismo criterio que §12.7.
+
+**Política de privacidad: texto propuesto**
+
+> **Tormenta Imperial — Política de privacidad.** Tormenta Imperial no recoge, guarda
+> fuera de tu dispositivo ni comparte ningún dato personal. No tiene anuncios, compras,
+> cuentas, chat ni analíticas, y no se conecta a internet. La partida y los ajustes se
+> guardan solo en tu dispositivo y se borran al desinstalar el juego. La app no pide
+> ningún permiso. Si esto cambia, esta página se actualizará antes de publicar la
+> versión que lo cambie. Contacto: `<correo del juego>`.
+>
+> *EN:* Tormenta Imperial does not collect, store off your device or share any personal
+> data. It has no ads, purchases, accounts, chat or analytics, and does not connect to
+> the internet. Your game and settings are stored only on your device and are deleted
+> when you uninstall. The app requests no permissions. If this changes, this page will
+> be updated before the version that changes it is released. Contact: `<game email>`.
+
+Si algún día se conecta `CloudSaveManager` (Supabase), esta política, la sección de
+seguridad de los datos y Familias cambian **antes** (tormenta-imperial-contexto/24 §4.2).
 
 ### 11.11 Límites conocidos (Android)
 
 - No probado aún en una tableta física; el emulador no pinta Vulkan (11.8).
 - Solo arm64. Sin x86_64 no corre en Chromebooks x86 ni en emuladores sin traducción.
-- Sin keystore de release ni AAB todavía: el APK de depuración solo sirve para probar.
+- Sin keystore de release todavía: el APK de depuración solo sirve para probar, y el
+  AAB solo se puede generar firmado con la clave de depuración (no subible).
 - Sin guardado en la nube: la partida vive en la tableta y se pierde al desinstalar.
 - La adaptación a tableta (stretch `expand`, perfiles de dispositivo, tamaños
   táctiles, colocación táctil, textos por dispositivo) ya está hecha
@@ -646,7 +887,8 @@ Compatibility (OpenGL ES 3) en equipos sin Vulkan fiable.
 
 ## 12. Publicar una versión: lista de comprobación
 
-Para cada versión que se reparte por GitHub Releases o enlace directo. El juego se publica
+Para cada versión que se reparte por GitHub Releases o enlace directo (y, cuando toque,
+itch.io o la prueba interna de Google Play, §8.3 y §11.10). El juego se publica
 gratis; si algún día se cobra, antes hay que resolver `docs/25-marco-legal.md` §7.
 
 ### 12.1 Antes de exportar
@@ -654,13 +896,16 @@ gratis; si algún día se cobra, antes hay que resolver `docs/25-marco-legal.md`
 - [ ] **Textos y comunicación revisados contra `docs/25-marco-legal.md`** (§3 y §4,
       y la búsqueda de verbos de §10 en `Tr.gd`). Las notas de versión y la página de
       la tienda también pasan por ahí.
-- [ ] **Versión en un solo sitio:** `config/version` en `project.godot` (por ejemplo
-      `1.0.0`). De ahí salen la versión del .exe (*Propiedades → Detalles*), el
-      `versionName` del APK, la primera línea del log y el nombre de los zips.
-- [ ] **`version/code` en los dos presets de Android** (`Android` y `Android QA
-      (emulador)`), con la regla de §11.6: `mayor*10000 + menor*100 + parche`
-      (0.9.0 → 900, 1.0.0 → 10000). Tiene que crecer siempre: Android no instala
-      encima un APK con un número menor.
+- [ ] **Versión:** `config/version` en `project.godot` (hoy `0.9-beta`). De ahí salen
+      la primera línea del log y el nombre de los zips. Al cambiarla, ponerla igual en
+      `version/name` de los **tres** presets Android, y su parte numérica en
+      `application/file_version` y `product_version` del preset de Windows
+      (`0.9-beta` → `0.9.0.0`; Windows solo admite números).
+- [ ] **`version/code` en los tres presets de Android** (`Android`, `Android QA
+      (emulador)` y `Android Release (AAB)`), con la regla de §11.6: **+1** respecto a
+      la última build repartida o subida a Play (hoy `10001`). Tiene que crecer
+      siempre: Android no instala encima un APK con un número menor, y Play rechaza un
+      código ya usado. `test_export_guards.gd` falla si los tres no coinciden.
 - [ ] Copia limpia del repo en la versión exacta (un worktree en el commit que se
       publica) y `override.cfg` temporal con carpeta de usuario propia (§3).
 - [ ] `--import` y **tests en verde** por el envoltorio (`tools/run_tests.sh`).
@@ -674,6 +919,8 @@ adb start-server   # evita que el export de Android se quede colgado (§11.5)
 # Con el keystore de release cargado en el entorno (12.5):
 "$GODOT" --headless --path . --export-release "Android" build/android/TormentaImperial.apk
 # Sin keystore de release (solo para testers): --export-debug ... TormentaImperial-debug.apk
+# Para Google Play (§11.10; la primera vez añade --install-android-build-template):
+"$GODOT" --headless --path . --export-release "Android Release (AAB)" build/android/TormentaImperial.aab
 ```
 
 - [ ] La primera línea de `logs/godot.log` del exportado dice `dev_mode=false` y la
@@ -682,9 +929,13 @@ adb start-server   # evita que el export de Android se quede colgado (§11.5)
 ### 12.3 Empaquetar
 
 ```bash
-bash tools/package_release.sh --apk build/android/TormentaImperial.apk
-# (sin --apk toma el de depuración, build/android/TormentaImperial-debug.apk)
+bash tools/package_release.sh --apk build/android/TormentaImperial.apk --sign
+# (sin --apk toma el de depuración, build/android/TormentaImperial-debug.apk;
+#  --sign firma el .exe si hay certificado en el entorno y, si no, solo avisa: §8.2)
 ```
+
+- [ ] Si se firmó: *Propiedades → Firmas digitales* del .exe enseña el certificado y
+      el sello de tiempo. El AAB no va en ningún zip: se sube tal cual a Play Console.
 
 - [ ] Salen `dist/TormentaImperial-<versión>-windows.zip` y `-android.zip`, cada uno
       con su `LEEME.txt`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.md`,
@@ -773,6 +1024,10 @@ APK firmado con la clave de release obliga a desinstalar el anterior una vez.
 - [ ] Probar la descarga desde la página publicada (otra cuenta o una ventana
       privada) y abrir el zip descargado.
 - [ ] Si se reparte por enlace directo, que apunte al mismo zip de la release.
+- [ ] **Google Play (prueba interna):** subir `build/android/TormentaImperial.aab` a
+      una versión nueva de *Prueba interna*, con las notas de §12.7, y comprobar en el
+      *Explorador de app bundles* versión, código, targetSdk y el aviso de 16 KB
+      (§11.10). Instalarlo desde el enlace de tester en una tableta real.
 
 ### 12.7 Notas de versión
 

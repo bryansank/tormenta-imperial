@@ -307,8 +307,11 @@ food, collecting and the irregular island: its timings need a new run of
 - 💤 Guide and readme screenshots (`docs/media/`) retaken with the toy look, roads and
   the irregular island
 - 💤 Achievements / statistics
-- 💤 Distribution: Windows code signing (SmartScreen), Android release keystore, AAB
-  and store listing ([19-exportar.md](19-exportar.md) §8, §11.10)
+- 💤 Distribution: the technical side is ready (AAB preset "Android Release (AAB)",
+  `tools/sign_windows.*` wired into `package_release`, Play checklist and privacy
+  policy text, branch `build/distribucion-tiendas`); what is left is the owner's: a
+  code-signing certificate, the Android release keystore, the Google Play account and
+  its store listing ([19-exportar.md](19-exportar.md) §8, §11.10)
 - 💤 Small known gaps listed per system: [15-combat.md](15-combat.md) §10,
   [18-vista-2d.md](18-vista-2d.md) "Huecos conocidos",
   [21-interfaz-y-dispositivos.md](21-interfaz-y-dispositivos.md) §11,

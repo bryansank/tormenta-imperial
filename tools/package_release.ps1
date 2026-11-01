@@ -4,17 +4,21 @@
 #
 # Uso:
 #   powershell -ExecutionPolicy Bypass -File tools\package_release.ps1 `
-#     [-Exe RUTA] [-Apk RUTA] [-Out DIR] [-Version X.Y.Z] [-Only windows|android]
+#     [-Exe RUTA] [-Apk RUTA] [-Out DIR] [-Version X.Y.Z] [-Only windows|android] [-Sign]
 # Por defecto: -Exe build\windows\TormentaImperial.exe,
 #              -Apk build\android\TormentaImperial-debug.apk, -Out dist,
 #              version = config/version de project.godot.
 # Las rutas relativas se resuelven desde la raiz del proyecto.
+# -Sign: antes de meter el .exe en el zip, lo firma con tools\sign_windows.ps1 (en su
+# sitio, asi build\ y el zip llevan el mismo binario). Sin certificado en el entorno
+# solo avisa y el zip sale igual, sin firmar.
 param(
 	[string]$Exe = "build/windows/TormentaImperial.exe",
 	[string]$Apk = "build/android/TormentaImperial-debug.apk",
 	[string]$Out = "dist",
 	[string]$Version = "",
-	[ValidateSet("", "windows", "android")][string]$Only = ""
+	[ValidateSet("", "windows", "android")][string]$Only = "",
+	[switch]$Sign
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,6 +127,10 @@ $made = @()
 if ($Only -ne "android") {
 	if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) { Fail "no existe el .exe: $Exe (exporta primero o pasa -Exe)" }
 	if (-not (Test-Magic $Exe "MZ")) { Fail "$Exe no parece un ejecutable de Windows" }
+	if ($Sign) {
+		& (Join-Path $PSScriptRoot "sign_windows.ps1") -Exe $Exe
+		if ($LASTEXITCODE -ne 0) { Fail "no se pudo firmar $Exe" }
+	}
 	$made += New-Package "TormentaImperial-$Version-windows" $Exe "TormentaImperial.exe" "tools/dist/LEEME-windows.txt"
 }
 if ($Only -ne "windows") {

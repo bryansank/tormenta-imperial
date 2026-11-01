@@ -1660,7 +1660,7 @@ is always `dev_mode=false`.
 
 ### Exporting
 
-`export_presets.cfg` (versioned, no secrets, no absolute paths) has three presets —
+`export_presets.cfg` (versioned, no secrets, no absolute paths) has four presets —
 full guide in `docs/19-exportar.md`:
 - **Windows Desktop**: one `build/windows/TormentaImperial.exe` with the PCK embedded
   (`build/` is untracked). Forward+, needs Vulkan, no .NET needed by the player.
@@ -1671,8 +1671,20 @@ full guide in `docs/19-exportar.md`:
 - **Android QA (emulador)**: x86_64 APK with `--rendering-method gl_compatibility
   --rendering-driver opengl3` (the emulator's Vulkan presents black), package
   `...tormentaimperial.qa`, used by the Maestro flows in `qa/maestro/`.
+- **Android Release (AAB)**: `build/android/TormentaImperial.aab` for Google Play
+  (internal testing for friends): Gradle build (`use_gradle_build=true`,
+  `export_format=1`), arm64-v8a, targetSdk 36, same package and version as the APK.
+  Needs the Android build template in `android/` (git-ignored; editor menu or
+  `--install-android-build-template`). Docs/19 §11.10 has the Play checklist.
 
-All three share one `exclude_filter`: `tests/`, `tools/`, `docs/`, `specs/`,
+Version: `config/version` (`0.9-beta`) = `version/name` of the three Android presets
+(same `version/code`, +1 per build handed out or uploaded; today 10001) and its
+numeric part is the Windows `file_version` (`0.9.0.0`). The `.exe` is signed outside
+Godot by `tools/sign_windows.ps1` / `.sh` (signtool / osslsigncode) with the
+certificate only from `TI_WINDOWS_SIGN_{PFX,PASSWORD,THUMBPRINT}`; without one it warns
+and leaves it unsigned. `tools/package_release.* -Sign/--sign` runs it before zipping.
+
+All four share one `exclude_filter`: `tests/`, `tools/`, `docs/`, `specs/`,
 `reports/`, `addons/gdUnit4`, `addons/beckett`, `.claude/`, `.specify/`, `.beckett/`,
 `.cursor/`, `.vscode/`, `.mcp.json`, `secret.json`, `.env*`, `override.cfg`,
 `estrategia/`, `ui_tour/`, `build/`, `assets/models/buildings/` and `*.md`. `tests/build/test_export_guards.gd`

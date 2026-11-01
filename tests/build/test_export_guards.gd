@@ -12,6 +12,10 @@ extends GdUnitTestSuite
 ##      THIRD-PARTY-NOTICES.md, licenses/GODOT-COPYRIGHT.txt y la de cada fuente.
 ##   7. Los assets que el export deja fuera por no usarse (UNUSED_ASSETS) siguen
 ##      sin usarse en el juego (docs/19 §13).
+##   8. El preset "Android Release (AAB)" (Gradle, para Google Play) excluye lo mismo,
+##      usa el mismo paquete, no lleva secretos y comparte versión con los otros dos.
+##   9. El .exe se firma fuera de Godot con el certificado solo por entorno
+##      (tools/sign_windows.*): el preset no lleva identidad ni contraseña.
 
 const PRESETS_PATH := "res://export_presets.cfg"
 const GATE_PATH := "res://scripts/services/BeckettGate.gd"
@@ -292,6 +296,137 @@ func test_android_qa_preset_is_x86_64_gl_compat_own_package_and_no_secrets() -> 
 			.override_failure_message("QA: %s tiene que ir vacio" % key).is_empty()
 	var custom: PackedStringArray = cf.get_value(options, "permissions/custom_permissions", PackedStringArray())
 	assert_int(custom.size()).is_equal(0)
+
+
+# --- Android Release (AAB) ------------------------------------------------------
+# El paquete para Google Play (docs/19 §11.10): build con Gradle, formato AAB, el
+# mismo paquete y la misma versión que el APK real, y la firma solo por entorno.
+
+const AAB_PRESET := "Android Release (AAB)"
+## Lo mínimo que Play acepta hoy para apps nuevas y actualizaciones (docs/19 §11.10).
+## Si Play sube el listón, se sube aquí y en el preset.
+const PLAY_MIN_TARGET_SDK := 35
+
+
+func test_aab_preset_exists_and_is_not_the_real_apk_preset() -> void:
+	var cf := ConfigFile.new()
+	assert_int(cf.load(PRESETS_PATH)).is_equal(OK)
+	var aab := _android_section(cf, AAB_PRESET)
+	assert_str(aab).override_failure_message("no hay preset %s" % AAB_PRESET).is_not_empty()
+	assert_str(aab).is_not_equal(_android_section(cf))
+	# Un solo preset Android "runnable" (el de depuración por USB).
+	assert_bool(bool(cf.get_value(aab, "runnable", true))).is_false()
+
+
+func test_aab_preset_excludes_the_same_as_the_real_one() -> void:
+	var cf := ConfigFile.new()
+	cf.load(PRESETS_PATH)
+	var aab := _android_section(cf, AAB_PRESET)
+	var filters := []
+	for f in str(cf.get_value(aab, "exclude_filter", "")).split(","):
+		filters.append(f.strip_edges())
+	for must in MUST_EXCLUDE:
+		assert_bool(filters.has(must)).override_failure_message("AAB: falta excluir %s" % must).is_true()
+	assert_str(str(cf.get_value(aab, "exclude_filter", ""))) \
+		.is_equal(str(cf.get_value(_android_section(cf), "exclude_filter", "")))
+
+
+func test_aab_preset_is_gradle_aab_arm64_same_package_and_no_secrets() -> void:
+	var cf := ConfigFile.new()
+	cf.load(PRESETS_PATH)
+	var aab := _android_section(cf, AAB_PRESET)
+	var options := aab + ".options"
+	var export_path := str(cf.get_value(aab, "export_path", ""))
+	assert_bool(export_path.is_relative_path()).is_true()
+	assert_bool(export_path.begins_with("build/android/") and export_path.ends_with(".aab")).is_true()
+	# Play solo acepta AAB, y Godot solo lo genera con la build de Gradle.
+	assert_bool(bool(cf.get_value(options, "gradle_build/use_gradle_build", false))).is_true()
+	assert_int(int(cf.get_value(options, "gradle_build/export_format", 0))).is_equal(1)
+	# La carpeta de la plantilla, la de por defecto (res://android, fuera de git).
+	assert_str(str(cf.get_value(options, "gradle_build/gradle_build_directory", "x"))).is_empty()
+	var target := str(cf.get_value(options, "gradle_build/target_sdk", ""))
+	assert_bool(target.is_valid_int() and int(target) >= PLAY_MIN_TARGET_SDK) \
+		.override_failure_message("AAB: target_sdk %s, Play pide >= %d" % [target, PLAY_MIN_TARGET_SDK]).is_true()
+	assert_bool(bool(cf.get_value(options, "architectures/arm64-v8a", false))).is_true()
+	for abi in ["x86", "x86_64"]:
+		assert_bool(bool(cf.get_value(options, "architectures/" + abi, true))) \
+			.override_failure_message("AAB: sobra la ABI %s" % abi).is_false()
+	assert_str(str(cf.get_value(options, "command_line/extra_args", "x"))).is_empty()
+	# El mismo paquete que el APK real: es la misma app en la tienda.
+	assert_str(str(cf.get_value(options, "package/unique_name", ""))) \
+		.is_equal(str(cf.get_value(_android_section(cf) + ".options", "package/unique_name", "")))
+	assert_bool(bool(cf.get_value(options, "package/signed", false))).is_true()
+	for key in ANDROID_SECRET_KEYS:
+		assert_str(str(cf.get_value(options, key, ""))) \
+			.override_failure_message("AAB: %s tiene que ir vacio" % key).is_empty()
+	var custom: PackedStringArray = cf.get_value(options, "permissions/custom_permissions", PackedStringArray())
+	assert_int(custom.size()).is_equal(0)
+	for key in cf.get_section_keys(options):
+		if key.begins_with("permissions/") and key != "permissions/custom_permissions":
+			assert_bool(bool(cf.get_value(options, key, false))) \
+				.override_failure_message("AAB: permiso activado: %s" % key).is_false()
+
+
+## versionCode y versionName iguales en los tres presets Android, y el nombre igual a
+## config/version: Play rechaza un AAB con un versionCode ya usado, y Android no
+## instala encima un APK con uno menor (docs/19 §12.1).
+func test_android_presets_share_version_code_and_name_from_project() -> void:
+	var cf := ConfigFile.new()
+	cf.load(PRESETS_PATH)
+	var project := ConfigFile.new()
+	assert_int(project.load("res://project.godot")).is_equal(OK)
+	var version := str(project.get_value("application", "config/version", ""))
+	assert_str(version).is_not_empty()
+	var code := int(cf.get_value(_android_section(cf) + ".options", "version/code", 0))
+	assert_int(code).is_greater(0)
+	for preset in ["Android", QA_PRESET, AAB_PRESET]:
+		var options := _android_section(cf, preset) + ".options"
+		assert_int(int(cf.get_value(options, "version/code", 0))) \
+			.override_failure_message("%s: version/code distinto de %d" % [preset, code]).is_equal(code)
+		var vname := str(cf.get_value(options, "version/name", ""))
+		assert_bool(vname.is_empty() or vname == version) \
+			.override_failure_message("%s: version/name %s, project.godot dice %s" % [preset, vname, version]) \
+			.is_true()
+
+
+# --- Windows: metadatos y firma -------------------------------------------------
+# La firma de código va fuera de Godot (tools/sign_windows.{ps1,sh} con signtool) y
+# el certificado solo por entorno: el preset no lleva identidad ni contraseña.
+
+func test_windows_preset_metadata_and_no_codesign_secrets() -> void:
+	var cf := ConfigFile.new()
+	cf.load(PRESETS_PATH)
+	var options := "preset.0.options"
+	assert_bool(bool(cf.get_value(options, "application/modify_resources", false))).is_true()
+	for key in ["application/company_name", "application/product_name", "application/file_description",
+			"application/copyright"]:
+		assert_str(str(cf.get_value(options, key, ""))).override_failure_message("Windows: falta %s" % key).is_not_empty()
+	# file_version es numérica (Windows no admite "-beta"): sale de la parte numérica
+	# de config/version, 0.9-beta -> 0.9.0.0.
+	var project := ConfigFile.new()
+	project.load("res://project.godot")
+	var numeric := str(project.get_value("application", "config/version", "")).get_slice("-", 0)
+	for key in ["application/file_version", "application/product_version"]:
+		var v := str(cf.get_value(options, key, ""))
+		assert_bool(v.is_empty() or v.begins_with(numeric + ".")) \
+			.override_failure_message("Windows: %s=%s no sigue config/version (%s)" % [key, v, numeric]).is_true()
+	assert_bool(bool(cf.get_value(options, "codesign/enable", true))).is_false()
+	for key in ["codesign/identity", "codesign/password"]:
+		assert_str(str(cf.get_value(options, key, ""))) \
+			.override_failure_message("export_presets.cfg es publico: %s tiene que ir vacio" % key).is_empty()
+	var raw := FileAccess.get_file_as_string(PRESETS_PATH).to_lower()
+	assert_bool(raw.contains(".pfx") or raw.contains(".p12")).is_false()
+
+
+func test_sign_script_reads_the_certificate_only_from_the_environment() -> void:
+	for path in ["res://tools/sign_windows.ps1", "res://tools/sign_windows.sh"]:
+		var src := FileAccess.get_file_as_string(path)
+		assert_str(src).override_failure_message("falta %s" % path).is_not_empty()
+		assert_bool(src.contains("TI_WINDOWS_SIGN_PFX")).is_true()
+		assert_bool(src.contains("TI_WINDOWS_SIGN_THUMBPRINT")).is_true()
+	for path in ["res://tools/package_release.ps1", "res://tools/package_release.sh"]:
+		assert_bool(FileAccess.get_file_as_string(path).contains("sign_windows")) \
+			.override_failure_message("%s no integra la firma" % path).is_true()
 
 
 func test_handheld_orientation_is_sensor_landscape() -> void:
