@@ -83,6 +83,20 @@ func test_the_army_panel_has_one_tab_per_military_building() -> void:
 	panel._toggle_panel()
 	assert_bool(panel.is_open()).is_false()
 
+## Beta 0.9 (QA escritorio n. 18): con mas tropas que plazas la cifra sale en
+## aviso y su globo dice por que.
+func test_over_capacity_says_why() -> void:
+	for locale in ["es", "en"]:
+		assert_str(String(Tr._STRINGS[locale].get("LBL_ARMY_OVER_CAPACITY", ""))).is_not_empty()
+	var panel: CanvasLayer = auto_free(load("res://scenes/ui/ArmyPanel.tscn").instantiate())
+	add_child(panel)
+	await await_idle_frame()
+	panel.open()
+	var label: Label = panel._capacity_label
+	var over := ArmyManager.get_used_capacity() > ArmyManager.get_capacity()
+	assert_bool(label.tooltip_text.begins_with(Tr.t("LBL_ARMY_OVER_CAPACITY"))).is_equal(over)
+	panel._toggle_panel()
+
 func test_the_missions_panel_says_attack_and_keeps_its_footer() -> void:
 	var saved_first: bool = TutorialManager.first_sortie_done
 	TutorialManager.first_sortie_done = true

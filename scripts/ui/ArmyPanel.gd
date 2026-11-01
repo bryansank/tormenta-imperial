@@ -35,6 +35,9 @@ var _sidebar_visible := false
 
 var _power_label: Label
 var _capacity_label: Label
+## El "de donde sale el tope" de siempre; con mas tropas que plazas se le
+## antepone el porque (QA escritorio n. 18: "21/19" asustaba sin explicar).
+var _capacity_hint := ""
 var _slots_label: Label
 var _tabs_row: HBoxContainer
 var _units_vbox: VBoxContainer
@@ -146,6 +149,7 @@ func _setup_ui() -> void:
 		+ "\n" + Tr.t("LBL_ARMY_CAPACITY_FLEET_HINT") % [int(GameConfig.army_capacity_per_building.get("shipyard", 0)),
 			int(GameConfig.army_capacity_per_building.get("aerodrome", 0))]
 	_capacity_label.get_parent().tooltip_text = _capacity_label.tooltip_text
+	_capacity_hint = _capacity_label.tooltip_text
 	_slots_label = _summary_chip(stats, "clock", Tr.t("ARMY2_QUEUE"))
 	_slots_label.tooltip_text = Tr.t("LBL_ARMY_SLOTS_HINT") % GameConfig.army_training_slots_max
 	_slots_label.get_parent().tooltip_text = _slots_label.tooltip_text
@@ -208,7 +212,16 @@ func _refresh(_arg = null) -> void:
 	var power: int = ArmyManager.get_power()
 	_power_label.text = str(power)
 	_power_label.get_parent().tooltip_text = Tr.t("LBL_MILITARY_POWER") % power
-	_capacity_label.text = "%d/%d" % [ArmyManager.get_used_capacity(), ArmyManager.get_capacity()]
+	var used: int = ArmyManager.get_used_capacity()
+	var cap: int = ArmyManager.get_capacity()
+	_capacity_label.text = "%d/%d" % [used, cap]
+	var over := used > cap
+	_capacity_label.add_theme_color_override("font_color", CT.tone_color("warning") if over else CT.text("window"))
+	var tip := (Tr.t("LBL_ARMY_OVER_CAPACITY") + "
+
+" + _capacity_hint) if over else _capacity_hint
+	_capacity_label.tooltip_text = tip
+	_capacity_label.get_parent().tooltip_text = tip
 	_slots_label.text = "%d/%d" % [ArmyManager.get_training().size(), ArmyManager.max_slots()]
 	_rebuild_tabs()
 	_rebuild_units()
