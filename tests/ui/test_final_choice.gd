@@ -118,7 +118,8 @@ func test_every_text_exists_in_both_languages() -> void:
 				"END_BURN_WHO", "END_BURN_SAYS", "END_BURN_WHAT", "BTN_END_BURN",
 				"END_SIGN_RIBBON", "END_SIGN_BODY", "END_SIGN_REPLY", "END_SIGN_CODA",
 				"END_BURN_RIBBON", "END_BURN_BODY", "END_BURN_REPLY", "END_BURN_REWARD",
-				"END_BURN_CODA", "END_BURN_TITLE", "MSG_END_BURN", "OBJ_WHY_BOOK"]:
+				"END_BURN_CODA", "END_BURN_TITLE", "MSG_END_BURN", "OBJ_WHY_BOOK",
+				"END_SIGN_HINT", "END_BURN_HINT"]:
 			assert_str(Tr.t(key)).override_failure_message("%s/%s" % [locale, key]).is_not_equal(key)
 	Tr.set_locale(before)
 
@@ -133,6 +134,29 @@ func test_the_book_shows_both_instructors_and_both_choices() -> void:
 	assert_object(screen.find_child("Choose_burn", true, false)).is_not_null()
 	assert_bool(_has_label(screen, Tr.t("END_SIGN_SAYS"))).is_true()
 	assert_bool(_has_label(screen, Tr.t("END_BURN_SAYS"))).is_true()
+
+## Beta 0.9: FIRMAR y QUEMAR se distinguen de un vistazo (laton con pluma, rojo
+## con llama, filo de la tarjeta del mismo color y una frase debajo).
+func test_sign_and_burn_look_different() -> void:
+	var screen := _screen()
+	screen.show_choice()
+	var sign_card: PanelContainer = screen.find_child("Choice_sign", true, false)
+	var burn_card: PanelContainer = screen.find_child("Choice_burn", true, false)
+	var sign_edge: Color = (sign_card.get_theme_stylebox("panel") as StyleBoxFlat).border_color
+	var burn_edge: Color = (burn_card.get_theme_stylebox("panel") as StyleBoxFlat).border_color
+	assert_object(sign_edge).is_equal(CartoonTheme.kind_fill("accent"))
+	assert_object(burn_edge).is_equal(CartoonTheme.kind_fill("danger"))
+	assert_bool(sign_edge.is_equal_approx(burn_edge)).is_false()
+	assert_bool(_has_glyph(sign_card, "quill")).is_true()
+	assert_bool(_has_glyph(burn_card, "fire")).is_true()
+	assert_bool(_has_label(screen, Tr.t("END_SIGN_HINT"))).is_true()
+	assert_bool(_has_label(screen, Tr.t("END_BURN_HINT"))).is_true()
+
+func _has_glyph(root: Node, glyph_id: String) -> bool:
+	for n in root.find_children("*", "Control", true, false):
+		if "glyph" in n and String(n.get("glyph")) == glyph_id:
+			return true
+	return false
 
 func test_burning_shows_the_free_island() -> void:
 	var screen := _screen()

@@ -181,18 +181,24 @@ func show_choice() -> void:
 	cards.add_theme_constant_override("separation", 8 if small else 14)
 	cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(cards)
+	# Cada salida con su intencion (beta 0.9: se distinguian poco, laton y
+	# ambar): FIRMAR en laton con la pluma, QUEMAR en rojo con la llama, el
+	# filo de la tarjeta del mismo color y una frase debajo del boton.
 	cards.add_child(_choice_card(EmpireManager.ENDING_SIGN, Bust.COMBAT, "salute",
-		"END_SIGN_WHO", "END_SIGN_SAYS", "END_SIGN_WHAT", "BTN_END_SIGN", "accent", "upgrade"))
+		"END_SIGN_WHO", "END_SIGN_SAYS", "END_SIGN_WHAT", "BTN_END_SIGN", "accent", "quill", "END_SIGN_HINT"))
 	cards.add_child(_choice_card(EmpireManager.ENDING_BURN, Bust.COLONY, "point",
-		"END_BURN_WHO", "END_BURN_SAYS", "END_BURN_WHAT", "BTN_END_BURN", "warning", "sun"))
+		"END_BURN_WHO", "END_BURN_SAYS", "END_BURN_WHAT", "BTN_END_BURN", "danger", "fire", "END_BURN_HINT"))
 
 func _choice_card(choice: String, who: String, mood: String, who_key: String, says_key: String,
-		what_key: String, btn_key: String, kind: String, glyph: String) -> PanelContainer:
+		what_key: String, btn_key: String, kind: String, glyph: String, hint_key: String = "") -> PanelContainer:
 	var small := CT.is_phone()
 	var card := PanelContainer.new()
 	card.name = "Choice_" + choice
 	var st := CT.card_style("window")
 	st.set_content_margin_all(6 if small else 12)
+	# El filo, del color del boton: se ve de lejos cual es cual.
+	st.border_color = CT.kind_fill(kind)
+	st.set_border_width_all(3)
 	card.add_theme_stylebox_override("panel", st)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var box := VBoxContainer.new()
@@ -225,6 +231,11 @@ func _choice_card(choice: String, who: String, mood: String, who_key: String, sa
 	btn.name = "Choose_" + choice
 	btn.pressed.connect(choose.bind(choice))
 	box.add_child(btn)
+	if hint_key != "":
+		var hint := CT.para(Tr.t(hint_key), "window", true, "small")
+		hint.name = "Hint"
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(hint)
 	return card
 
 ## FIRMAR o QUEMAR (los botones de la mesa; publica para las pruebas).
