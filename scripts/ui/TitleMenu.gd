@@ -34,6 +34,10 @@ const LOGO_PATH := "res://assets/branding/logo.png"
 
 var _root: Control
 var _art: TextureRect
+## El emblema (solo en vertical). Como la ilustracion, sin textura mientras el
+## menu esta cerrado: el menu vive oculto toda la partida y las dos imagenes
+## son ~7 MB en la GPU (keyart 1600x900 sin comprimir). docs/26 §4.8.
+var _logo: TextureRect
 var _shade: ColorRect
 var _brand: VBoxContainer
 var _card: PanelContainer
@@ -118,8 +122,6 @@ func _setup_ui() -> void:
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if ResourceLoader.exists(KEYART_PATH):
-		_art.texture = load(KEYART_PATH)
 	_root.add_child(_art)
 
 	# Un velo para que la tarjeta se lea sobre la ilustracion sin apagarla.
@@ -141,8 +143,7 @@ func _setup_ui() -> void:
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if ResourceLoader.exists(LOGO_PATH):
-		logo.texture = load(LOGO_PATH)
+	_logo = logo
 	_brand.add_child(logo)
 	var name_label := CT.label(Tr.t("LBL_TITLE_GAME"), "display", CT.WHITE, true)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -255,6 +256,7 @@ static func title_card_lift(vp_h: float, card_h: float) -> float:
 # ── Abrir / cerrar ───────────────────────────────────────────────────
 
 func open_menu() -> void:
+	_load_art(true)
 	_refresh_buttons()
 	_relayout()
 	_root.visible = true
@@ -275,10 +277,19 @@ func _focus_default() -> void:
 func close_menu() -> void:
 	GameManager.title_dismissed = true
 	visible = false
+	_load_art(false)
 	_close_sub()
 	if _paused_by_me:
 		_paused_by_me = false
 		get_tree().paused = false
+
+## Pone o suelta la ilustracion y el emblema. Soltarlas libera la textura (nadie
+## mas las usa) y volver a abrir el menu las carga de disco.
+func _load_art(on: bool) -> void:
+	if _art != null:
+		_art.texture = load(KEYART_PATH) if on and ResourceLoader.exists(KEYART_PATH) else null
+	if _logo != null:
+		_logo.texture = load(LOGO_PATH) if on and ResourceLoader.exists(LOGO_PATH) else null
 
 func _refresh_buttons() -> void:
 	_continue_btn.visible = has_game_to_continue()

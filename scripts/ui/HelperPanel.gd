@@ -76,6 +76,9 @@ const DESKTOP_TIPS := ["HelperPanel.tip_camera"]
 var _callouts: Control
 var _help_btn: Button
 var _guide_panel: Control
+## La lista de la guia de edificios. Se llena al abrirla y se vacia al cerrarla:
+## son ~700 nodos y ~10 MB de RAM que pasaban la partida ocultos (docs/26 §4.8).
+var _guide_list: VBoxContainer
 var _backdrop: ColorRect
 var _guide_open := false
 ## La X de la guia de edificios (se corre a la izquierda del ☰ si la tapa).
@@ -264,9 +267,7 @@ func _setup_ui() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 8)
 	scroll.add_child(list)
-
-	for data in _load_buildings():
-		list.add_child(_make_building_entry(data))
+	_guide_list = list
 
 	# ── Capa de consejos: la tarjeta de abajo y el marco que senala ──
 	_tip_layer = CanvasLayer.new()
@@ -856,6 +857,7 @@ func is_skirmish_callout_shown() -> bool:
 
 func _toggle_guide() -> void:
 	_guide_open = not _guide_open
+	_fill_guide(_guide_open)
 	_guide_panel.visible = _guide_open
 	_backdrop.visible = _guide_open
 	if _guide_open:
@@ -867,6 +869,17 @@ func _toggle_guide() -> void:
 		UIManager.close_panel(self)
 		# La pila le cambio la capa al abrir: vuelve a la suya.
 		layer = 14
+
+## Llena la lista de la guia (al abrir) o la vacia (al cerrar).
+func _fill_guide(on: bool) -> void:
+	if _guide_list == null:
+		return
+	for c in _guide_list.get_children():
+		_guide_list.remove_child(c)
+		c.queue_free()
+	if on:
+		for data in _load_buildings():
+			_guide_list.add_child(_make_building_entry(data))
 
 ## Vigia de la pausa: el arbol en pausa no llama al _process de HelperPanel.
 const _PauseWatcher := preload("res://scripts/ui/PauseWatcher.gd")

@@ -39,6 +39,8 @@ esta sonda como árbitro antes y después.
 - **Memoria**: 900-1080 MB de proceso en Vulkan y 550-700 MB en OpenGL (binario del
   editor), y 170-290 MB de VRAM. El presupuesto de un PC de 4 GB (≤ 600 MB) solo lo
   roza Compatibility.
+  En la tablet real, 880-930 MB con Vulkan; el inventario y el paso de Mínima en
+  móvil a Compatibility, en §4.8.
 - **Tirones**: la auditoría encontró trabajo síncrono por casilla del auto-road (un
   guardado completo y un recálculo de población por tramo) y cientos de BFS al elegir
   dónde construir. No se ven en la media, pero son los saltos que nota quien juega.
@@ -452,6 +454,102 @@ Mínima **emulada** en `grande` (la de §4.2): 132 fps · 64, 497 draw calls, VR
 
 Informe completo (toque, pantallas y estas cifras): `tormenta-imperial-contexto/29_QA_TABLET.md`.
 
+### 4.8 Memoria en Android: inventario y recorte (2026-11-01, rama `perf/ram-memoria`)
+
+**Punto de partida** (tablet real Galaxy Tab A11+, APK debug arm64, renderizador Mobile,
+calidad Mínima elegida por la detección; `tormenta-imperial-contexto/31_QA_TABLET_REAL.md`):
+**880-930 MB PSS** con un presupuesto de 500 (§2). En el menú ya son 889: Native 451,
+Graphics 337, Code 63. No sube con la colonia (876-883 MB con 483 piezas) ni con el
+tiempo (929 → 930 MB de 5 a 16 min): no hay fuga, es lo que se carga al arrancar.
+
+**Cómo se midió aquí** (sin ventana, regla del dueño): `tools/ram_probe.gd`, sonda
+headless nueva. Arranca `Main.tscn`, deja que GameManager monte una partida nueva y
+cuenta la memoria estática del motor (`MEMORY_STATIC`) por etapas y por hijo de `Main`,
+y los recursos únicos colgados del árbol (texturas, mallas, fuentes y sus atlas de
+glifos, audio). El servidor de render "dummy" de headless guarda en CPU lo que en el
+dispositivo va a la GPU, así que sirve para estimar el tamaño de los activos; lo que
+**no** ve es el driver ni los render targets.
+
+```
+godot --headless --path . -s tools/ram_probe.gd -- --no-title --no-dev
+```
+
+Con `override.cfg` de carpeta propia (monta y guarda una partida); se niega a correr en
+la carpeta del jugador.
+
+#### Inventario, ordenado por MB
+
+Partida nueva, vista 3D, rejilla 66x62, antes de los cambios de esta rama:
+
+| # | Qué | MB | Dónde | Comentario |
+|---|---|---|---|---|
+| 1 | **Driver Vulkan, pipelines, bloques de memoria, staging, swapchain y render targets** | **~550-650** (la Native que no es estática + casi todo Graphics) | renderizador Mobile | Ninguna sonda de PC lo ve por dentro, pero el A/B de §4.7 lo delata: con la misma partida, **Compatibility 551-641 MB de proceso y Vulkan (Mobile) 978-1025**. En la tablet, Native (451) − estática (~150-200) ≈ 250-300 MB de driver, y Graphics 337 frente a los 88-105 MB de VRAM que el motor dice usar en Mínima |
+| 2 | Interfaz: 3414 nodos (766 `Label`, 628 `HBoxContainer`, 430 `PanelContainer`, 257 `Button`) | **~60** | todos los paneles, construidos al arrancar y ocultos | Medido: un `Label` con texto ~19 KB de estática (el texto con forma del TextServer), un contenedor ~5,5 KB. Los más caros: `HelperPanel` 13 MB (la **guía de edificios**, 715 nodos, siempre oculta), `ConstructionMenu` 11 MB (la ventana CONSTRUIR, 585 nodos), `SettingsPanel` 5,7 MB (409), `TitleMenu` 5,5 MB (la ilustración) |
+| 3 | Scripts: 184 `.gd`, ~90 000 líneas, compilados con sus `preload` | **~45** | autoloads (+26 MB sobre el motor vacío) y escenas de `Main` (+20) | Fijo mientras el código sea este. `Tr.gd` (293 KB, ES y EN) y `GameConfig.gd` (204 KB) son los mayores |
+| 4 | Motor vacío | 24 | — | Godot 4.7 sin proyecto |
+| 5 | Mundo 3D de una partida nueva (isla, yacimientos, núcleo, carreteras) | ~15-20 | `Main` | Los yacimientos horneados son las mallas mayores (bosque: 11 154 vértices, 0,26 MB) |
+| 6 | Ilustración del título `keyart.png` 1600x900 (RGB8 sin comprimir; en GPU, RGBA: 5,5 MB) y `logo.png` 512x512 (1 MB) | **6,5** | `TitleMenu` | Cargadas al arrancar y retenidas **toda la partida** aunque el menú esté cerrado |
+| 7 | Atlas de glifos: 7 fuentes, 26 tamaños, 22 texturas | 4,6 (×2: CPU y GPU) | TextServer | En la tablet, más: el sobremuestreo de fuentes rasteriza al tamaño de pantalla (1920x1200 sobre 1280x720 de base, ×1,67) |
+| 8 | Tablero de combate 3D (`BoardViewport3D`: SubViewport a pantalla completa, su `World3D`, terreno, piezas) | ~10-30 (estimado) | `BattleScreen` | Se creaba en la primera pelea y **no se soltaba nunca** |
+| 9 | Fuentes cargadas (Baloo 2, Nunito Sans y Caveat variables, más la del motor) | 1,6 | `CartoonTheme` | Inter, Rajdhani, Black Ops One, Special Elite y Nunito están en `assets/` pero no se cargan |
+| 10 | Audio | 1,3 cargado | `AudioManager` | 56 OGG (6,6 MB en disco), **ningún WAV**: un OGG vive comprimido en memoria y se decodifica al vuelo; el streaming no ahorraría nada |
+| 11 | Iconos PNG (24/42/60/96 px), texturas generadas (humo de `BuildingFx` a 32 px por fotograma, solares de 64 px, insignias, banderas) y miniaturas de CONSTRUIR (27 de ≤ 256 px) | < 4 | varios | Despreciables. El prólogo y los instructores son de código, sin láminas |
+| 12 | Mapas PBR `metal_plate_*_1k.jpg` | ~3 | `DieselpunkBuildingFactory` | Solo rugosidad y normal, comprimidas en VRAM con mipmaps; la difusa no se carga |
+
+**Conclusión**: los activos del proyecto (26 MB en disco) no explican ni el 5 % de los
+900 MB. Lo gordo es el renderizador Vulkan en Android (~60-70 %); luego, la interfaz
+construida entera al arrancar y el código.
+
+#### Hecho
+
+| Cambio | Ahorro estimado por partida | Archivos |
+|---|---|---|
+| **Mínima en Android/iOS arranca en Compatibility** (OpenGL ES 3). Es el mismo override del user dir que Mínima en PC (§7.5-7.6), con la clave `renderer/rendering_method.mobile`: `project.godot` fija esa variante y una variante de etiqueta manda sobre la clave base. Mínima ya apaga lo que Compatibility no tiene (sombras, SSAO, glow). Se aplica **desde el siguiente arranque** | **~300-400 MB** (de 880-930 a ~500-600 de PSS, por el A/B de §4.7) | `GraphicsQuality.gd` (`MOBILE_MINIMAL_RENDERER`, `override_key`), `tests/ui/test_quality_measure.gd` |
+| Tope del staging buffer de Vulkan en móvil: `rendering_device/staging_buffer/max_size_mb.mobile=16` (128 por defecto). Crece hasta lo que se sube en el fotograma más cargado (la carga de la partida) y no vuelve a bajar; con tope, una subida mayor espera a la GPU en vez de crecer | 0-110 MB, **solo** con Vulkan (Alta y Baja en móvil, y el primer arranque antes de la detección) | `project.godot` |
+| La guía de edificios se llena al abrirla y se vacía al cerrarla | ~10 MB, 698 nodos | `HelperPanel.gd` (`_fill_guide`) |
+| La ilustración y el emblema del título se sueltan al cerrar el menú y se recargan al abrirlo | ~6,5 MB de GPU | `TitleMenu.gd` (`_load_art`) |
+| El tablero de combate 3D se suelta al cerrar la pantalla de combate (si no le queda animación ni interfaz esperándolo) y se rehace en la siguiente pelea | ~10-30 MB tras la primera pelea | `BattleScreen.gd` (`_release_board3d`) |
+| `--ram-log` dice también el renderizador | — | `DeviceProfile.print_memory` |
+| Sonda headless de memoria | — | `tools/ram_probe.gd` |
+
+Con la sonda, tras los cambios: estática con `Main` en el árbol **149,6 → 134,6 MB** y
+nodos **3414 → 2716**.
+
+**Riesgos**
+
+- El override en Android no se ha probado en un dispositivo. Si el motor no lo leyera,
+  el juego seguiría en Mobile como hoy; si lo lee, el registro dice
+  `renderizador=gl_compatibility`.
+- Compatibility no tiene ubershaders: el primer uso de cada material puede dar un tirón
+  (compilación en caliente). Hay que medir los tirones de la primera partida.
+- El aspecto en Compatibility es el del APK "Android QA (emulador)", que ya va en
+  Compatibility: las diferencias se habrían visto ahí.
+- Un dispositivo ya detectado como Mínima tarda **dos** arranques: el primero escribe el
+  override (todavía en Vulkan) y el segundo arranca en Compatibility.
+- `GraphicsQuality.MOBILE_MINIMAL_RENDERER = ""` deshace el cambio de renderizador.
+
+#### Qué medir en la tablet
+
+1. APK con `--ram-log` en `command_line/extra_args`. Arrancar **dos veces** (la segunda ya
+   en Compatibility) y comprobar `renderizador=gl_compatibility` en `adb logcat`.
+2. `dumpsys meminfo com.bryankey.tormentaimperial` en el menú, en la partida inicial, a los
+   5 min y en la colonia grande: PSS total, Native y Graphics. Objetivo: ≤ 500 MB.
+3. FPS con `dumpsys SurfaceFlinger --latency` (como en 31_QA_TABLET_REAL) en la partida
+   pequeña y en la colonia grande con tope 30: ≥ 30 estables. Contar los fotogramas de más
+   de 50 ms en el primer minuto (compilación de shaders).
+4. Combate: abrir y cerrar una pelea dos veces; la RAM tras cerrar no debe crecer de pelea
+   en pelea.
+5. Pasar a Alta en Ajustes (aviso de reinicio, vuelve a Vulkan) y volver a Mínima.
+
+#### Lo siguiente, si no basta
+
+- `ConstructionMenu`: 585 nodos fijos (~9 MB). Soltar las tarjetas al cerrar costaría un
+  tirón al abrir CONSTRUIR, que se abre a menudo: medirlo antes en la tablet.
+- `SettingsPanel`: 409 nodos (~6 MB) construidos al arrancar; construirlos al abrir pide
+  rehacer cómo las pruebas buscan sus filas.
+- Si Compatibility no llega a 500 en la tablet: bajar la escala de la interfaz o el
+  sobremuestreo de fuentes del perfil tablet, y pasar el resto de paneles a demanda.
+
 ---
 
 ## 5. Auditoría estática
@@ -818,6 +916,7 @@ juego con ellos, y el `.exe` se abre con doble clic. Detalle en §7.6.
   `DeviceProfile.auto_fps()`).
 - **Renderizador** (§7.5): Mínima en PC escribe `user://renderer_override.cfg`;
   cualquier otra calidad lo borra. No se pide Mobile si hoy va en Compatibility.
+  Desde el 2026-11-01 (§4.8), Mínima en **móvil** pide Compatibility por la RAM.
 - **Detección del primer arranque** (§7.2) en `DeviceProfile`, con las reglas puras
   en `GraphicsQuality` y los umbrales y la lista de GPU en `GameConfig`
   (`quality_weak_gpu_patterns`, `quality_weak_ram_mb` 4600, `quality_weak_threads` 4,

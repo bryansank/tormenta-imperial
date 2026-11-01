@@ -794,6 +794,7 @@ cambio.
 | Caminantes | tope del perfil | igual | **`life_figure_cap_minimal`** (12) |
 | FPS "Del perfil" en PC | 60 | 60 | **30** |
 | Renderizador en PC | Forward+ | Forward+ | **Mobile**, desde el siguiente arranque |
+| Renderizador en Android/iOS | Mobile | Mobile | **Compatibility** (OpenGL ES 3), desde el siguiente arranque: ~300-400 MB de RAM menos (docs/26 §4.8) |
 | Tablero de combate 3D | completo | completo | simplificado (lo lee `BattleScreen` de `settings_for`) |
 
 - **Mínima en PC cambia el renderizador al reiniciar** (decisión del dueño): al
@@ -803,7 +804,11 @@ cambio.
   `project.godot` lo nombra en `application/config/project_settings_override`: vive
   en el user dir (se puede escribir aunque el `.exe` esté en `Program Files`) y no
   toca la instalación. El editor no lee ese archivo (solo el juego), así que no se
-  cuela en `project.godot`. Volver a otra calidad lo borra (y avisa igual). No se
+  cuela en `project.godot`. **En móvil** (2026-11-01, docs/26 §4.8) Mínima escribe
+  `renderer/rendering_method.mobile="gl_compatibility"` (la variante `.mobile`, porque
+  `project.godot` fija esa y una variante de etiqueta manda sobre la clave base):
+  Vulkan costaba ~880-930 MB en la tablet real. `GraphicsQuality.MOBILE_MINIMAL_RENDERER`
+  a `""` lo deshace. Volver a otra calidad lo borra (y avisa igual). No se
   pide Mobile si hoy se va en Compatibility (sin Vulkan ni D3D12), ni en Android
   (ya es Mobile), ni en headless. Al arrancar, `DeviceProfile` lo resincroniza con
   la calidad guardada. `--rendering-method` en la línea de órdenes sigue mandando

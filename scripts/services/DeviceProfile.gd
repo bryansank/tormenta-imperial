@@ -512,7 +512,7 @@ func _process(delta: float) -> void:
 ## medir en un dispositivo con `--ram-log`; docs/26 §4.8).
 func print_memory(tag: String) -> void:
 	var mb := 1048576.0
-	print("[%s] static=%.1f MB (max %.1f) video=%.1f texture=%.1f buffer=%.1f MB objects=%d nodes=%d resources=%d fps=%.0f cap=%d calidad=%s pipelines=%d" % [
+	print("[%s] static=%.1f MB (max %.1f) video=%.1f texture=%.1f buffer=%.1f MB objects=%d nodes=%d resources=%d fps=%.0f cap=%d calidad=%s renderizador=%s pipelines=%d" % [
 		tag, Performance.get_monitor(Performance.MEMORY_STATIC) / mb,
 		Performance.get_monitor(Performance.MEMORY_STATIC_MAX) / mb,
 		Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / mb,
@@ -520,7 +520,8 @@ func print_memory(tag: String) -> void:
 		Performance.get_monitor(Performance.RENDER_BUFFER_MEM_USED) / mb,
 		Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
 		Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT), Engine.get_frames_per_second(),
-		Engine.max_fps, GraphicsQuality.current(), _pipeline_compilations()])
+		Engine.max_fps, GraphicsQuality.current(), RenderingServer.get_current_rendering_method(),
+		_pipeline_compilations()])
 
 ## Pipelines compilados hasta ahora (todas las clases). Mientras sube, el motor
 ## esta compilando shaders y el fotograma no dice lo que vale el equipo.

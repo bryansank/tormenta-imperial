@@ -128,3 +128,25 @@ func test_the_warmup_waits_for_play_and_for_the_shaders() -> void:
 	assert_bool(DeviceProfile.warmup_done(w, s)).is_true()
 	# Si los shaders no paran de compilar, se mide igual pasado el maximo.
 	assert_bool(DeviceProfile.warmup_done(float(GameConfig.quality_detect_warmup_max), 0.0)).is_true()
+
+# ── Renderizador de Minima (docs/26 §4.8) ────────────────────────────
+
+func test_minimal_on_pc_asks_for_mobile() -> void:
+	assert_str(GraphicsQuality.renderer_for("minimal", false, "forward_plus")).is_equal("mobile")
+	assert_str(GraphicsQuality.renderer_for("minimal", false, "gl_compatibility")).is_equal("")
+
+func test_minimal_on_mobile_asks_for_compatibility() -> void:
+	# Vulkan en la tablet real: 880-930 MB; Compatibility ahorra RAM del driver.
+	assert_str(GraphicsQuality.renderer_for("minimal", true, "mobile")).is_equal(GraphicsQuality.MOBILE_MINIMAL_RENDERER)
+	# Ya en Compatibility se sigue pidiendo: el override tiene que quedarse.
+	assert_str(GraphicsQuality.renderer_for("minimal", true, "gl_compatibility")).is_equal(GraphicsQuality.MOBILE_MINIMAL_RENDERER)
+
+func test_other_qualities_keep_the_project_renderer() -> void:
+	for q in ["auto", "high", "low"]:
+		assert_str(GraphicsQuality.renderer_for(q, true, "mobile")).is_equal("")
+		assert_str(GraphicsQuality.renderer_for(q, false, "forward_plus")).is_equal("")
+
+func test_the_override_key_on_mobile_is_the_feature_variant() -> void:
+	# project.godot fija rendering_method.mobile: la clave base no mandaria.
+	assert_str(GraphicsQuality.override_key(true)).is_equal("renderer/rendering_method.mobile")
+	assert_str(GraphicsQuality.override_key(false)).is_equal("renderer/rendering_method")

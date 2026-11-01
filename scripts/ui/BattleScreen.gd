@@ -2148,6 +2148,23 @@ func _close_all() -> void:
 	_report_panel.visible = false
 	visible = false
 	_sync_world_render()
+	_release_board3d()
+
+## Suelta la maqueta 3D al cerrar la pantalla de combate: su SubViewport guarda
+## render targets del tamano de la pantalla, su propio World3D, el terreno y las
+## piezas, y la partida pasa casi todo el tiempo fuera de combate (docs/26 §4.8).
+## La siguiente pelea la vuelve a crear (_ensure_board3d). Si la maqueta aun
+## cuenta algo o hay interfaz esperandola, se queda hasta el proximo cierre.
+func _release_board3d() -> void:
+	if _board3d == null or _board3d.board.is_busy() or not _deferred_ui.is_empty():
+		return
+	if _actions_row.resized.is_connected(_queue_margin_update):
+		_actions_row.resized.disconnect(_queue_margin_update)
+	var old = _board3d
+	_board3d = null
+	if old.get_parent() != null:
+		old.get_parent().remove_child(old)
+	old.queue_free()
 
 # ── Tablero 3D ───────────────────────────────────────────────────────
 

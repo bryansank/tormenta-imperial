@@ -9,7 +9,9 @@ extends RefCounted
 ##   - la rejilla "siempre visible" no se pinta (solo al construir);
 ##   - tope de caminantes GameConfig.life_figure_cap_minimal;
 ##   - tope de FPS de 30 en PC (DeviceProfile.auto_fps);
-##   - en PC, el renderizador Mobile desde el siguiente arranque (RENDERER_OVERRIDE_PATH).
+##   - en PC, el renderizador Mobile desde el siguiente arranque (RENDERER_OVERRIDE_PATH);
+##   - en Android/iOS, el renderizador Compatibility (OpenGL ES 3) desde el
+##     siguiente arranque: Vulkan cuesta ~300-400 MB de RAM mas (docs/26 §4.8).
 ## Y las reglas puras de la deteccion del primer arranque (§7.2), que DeviceProfile
 ## ejecuta.
 ##
@@ -83,25 +85,40 @@ static func apply_runtime(tree: SceneTree) -> void:
 		# vistas se pone como diga la preferencia con la calidad aplicada.
 		EventBus.grid_overlay_toggled.emit(grid_always_visible())
 
-# ── Renderizador (PC) ─────────────────────────────────────────────────
+# ── Renderizador ──────────────────────────────────────────────────────
+
+## El renderizador de Minima en movil. Con Vulkan (Mobile) el proceso ocupa
+## 880-930 MB en la tablet real (Native 451 + Graphics 337, 31_QA_TABLET_REAL);
+## en PC, Compatibility pesa 550-640 MB frente a ~1000 de Vulkan con la misma
+## partida (docs/26 §4.1 y §4.7). Minima ya apaga todo lo que Compatibility no
+## tiene (sombras, glow, SSAO). "" deja Mobile tambien en Minima.
+const MOBILE_MINIMAL_RENDERER := "gl_compatibility"
 
 ## El renderizador que deberia arrancar con esta calidad, o "" para el de
-## project.godot. Puro. Solo en PC y solo para Minima. Si hoy va en
-## Compatibility (sin Vulkan ni D3D12, o forzado), no se pide Mobile: no
-## arrancaria mejor.
+## project.godot. Puro. Solo para Minima: en PC, Mobile (si hoy va en
+## Compatibility, sin Vulkan ni D3D12 o forzado, no se pide Mobile: no
+## arrancaria mejor); en movil, MOBILE_MINIMAL_RENDERER.
 static func renderer_for(quality: String, mobile_platform: bool, current_renderer: String) -> String:
-	if mobile_platform or quality != "minimal":
+	if quality != "minimal":
 		return ""
+	if mobile_platform:
+		return MOBILE_MINIMAL_RENDERER
 	if current_renderer == "gl_compatibility":
 		return ""
 	return "mobile"
+
+## La clave del override para esta plataforma. En movil, project.godot fija
+## `renderer/rendering_method.mobile`, y una variante de etiqueta manda sobre la
+## clave base: el override tiene que escribir la misma variante.
+static func override_key(mobile_platform: bool) -> String:
+	return "renderer/rendering_method.mobile" if mobile_platform else "renderer/rendering_method"
 
 ## El renderizador que pide el archivo de override, o "".
 static func renderer_override() -> String:
 	var cf := ConfigFile.new()
 	if cf.load(RENDERER_OVERRIDE_PATH) != OK:
 		return ""
-	return str(cf.get_value("rendering", "renderer/rendering_method", ""))
+	return str(cf.get_value("rendering", override_key(is_mobile_platform()), ""))
 
 ## Escribe o borra el override segun la calidad elegida. Devuelve true si el
 ## renderizador del proximo arranque no es el de ahora (hay que reiniciar).
@@ -110,13 +127,14 @@ static func sync_renderer_override() -> bool:
 	if DisplayServer.get_name() == "headless":
 		return false
 	var current_renderer := RenderingServer.get_current_rendering_method()
-	var want := renderer_for(GameConfig.ui_graphics_quality, is_mobile_platform(), current_renderer)
+	var mobile := is_mobile_platform()
+	var want := renderer_for(GameConfig.ui_graphics_quality, mobile, current_renderer)
 	if want == "":
 		if FileAccess.file_exists(RENDERER_OVERRIDE_PATH):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(RENDERER_OVERRIDE_PATH))
 	else:
 		var cf := ConfigFile.new()
-		cf.set_value("rendering", "renderer/rendering_method", want)
+		cf.set_value("rendering", override_key(mobile), want)
 		if cf.save(RENDERER_OVERRIDE_PATH) != OK:
 			push_warning("[GraphicsQuality] no se pudo escribir %s" % RENDERER_OVERRIDE_PATH)
 			return false

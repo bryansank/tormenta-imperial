@@ -993,10 +993,11 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   detection, once) — docs/21 §12, docs/26 §7; `combat_view` (`front` / `board`: how
   the 3D combat board is shown, docs/15 §3 "Las dos vistas");
 - `[partidas]`: `activa` — which saved game is the active one (`GameConfig.saves_active_slot`);
-- `user://renderer_override.cfg` (not settings.cfg): written only when a PC picks
-  Minimal quality; `project.godot` names it in
+- `user://renderer_override.cfg` (not settings.cfg): written only when Minimal
+  quality is picked; `project.godot` names it in
   `application/config/project_settings_override`, so the next launch runs the
-  Mobile renderer. Any other quality deletes it. Only `GraphicsQuality.set_quality()`
+  Mobile renderer on a PC, or Compatibility on Android/iOS (key
+  `renderer/rendering_method.mobile`, docs/26 §4.8). Any other quality deletes it. Only `GraphicsQuality.set_quality()`
   touches it;
 - `[perfil]`: `runs_finished`, `campaigns_won` — the player profile that unlocks
   Gobernador (docs/20 §1b). Of the player on this device, never of the run.
@@ -1046,7 +1047,9 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   simple island); `GraphicsQuality.apply_runtime()` the rest (smoke/sparks hidden, site
   pennants still, no always-on grid, walkers capped at `life_figure_cap_minimal`).
   Minimal on a PC writes `user://renderer_override.cfg` so the next launch runs the
-  Mobile renderer. First launch with `auto` runs a detection (GPU name patterns, RAM,
+  Mobile renderer; Minimal on Android/iOS writes it with
+  `renderer/rendering_method.mobile="gl_compatibility"` (Vulkan cost ~880-930 MB on the
+  real tablet; `GraphicsQuality.MOBILE_MINIMAL_RENDERER`, docs/26 §4.8). First launch with `auto` runs a detection (GPU name patterns, RAM,
   threads, then a few measured seconds behind the title menu). FPS cap per profile
   (`fps_cap`), 30 while paused, 10 without focus.
 - **Done (2026-10-12/14):** roads in one `RoadBatch3D` (≤ 16 draw calls); building
