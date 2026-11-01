@@ -971,7 +971,7 @@ const _STRINGS := {
 		"LBL_LAYOUT_EDITING_HINT_TOUCH": "Arrastra cada marco con el dedo. Se ajusta a la rejilla y a los bordes. Pulsa LISTO para terminar.",
 		"NOTIF_LAYOUT_AFTER_BATTLE": "La disposición se edita fuera del tablero de batalla.",
 		"NOTIF_UI_AFTER_BATTLE": "Ajustes guardados. Con un tablero abierto la interfaz no se rehace: se verá al terminar.",
-		"LBL_CONTROLS_SUMMARY": "Ratón y teclado: WASD o arrastrar para mover el mapa, rueda para el zoom, Q y E para girar, R para rotar un edificio, Esc o clic derecho para cancelar.",
+		"LBL_CONTROLS_SUMMARY": "Ratón y teclado: WASD o arrastrar para mover el mapa, rueda para el zoom, Q y E para girar, R para rotar un edificio, Esc o clic derecho para cancelar. Atajos: B construir, M misiones, H ayuda, Espacio pausa, F o 1 / 2 velocidad, F11 pantalla completa.",
 		"LBL_CONTROLS_SUMMARY_TOUCH": "Con el dedo: arrastra para mover el mapa, pellizca con dos dedos para el zoom y gíralos para girar la cámara (3D). Al construir, toca el mapa para llevar el edificio, arrástralo para ajustarlo y toca ✓ o el propio edificio para colocarlo. Mantén pulsados zoom y giro para que sigan.",
 		"LBL_PALETTE": "Paleta de colores",
 		"OPT_PALETTE_DEFAULT": "Normal",
@@ -1192,7 +1192,8 @@ const _STRINGS := {
 M: abrir o cerrar MISIONES.
 H: abrir la AYUDA.
 Espacio: pausa y reanudar.
-1 / 2: velocidad del juego.
+F o 1 / 2: velocidad del juego.
+F11: pantalla completa.
 Esc: cierra la ventana de arriba.
 W A S D o flechas: mover el mapa. Q / E: girarlo.
 En combate: Enter termina el turno, D defiende y E espera.",
@@ -3522,7 +3523,7 @@ Abre ☰ MENÚ → ARCHIPIÉLAGO para ver el mapa, o MISIONES → IMPERIO para s
 		"LBL_LAYOUT_EDITING_HINT_TOUCH": "Drag each frame with your finger. It snaps to the grid and the edges. Tap DONE to finish.",
 		"NOTIF_LAYOUT_AFTER_BATTLE": "The layout is edited away from the battle board.",
 		"NOTIF_UI_AFTER_BATTLE": "Settings saved. With a board open the interface is not rebuilt: you will see it once the fight is over.",
-		"LBL_CONTROLS_SUMMARY": "Mouse and keyboard: WASD or drag to move the map, wheel to zoom, Q and E to rotate, R to rotate a building, Esc or right-click to cancel.",
+		"LBL_CONTROLS_SUMMARY": "Mouse and keyboard: WASD or drag to move the map, wheel to zoom, Q and E to rotate, R to rotate a building, Esc or right-click to cancel. Shortcuts: B build, M missions, H help, Space pause, F or 1 / 2 speed, F11 fullscreen.",
 		"LBL_CONTROLS_SUMMARY_TOUCH": "With a finger: drag to move the map, pinch with two fingers to zoom and twist them to turn the camera (3D). When building, tap the map to bring the building there, drag it to adjust and tap ✓ or the building itself to place it. Hold zoom and turn to keep going.",
 		"LBL_PALETTE": "Colour palette",
 		"OPT_PALETTE_DEFAULT": "Normal",
@@ -3740,7 +3741,8 @@ Abre ☰ MENÚ → ARCHIPIÉLAGO para ver el mapa, o MISIONES → IMPERIO para s
 M: open or close MISSIONS.
 H: open HELP.
 Space: pause and resume.
-1 / 2: game speed.
+F or 1 / 2: game speed.
+F11: fullscreen.
 Esc: closes the top window.
 W A S D or arrows: move the map. Q / E: rotate it.
 In combat: Enter ends the turn, D defends and E waits.",
