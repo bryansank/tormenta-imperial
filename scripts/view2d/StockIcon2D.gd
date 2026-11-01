@@ -6,8 +6,15 @@ extends Node2D
 ## "StockIcon", para recoger con un toque.
 ##
 ## Rebote de premio (V2, rediseno 2026-10-14): al aparecer salta de pequeno a su
-## tamano y luego bota cada HOP_PERIOD s en vez de mecerse. Sigue en _process
-## porque el contraescalado depende del zoom, pero solo mientras se ve.
+## tamano y luego bota cada HOP_PERIOD s en vez de mecerse.
+##
+## Sin _process (perf/coste-fotograma, 2026-11-01): en la colonia grande habia
+## decenas de iconos esperando y cada uno recolocaba su escala cada fotograma.
+## Ahora el bote y el latido de "lleno" los hace un shader con TIME (dos
+## materiales compartidos, uno por estado), el salto de entrada un Tween de
+## APPEAR_TIME s, y el contraescalado al zoom se recalcula en `place()`, que
+## llaman el propio icono al cambiar y el reloj de la vista 2D al cambiar el
+## zoom o la huella (Building2D.place_badge).
 
 const ICON_PX := 26.0
 const DISC_R := 19.0
@@ -23,8 +30,40 @@ var _full := false
 var _total := 0
 var _res := ""
 var _tex: Texture2D = null
-## Cuando aparecio (ms), para el salto de entrada.
-var _shown_at := 0
+## Factor del salto de entrada (1 = a su tamano). Lo mueve un Tween.
+var _appear_k := 1.0
+var _appear_tween: Tween = null
+
+const _SHADER := """
+shader_type canvas_item;
+uniform bool full = false;
+const float HOP_PERIOD = 1.3;
+const float HOP_TIME = 0.4;
+const float HOP_PX = 9.0;
+void vertex() {
+	if (full) {
+		VERTEX *= 1.0 + 0.12 * (0.5 + 0.5 * sin(TIME * 7.0));
+	} else {
+		float p = mod(TIME, HOP_PERIOD);
+		if (p < HOP_TIME) {
+			VERTEX.y -= sin(p / HOP_TIME * PI) * HOP_PX;
+		}
+	}
+}
+"""
+static var _materials: Array = []
+
+## Los dos materiales compartidos: [bota, late lleno].
+static func _material_for(full: bool) -> ShaderMaterial:
+	if _materials.is_empty():
+		var sh := Shader.new()
+		sh.code = _SHADER
+		for f in [false, true]:
+			var m := ShaderMaterial.new()
+			m.shader = sh
+			m.set_shader_parameter("full", f)
+			_materials.append(m)
+	return _materials[1 if full else 0]
 
 func setup(building: Node2D) -> void:
 	_building = building
@@ -33,6 +72,7 @@ func setup(building: Node2D) -> void:
 	refresh()
 
 func _ready() -> void:
+	set_process(false)
 	EventBus.building_stock_changed.connect(_on_stock_changed)
 	refresh()
 
@@ -55,32 +95,41 @@ func refresh() -> void:
 			top_res = String(res_name)
 	var was_visible := visible
 	visible = _total > 0
-	set_process(visible)
-	if visible and not was_visible:
-		_shown_at = Time.get_ticks_msec()
 	_full = visible and ProductionManager.is_full(_building)
+	material = _material_for(_full)
+	if visible and not was_visible:
+		_start_appear()
 	if top_res != "" and top_res != _res:
 		_res = top_res
 		_tex = UITheme.icon_texture(_res, 42)
+	place()
 	queue_redraw()
 
-func _process(_delta: float) -> void:
-	if not visible or _building == null:
+## El salto de entrada: de pequeno a su tamano, con un rebote, en APPEAR_TIME s.
+func _start_appear() -> void:
+	if _appear_tween != null and _appear_tween.is_valid():
+		_appear_tween.kill()
+	_appear_tween = null
+	if not is_inside_tree():
+		_appear_k = 1.0
+		return
+	_set_appear(0.0)
+	_appear_tween = create_tween()
+	_appear_tween.tween_method(_set_appear, 0.0, 1.0, APPEAR_TIME)
+
+func _set_appear(a: float) -> void:
+	_appear_k = 1.0 if a >= 1.0 else lerpf(0.3, 1.0, a) + 0.25 * sin(PI * a)
+	place()
+
+## Contraescalado al zoom y sitio encima de la huella. Solo cambia con el zoom,
+## la huella o el salto de entrada; el bote va en el shader.
+func place() -> void:
+	if not visible or _building == null or not is_instance_valid(_building) or not is_inside_tree():
 		return
 	var inv: float = _building.label_scale(self) if _building.has_method("label_scale") else 1.0
-	var t := Time.get_ticks_msec() * 0.001
-	var pulse := 1.0 + (0.12 * (0.5 + 0.5 * sin(t * 7.0)) if _full else 0.0)
-	var a := float(Time.get_ticks_msec() - _shown_at) * 0.001 / APPEAR_TIME
-	if a < 1.0:
-		pulse *= lerpf(0.3, 1.0, a) + 0.25 * sin(PI * a)
-	var hop := 0.0
-	if not _full:
-		var p := fmod(t, HOP_PERIOD)
-		if p < HOP_TIME:
-			hop = sin(p / HOP_TIME * PI)
-	scale = Vector2(inv, inv) * pulse
+	scale = Vector2(inv, inv) * _appear_k
 	var fp: Vector2 = _building.footprint_px() if _building.has_method("footprint_px") else Vector2(32, 32)
-	position = Vector2(0, -fp.y * 0.5 - 18.0 * inv - hop * HOP_PX * inv)
+	position = Vector2(0, -fp.y * 0.5 - 18.0 * inv)
 
 func _draw() -> void:
 	if _total <= 0:

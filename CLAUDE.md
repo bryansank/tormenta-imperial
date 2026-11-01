@@ -75,7 +75,7 @@ holds a service's state of its own.
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
 | 7 | `GameManager` | `scripts/services/GameManager.gd` | Save/load and autosave of up to 5 saved games (`SaveSlots`, `save_path()`, `open_saves_list()`), new game (`request_new_game()` → mode picker, never deletes), offline progression, 3D↔2D switch (`switch_to_scene()`), reload on language change |
 | 8 | `ProcessManager` | `scripts/services/ProcessManager.gd` | Timed manual processes (manufacturing, mining), in batches of ×1 / ×5 / MÁX |
-| 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production that waits in each building until collected, Farm crops, spoilage (Gobernador), construction, upgrades; advances by 0.1 s simulation ticks (`TICK_SECONDS`), not per frame (2026-10-26, `fix/tablet-y-rendimiento`, docs/26); HQ level 3 also asks for the three campaign pieces |
+| 9 | `ProductionManager` | `scripts/services/ProductionManager.gd` | Passive production that waits in each building until collected, Farm crops, spoilage (Gobernador), construction, upgrades; advances by 0.2 s simulation ticks (`TICK_SECONDS`), not per frame, with each producer's cycle interval and stock cap cached (2026-10-26 / 2026-11-01, docs/26 §9); HQ level 3 also asks for the three campaign pieces |
 | 10 | `ProgressionManager` | `scripts/services/ProgressionManager.gd` | Era system (3 eras), 9 milestones, **and the Final Audit** (owns the `FinalAudit` model and publishes it) |
 | 11 | `MarketManager` | `scripts/services/MarketManager.gd` | Buy/sell resources with floating prices |
 | 12 | `PopulationManager` | `scripts/services/PopulationManager.gd` | Population, workers, morale, consumption |
@@ -1424,7 +1424,7 @@ tormenta-imperial/
 |   +-- view2d/                      # The 2D view (docs/18): same services, flat world
 |       +-- ViewRouter.gd, ViewMode.gd, View2D.gd  # Scene routing, the view preference, world<->pixel maths
 |       +-- Camera2DController.gd, Island2D.gd, GridOverlay2D.gd, StormTint2D.gd
-|       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd (no `_process` of its own: `Building2DClock.gd` checks one slice of the buildings per frame, a round every 0.4 s), BuildingArt2D.gd, BuildingIcon2D.gd
+|       +-- BuildingPlacer2D.gd, MapGenerator2D.gd, Building2D.gd (no `_process` of its own: `Building2DClock.gd` checks one slice of the buildings per frame, a round every 0.4 s, only those near the camera; StockIcon2D bounces by shader), BuildingArt2D.gd, BuildingIcon2D.gd
 |       +-- Deposit2D.gd, StatusBadge2D.gd, FloatingText2D.gd, ColonyFlag2D.gd, StockIcon2D.gd
 |       +-- ArtCache2D.gd, WalkerFigures2D.gd  # Baked 2D drawings (one textured rect per building); the 2D walkers
 +-- data/buildings/                  # 55 .tres building definitions

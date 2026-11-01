@@ -74,3 +74,35 @@ func test_a_2d_building_at_rest_has_no_process_of_its_own() -> void:
 
 func test_the_clock_and_the_building_agree_on_the_bucket_count() -> void:
 	assert_int(Clock.CHECK_FRAMES).is_equal(Building2D.CHECK_FRAMES)
+
+# ── perf/coste-fotograma (2026-11-01) ────────────────────────────────
+
+## El tic guarda intervalo y tope de cada productor; subir de nivel (tope mayor)
+## lo recalcula sin esperar a nada.
+func test_the_production_cache_follows_the_level() -> void:
+	var n := _node()
+	n.set_meta("connected", true)
+	n.set_meta("staffed", true)
+	n.set_meta("level", 1)
+	ProductionManager.register_building(n, SawmillData)
+	var cap1 := GameConfig.get_stock_cap("sawmill", 1)
+	ProductionManager._stock[n] = {"res": {"wood": cap1}, "age": 0.0}
+	ProductionManager._tick_production(0.5)
+	# Lleno: el reloj no avanza.
+	assert_float(float(ProductionManager._producing[n]["timer"])).is_equal(0.0)
+	n.set_meta("level", 3)
+	assert_int(GameConfig.get_stock_cap("sawmill", 3)).is_greater(cap1)
+	ProductionManager._tick_production(0.5)
+	assert_float(float(ProductionManager._producing[n]["timer"])).is_equal_approx(0.5, 0.0001)
+	ProductionManager._stock.erase(n)
+
+## El icono de recoger de la 2D no tiene _process: el bote es del shader.
+func test_the_2d_stock_icon_has_no_process() -> void:
+	var b: Node2D = Building2D.new()
+	b.setup(SawmillData)
+	add_child(b)
+	_nodes.append(b)
+	await get_tree().process_frame
+	var icon: Node = b.get_node("StockIcon")
+	assert_bool(icon.is_processing()).is_false()
+	assert_bool(icon.material is ShaderMaterial).is_true()

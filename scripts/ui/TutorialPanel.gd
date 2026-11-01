@@ -1249,10 +1249,25 @@ func instructor() -> Control:
 
 ## La tarjeta, la flecha y el aro sobre el tablero. Cada fotograma solo pregunta
 ## a BattleScreen donde esta lo que se senala (sigue a la camara y a la pieza).
+## La leccion de combate se recoloca a 20 Hz, no cada fotograma (QA de
+## telefono: 0,26-0,33 ms por fotograma con el tutorial de combate abierto;
+## perf/coste-fotograma, 2026-11-01). Un paso nuevo se coloca al momento.
+const COMBAT_LAYOUT_STEP := 0.05
+var _combat_layout_left := 0.0
+var _combat_layout_step_id := ""
+
 func _layout_combat(delta: float) -> void:
 	if get_tree().paused:
 		_coach.visible = false
+		_combat_layout_left = 0.0
 		return
+	if _cstep != _combat_layout_step_id:
+		_combat_layout_step_id = _cstep
+		_combat_layout_left = 0.0
+	_combat_layout_left -= delta
+	if _combat_layout_left > 0.0:
+		return
+	_combat_layout_left = COMBAT_LAYOUT_STEP
 	var bs: Node = get_tree().get_first_node_in_group("battle_screen")
 	var anchor := {}
 	if bs != null and bs.has_method("coach_anchor"):

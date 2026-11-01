@@ -14,6 +14,13 @@ extends Node
 ##   de verdad: seleccionado (el pulso), en obras (el rotulo sigue al zoom) y los
 ##   primeros fotogramas tras nacer. El badge no tiene _process.
 ##
+## - Fuera de camara no se revisa (2026-11-01, perf/coste-fotograma): con una
+##   Camera2D, cada cubeta mira solo los edificios dentro de la vista agrandada
+##   `VIEW_MARGIN` veces su lado (para que lo que entra al desplazar ya este al
+##   dia). Lo de fuera se revisa cuando vuelve a estar cerca; sin camara (las
+##   pruebas) se revisa todo. Un cambio de zoom recoloca los badges de lo que se
+##   ve y marca el resto (`_zoom_dirty`) para cuando vuelva.
+##
 ## Sin escena: lo crea el primer Building2D que entra en el arbol y cuelga de la
 ## raiz (sobrevive a la recarga de escena, como un autoload, y no guarda nada de
 ## la partida: los edificios se dan de baja al salir del arbol).
@@ -34,6 +41,11 @@ var _buckets: Array = []
 var _frame := 0
 var _acc := 0.0
 var _zoom := -1.0
+## Vista de la camara en coordenadas del mundo, agrandada; `_has_view` false sin
+## camara (entonces no se recorta nada).
+const VIEW_MARGIN := 0.5
+var _view_rect := Rect2()
+var _has_view := false
 
 static func register(building: Node) -> void:
 	if not is_instance_valid(_instance):
@@ -79,12 +91,34 @@ func _process(delta: float) -> void:
 func _check_next_bucket() -> void:
 	_frame = (_frame + 1) % CHECK_FRAMES
 	var bucket: Array = _buckets[_frame]
+	if bucket.is_empty():
+		return
+	_update_view_rect()
 	for i in range(bucket.size() - 1, -1, -1):
 		var building = bucket[i]
 		if not is_instance_valid(building):
 			bucket.remove_at(i)
 			continue
+		if not in_view(building):
+			continue
+		if building._zoom_dirty:
+			building._zoom_dirty = false
+			building.place_badge()
 		building.check_state()
+
+## La vista de la camara 2D en el mundo, agrandada VIEW_MARGIN por lado.
+func _update_view_rect() -> void:
+	var vp := get_viewport()
+	var cam := vp.get_camera_2d() if vp != null else null
+	_has_view = cam != null
+	if not _has_view:
+		return
+	var r: Rect2 = vp.get_canvas_transform().affine_inverse() * vp.get_visible_rect()
+	_view_rect = r.grow(maxf(r.size.x, r.size.y) * VIEW_MARGIN)
+
+## Si el edificio esta cerca de la vista (siempre, sin camara).
+func in_view(building: Node2D) -> bool:
+	return not _has_view or _view_rect.has_point(building.global_position)
 
 ## Con zoom nuevo, los badges a la vista se recolocan (una vez por cambio).
 func _follow_zoom() -> void:
@@ -95,7 +129,12 @@ func _follow_zoom() -> void:
 	if is_equal_approx(z, _zoom):
 		return
 	_zoom = z
+	_update_view_rect()
 	for b in _buckets:
 		for building in b:
-			if is_instance_valid(building):
+			if not is_instance_valid(building):
+				continue
+			if in_view(building):
 				building.place_badge()
+			else:
+				building._zoom_dirty = true

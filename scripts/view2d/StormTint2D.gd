@@ -264,8 +264,22 @@ func lights() -> Node2D:
 
 ## Herramientas de captura: >= 0 fija el peso sin mirar la tormenta.
 var forced_weight := -1.0
+## En reposo (el peso ya en su objetivo, sin golpe ni ceniza en rafaga) el tinte
+## solo cambia con la hora del dia, que es lenta: se recalcula cada
+## SETTLED_STEP s y no cada fotograma (perf/coste-fotograma, 2026-11-01). Un
+## cambio de fase se nota como mucho SETTLED_STEP s tarde; el golpe de la
+## Tormenta llega por senal (_on_storm_started) y despierta el ritmo normal.
+const SETTLED_STEP := 0.1
+var _settled := false
+var _settled_acc := 0.0
 
 func _process(delta: float) -> void:
+	if _settled and _punch_left <= 0.0 and forced_weight < 0.0:
+		_settled_acc += delta
+		if _settled_acc < SETTLED_STEP:
+			return
+		delta = _settled_acc
+	_settled_acc = 0.0
 	var halted: bool = StormManager.is_halted()
 	var phase: int = StormManager.get_phase()
 	var target := view_target(phase, StormManager.get_severity(), halted)
@@ -292,6 +306,7 @@ func _process(delta: float) -> void:
 	var fx := GraphicsQuality.fx_enabled()
 	_update_mood(light, fx, drifting(phase, halted))
 	var gusting := _punch_left > 0.0 and fx
+	_settled = _punch_left <= 0.0 and is_equal_approx(_weight, target) and not gusting
 	if _ash.emitting == gusting and not gusting:
 		return
 	var vp := get_viewport().get_visible_rect().size

@@ -23,14 +23,24 @@ func get_max_health(node: Node) -> int:
 func get_health(node: Node) -> int:
 	if node == null or not is_instance_valid(node):
 		return 0
-	return int(node.get_meta("health", get_max_health(node)))
+	# Sin la meta, la vida maxima. Antes era get_meta("health", get_max_health(node)):
+	# el valor por defecto se evalua siempre, y get_max_health copia la ficha de
+	# GridManager. Lo llaman cada tic la produccion, los badges y los aspectos de
+	# todos los edificios (perf/coste-fotograma, 2026-11-01). Mismo resultado.
+	if node.has_meta("health"):
+		return int(node.get_meta("health"))
+	return get_max_health(node)
 
 func get_health_ratio(node: Node) -> float:
 	return clampf(float(get_health(node)) / float(maxi(1, get_max_health(node))), 0.0, 1.0)
 
 ## En ruinas: sigue ocupando su sitio, pero no produce nada hasta repararlo.
 func is_ruined(node: Node) -> bool:
-	return get_health(node) <= 0
+	# Lo mismo que get_health(node) <= 0 sin buscar la vida maxima: sin la meta,
+	# la vida es la maxima (>= 1) y no esta en ruinas.
+	if node == null or not is_instance_valid(node):
+		return true
+	return node.has_meta("health") and int(node.get_meta("health")) <= 0
 
 ## En pie y funcionando: ni en ruinas ni a medio construir.
 ##

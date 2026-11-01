@@ -72,11 +72,26 @@ func _on_grid_resized(_w: int, _h: int) -> void:
 	fit_to_grid()
 	_clamp_to_boundaries()
 
+## La ultima postura aplicada: con la camara quieta no se vuelve a poner la
+## misma transformacion cada fotograma (perf/coste-fotograma, 2026-11-01).
+var _applied := PackedFloat64Array()
+
 func _process(delta: float) -> void:
 	_distance = lerp(_distance, _target_distance, 8.0 * delta)
 	_yaw = lerp(_yaw, _target_yaw, minf(1.0, rotate_lerp_speed * delta))
+	# Los acercamientos suaves terminan de verdad (si no, millonesimas cada
+	# fotograma mueven la camara y los badges se reajustan sin fin).
+	if absf(_distance - _target_distance) < 0.0005:
+		_distance = _target_distance
+	if absf(_yaw - _target_yaw) < 0.0005:
+		_yaw = _target_yaw
 	_clamp_to_boundaries()
+	var pose := PackedFloat64Array([_distance, _yaw, _ground_target.x, _ground_target.y])
+	if pose == _applied and global_transform == _applied_xform:
+		return
 	_update_transform()
+
+var _applied_xform := Transform3D()
 
 ## La inclinacion para una distancia: pitch_near_angle en min_distance, que se
 ## endereza hasta pitch_angle en pitch_flat_distance y se queda ahi.
@@ -99,6 +114,8 @@ func _update_transform() -> void:
 	var target_3d := Vector3(_ground_target.x, 0.0, _ground_target.y)
 	global_position = target_3d + offset
 	look_at(target_3d, Vector3.UP)
+	_applied = PackedFloat64Array([_distance, _yaw, _ground_target.x, _ground_target.y])
+	_applied_xform = global_transform
 
 func _on_pan(direction: Vector2) -> void:
 	# Pan relative to camera yaw so W always moves "forward" on screen

@@ -74,6 +74,9 @@ var _site_key := ""
 var _site_seed := 0
 var _slot := 0
 var _boot := BOOT_FRAMES
+## El zoom cambio mientras estaba fuera de camara: Building2DClock recoloca
+## badge, icono y rotulos cuando vuelve a la vista.
+var _zoom_dirty := false
 ## La parcela entera horneada para ESTA instancia (suelo, cuerpo y atrezo, en
 ## pie o trabajando): un solo rectangulo con textura. La clave dice con que se
 ## horneo; si cambia (calzadas, nivel, giro, ruina...) se pide otra.
@@ -150,10 +153,12 @@ func _exit_tree() -> void:
 func _clocked() -> bool:
 	return data != null and not ghost and data.id != "road"
 
-## Lo que pide el _process de cada fotograma: el pulso de la seleccion, el
-## rotulo de la obra contraescalado al zoom y los primeros fotogramas de vida.
+## Lo que pide el _process de cada fotograma: el pulso de la seleccion y los
+## primeros fotogramas de vida. El rotulo de la obra ya no (2026-11-01): se
+## recoloca cuando cambia su texto (minimum_size_changed) y cuando cambia el
+## zoom (el reloj llama a place_badge()).
 func _wants_frames() -> bool:
-	return _selected or _boot > 0 or has_meta("under_construction")
+	return _selected or _boot > 0
 
 func _on_map_changed(_a = null, _b = null) -> void:
 	_lot_dirty = true
@@ -237,7 +242,25 @@ func apply_construction_visual() -> void:
 		label.add_theme_constant_override("outline_size", 4)
 		label.z_index = 41
 		add_child(label)
+		# El texto ("Construyendo 45 % · faltan 12 s") cambia cada pocos tics:
+		# solo entonces se recoloca, no cada fotograma.
+		label.minimum_size_changed.connect(_queue_layout_labels)
+	_queue_layout_labels()
 	queue_redraw()
+
+var _layout_queued := false
+
+## Recoloca los rotulos una vez al final del fotograma (agrupa los cambios).
+func _queue_layout_labels() -> void:
+	if _layout_queued:
+		return
+	_layout_queued = true
+	_deferred_layout_labels.call_deferred()
+
+func _deferred_layout_labels() -> void:
+	_layout_queued = false
+	if is_inside_tree():
+		_layout_labels()
 
 func _process(_delta: float) -> void:
 	if data == null:
@@ -262,8 +285,8 @@ var _checks := 0
 func check_state() -> void:
 	if data == null or ghost or data.id == "road":
 		return
-	# Una obra que empieza (o un rotulo nuevo) necesita el _process para seguir
-	# al zoom; lo apaga el propio _process cuando ya no hace falta.
+	# La seleccion (o los primeros fotogramas) necesita el _process; lo apaga el
+	# propio _process cuando ya no hace falta.
 	if not is_processing() and _wants_frames():
 		set_process(true)
 	_checks += 1
@@ -291,6 +314,13 @@ func place_badge() -> void:
 	var badge := get_node_or_null("StatusBadge")
 	if badge != null and badge.has_method("place"):
 		badge.place()
+	# El icono de recoger y el rotulo de la obra siguen al zoom por aqui, no con
+	# un _process propio (2026-11-01).
+	var stock_icon := get_node_or_null("StockIcon")
+	if stock_icon != null and stock_icon.visible and stock_icon.has_method("place"):
+		stock_icon.place()
+	if has_meta("under_construction") or (_name_label != null and _name_label.visible):
+		_layout_labels()
 
 ## La bandera cuelga del mastil del propio dibujo (linterna del Nucleo,
 ## mastil corto del tejado del Cuartel, lo alto del mastil o del letrero): se

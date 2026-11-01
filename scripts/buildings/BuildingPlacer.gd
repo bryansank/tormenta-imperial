@@ -78,6 +78,16 @@ var _spot_highlight: MultiMeshInstance3D = null
 ## Un solo reloj para releer el aspecto de TODOS los edificios (paso de fase,
 ## humo encendido/apagado). Las senales repintan al momento.
 var _look_timer := 0.0
+## Rendimiento (perf/coste-fotograma, 2026-11-01): la lista de aspectos se
+## guarda (sin recorrer las ~300 calzadas en cada ronda), la ronda se reparte
+## entre fotogramas (sin pico cada 0,25 s) y lo que esta lejos de la camara no
+## se relee: vuelve a releerse en cuanto esta cerca (la vista se agranda
+## LOOK_VIEW_MARGIN por lado, para que lo que entra al desplazar ya este al dia).
+var _look_nodes: Array = []
+var _look_list_dirty := true
+var _look_cursor := 0
+var _look_budget := 0.0
+const LOOK_VIEW_MARGIN := 0.5
 ## Ultima camara con la que se ajustaron los badges (BuildingStatusBadge.
 ## fit_to_camera): se reajustan solo cuando la camara se mueve o cambia de lente.
 var _badge_cam_xform := Transform3D()
@@ -94,6 +104,8 @@ func _ready() -> void:
 	_buildings_container = Node3D.new()
 	_buildings_container.name = "Buildings"
 	add_child(_buildings_container)
+	_buildings_container.child_entered_tree.connect(_mark_look_list_dirty.unbind(1))
+	_buildings_container.child_exiting_tree.connect(_mark_look_list_dirty.unbind(1))
 	_road_batch = RoadBatch.new()
 	add_child(_road_batch)
 	_decor_batch = DecorBatch.new()
@@ -299,16 +311,55 @@ func _process(delta: float) -> void:
 		return
 	_update_preview()
 
-## Relee el aspecto de todos los edificios cada building_look_sync_interval.
+## Relee el aspecto de cada edificio una vez cada building_look_sync_interval,
+## repartido: cada fotograma la parte de la ronda que le toca por tiempo.
 func _tick_looks(delta: float) -> void:
-	_look_timer -= delta
-	if _look_timer > 0.0:
+	var interval := maxf(GameConfig.building_look_sync_interval, 0.01)
+	if _look_cursor == 0:
+		# Ronda nueva: la lista al dia si entro o salio algun edificio.
+		if _look_list_dirty:
+			_rebuild_look_list()
+		if _look_nodes.is_empty():
+			return
+	var n := _look_nodes.size()
+	_look_budget = minf(_look_budget + float(n) * delta / interval, float(n))
+	if _look_budget < 1.0:
 		return
-	_look_timer = GameConfig.building_look_sync_interval
+	var count := int(_look_budget)
+	_look_budget -= float(count)
+	var cam := get_viewport().get_camera_3d()
+	var view := Rect2()
+	if cam != null:
+		var r := get_viewport().get_visible_rect()
+		view = r.grow(maxf(r.size.x, r.size.y) * LOOK_VIEW_MARGIN)
+	while count > 0 and _look_cursor < n:
+		var look = _look_nodes[_look_cursor]
+		_look_cursor += 1
+		count -= 1
+		if not is_instance_valid(look) or not look.is_inside_tree():
+			continue
+		if cam != null and not _near_view(cam, view, (look as Node3D).global_position):
+			continue
+		look.sync()
+	if _look_cursor >= n:
+		_look_cursor = 0
+
+func _mark_look_list_dirty() -> void:
+	_look_list_dirty = true
+
+func _rebuild_look_list() -> void:
+	_look_list_dirty = false
+	_look_nodes.clear()
 	for building in _buildings_container.get_children():
 		var look := building.get_node_or_null("LookVisual")
 		if look:
-			look.sync()
+			_look_nodes.append(look)
+
+## Cerca de la vista: delante de la camara y dentro de la pantalla agrandada.
+static func _near_view(cam: Camera3D, view: Rect2, pos: Vector3) -> bool:
+	if cam.is_position_behind(pos):
+		return false
+	return view.has_point(cam.unproject_position(pos))
 
 ## Los badges de estado no crecen sin limite al acercar la camara (ni se
 ## quedan pegados a la lente): BuildingStatusBadge.fit_to_camera. Solo trabaja

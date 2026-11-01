@@ -1061,3 +1061,104 @@ dentro del ruido de la máquina. En la **Mínima real** del juego
 sonda emula Mínima con calidad "low", así que esta tabla es el peor caso. Las marcas de
 amenaza y el barco no tienen `_process` (malla cacheada por tipo; el barco, Tweens solo
 al llegar e irse). Falta medirlo en un móvil de gama baja de verdad.
+
+## 9. Coste por fotograma (2026-11-01, rama `perf/coste-fotograma`)
+
+Respuesta a las regresiones de §4.7.2/§4.7.3 (`ProductionManager`, la 2D, el
+tutorial de combate). Sobre `main` con lo de `fix/tablet-y-rendimiento` ya dentro
+(producción y encargos por tic, `Building2DClock`), que las tandas de QA no llegaron
+a medir. Implementado sin abrir el juego: **falta pasar `perf_probe`** (ver al final).
+
+### 9.1 ProductionManager
+
+- **Intervalo y tope en caché por productor** (`_cache_entry`): el tic ya no llama a
+  `get_cycle_seconds()` ni a `get_stock_cap()`/`is_full()` por edificio. Se recalcula
+  la entrada si cambia su nivel (se compara la meta `level`), su cultivo
+  (`plant_crop`, `load_save_data`) o la configuración de tiempos (`dev_mode`,
+  `time_multiplier`: un sello global que se mira una vez por tic).
+  `invalidate_production_cache()` para quien cambie topes o cultivos de `GameConfig`
+  en caliente. Las entradas que las pruebas crean a mano (`{"timer", "data"}`) se
+  rellenan solas.
+- **Tic de 0,2 s** (antes 0,1). El tiempo se suma entero: los ciclos son los mismos;
+  solo se mira cada 0,2 s si el edificio está lleno, sin carretera o sin obreros.
+- **`BuildingHealth.get_health()` / `is_ruined()`** sin evaluar `get_max_health()`
+  (que copia la ficha de `GridManager`) cuando la meta `health` existe o no hace
+  falta. Mismo resultado; lo usan también los badges y los aspectos.
+- **Caducidad** sin copiar las claves de `_stock` en cada tic cuando el modo no la
+  pide (Colono).
+
+Cronometrado en un script headless (`-s`, binario del editor, 80 productores
+sueltos: 16 de cada uno de Aserradero, Mina, Granja, Fundición y Refinería, un
+tercio con reserva y un quinto llenos):
+
+| | antes | después |
+|---|---|---|
+| un tic de producción (80 productores) | 1623 µs | 588 µs |
+| media por fotograma a 250 fps (`_process(0.004)`) | 65 µs | 14 µs |
+
+Equivalencia: el mismo guion (30 productores, 6000 tics de 0,1 s, recogidas, cambio
+de nivel, carretera, ruina y reparación, cultivo nuevo, `dev_mode` encendido y
+apagado) deja **la misma reserva y el mismo reloj** en todos con el código viejo y
+el nuevo. Guardado y progresión offline no cambian (no usan la caché).
+
+### 9.2 Vista 2D
+
+- **`StockIcon2D` sin `_process`**: el bote y el latido de "lleno" van en un shader
+  `canvas_item` con `TIME` (dos materiales compartidos), el salto de entrada es un
+  Tween de 0,3 s, y el contraescalado al zoom se recalcula en `place()` (al cambiar
+  la reserva, el zoom o la huella). Antes, cada icono a la vista recolocaba su escala
+  cada fotograma: en la colonia grande, decenas.
+- **El rótulo de la obra no enciende el `_process`** del edificio: se recoloca cuando
+  cambia su texto (`minimum_size_changed`, agrupado al final del fotograma) y cuando
+  cambia el zoom. El `_process` de `Building2D` queda para la selección y los
+  primeros fotogramas.
+- **`Building2DClock` no revisa lo que está fuera de cámara**: cada cubeta mira solo
+  los edificios dentro de la vista agrandada medio lado por cada borde; lo de fuera
+  se revisa al volver. Un cambio de zoom recoloca badges, iconos y rótulos de lo que
+  se ve y marca el resto (`_zoom_dirty`). Sin cámara (las pruebas) se revisa todo.
+- **`Camera2DController`** solo asigna posición y zoom si cambian, y el acercamiento
+  suave termina de verdad (antes el zoom cambiaba en millonésimas cada fotograma).
+- **`StormTint2D`** en reposo (peso en su objetivo, sin golpe) se recalcula cada
+  0,1 s, no cada fotograma; el golpe de la Tormenta llega por señal y lo despierta.
+
+Quedan en la 2D los draw calls (una pieza horneada por edificio, ~1340 en
+`grande_2d`): agruparlas en un atlas es otro trabajo (§4.7.3).
+
+### 9.3 Los demás `_process` siempre encendidos
+
+| Script | Qué hacía por fotograma | Qué se hizo |
+|---|---|---|
+| `BuildingPlacer._tick_looks` (3D) | Cada 0,25 s recorría **todos** los hijos del mapa (~300 calzadas incluidas) y releía el aspecto de todos los edificios de golpe | Lista de aspectos guardada (se rehace si entra o sale un edificio), la ronda repartida entre fotogramas (sin pico) y sin releer lo que está lejos de la cámara (pantalla agrandada medio lado) |
+| `MonumentalCamera` | `global_position` + `look_at` cada fotograma aunque estuviera quieta | Solo si cambió la postura o alguien movió la cámara; los acercamientos suaves terminan |
+| `TutorialPanel` (lección de combate) | Ancla, maqueta y sitio de la tarjeta cada fotograma (0,26-0,33 ms, §4.7.3) | A 20 Hz; un paso nuevo se coloca al momento |
+| `BuildingPlacer._fit_badges` | Ya solo trabaja si la cámara se movió | Se beneficia de la cámara quieta de verdad |
+| `WorkerWalkers`, `RoadTraffic` | Mover y pintar figuras (0,1-0,4 ms) | Sin cambios: es su trabajo; `RoadTraffic` ya se apaga sin camiones |
+| `FarmCrops3D` | Ángulo del rotor por instancia cada fotograma mientras la Granja trabaja | Sin cambios (pocas granjas, un parámetro); candidato a `TIME` en el shader |
+| `StormHUD` | En la interfaz cartoon sale enseguida; el barómetro va por temporizador | Sin cambios |
+| `ResourceHUD` | No tiene `_process` (actualiza por señales) | — |
+| `ContractManager` | Ya por tic de 0,5 s | — |
+| `PopulationManager`, `ProcessManager`, `ArmyManager`, `MarketManager`, `RandomEventManager`, `StormManager`, `TechTreeManager`, `DayClock`, `EconomyManager` | Relojes de simulación: sumar `delta` y comparar; `ProcessManager` recorre los procesos activos (pocos) | Sin cambios: unos µs |
+| `PauseMenu`, `TitleMenu`, `WarReportScreen`, `PauseWatcher`, `DeviceProfile`, `GameManager`, `ProgressionManager`, `TutorialManager`, `InputService`, `TouchTooltip`, `Island2D`, `ArtCache2D` | Una comprobación barata y salir | Sin cambios: 1-2 µs cada uno |
+| `HelperPanel._update_pointer` | Busca el control de la ayuda en pantalla cada fotograma, solo con una ayuda a la vista | Sin cambios (temporal); candidato a 10 Hz si sale en el perfil |
+
+### 9.4 Riesgos de comportamiento
+
+- Producción: lo que cambia entre tics se ve hasta 0,2 s después (antes 0,1): la
+  barra del ciclo, el rótulo de la obra, el icono de "lleno". Los números no.
+- 2D y 3D: un edificio que cambia de estado fuera de cámara se pinta al día como
+  mucho una ronda (0,4 s en 2D, 0,25 s en 3D) después de acercarse a la vista; con
+  el margen de medio lado, normalmente antes de entrar.
+- El bote del icono de recoger va con el `TIME` del motor (se reinicia cada hora: un
+  salto de un fotograma).
+- `StormTint2D`: un cambio de fase sin golpe (Aviso, Ceniza, calma) empieza a
+  fundirse hasta 0,1 s tarde.
+
+### 9.5 Qué medir al final
+
+`perf_probe` en `grande` y `grande_2d` (Mobile Mínima con `--device=phone` y
+Compatibility Mínima emulada, como §4.7.3), mirando en el perfil por script:
+`autoload ProductionManager` (esperado: decenas de µs de media, desde 430-850),
+`Building2D` + `StatusBadge2D` + `StockIcon2D` (esperado: por debajo de 0,2 ms
+juntos), `BuildingPlacer` (sin el pico cada 0,25 s) y `TutorialPanel` en `combate`
+con la lección abierta. Y `frames_over_50ms`, por si algo de lo repartido mete un
+tirón.

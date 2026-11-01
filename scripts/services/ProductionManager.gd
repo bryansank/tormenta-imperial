@@ -386,7 +386,11 @@ func _complete_construction(stale_or_node) -> void:
 ## duran 4-60 s y las obras segundos: una decima de segundo no se nota, y el
 ## tiempo no se pierde (se suma lo acumulado entero). Un delta grande (pruebas,
 ## sondas, line_probe) pasa de golpe, como antes.
-const TICK_SECONDS := 0.1
+## 2026-11-01 (perf/coste-fotograma): tic de 0,2 s (antes 0,1) y el intervalo y
+## el tope de cada productor en cache (_cache_entry). Los ciclos que salen son
+## los mismos: el tiempo se suma entero; solo se mira cada 0,2 s si el edificio
+## esta lleno, sin carretera o sin obreros. Ver docs/26 §9.
+const TICK_SECONDS := 0.2
 var _tick_acc := 0.0
 
 func _process(delta: float) -> void:
@@ -422,6 +426,7 @@ func _tick_construction(delta: float) -> void:
 		_complete_construction(node)
 
 func _tick_production(delta: float) -> void:
+	_check_cache_stamp()
 	var to_remove: Array = []
 	for node in _producing:
 		if not is_instance_valid(node):
@@ -432,22 +437,72 @@ func _tick_production(delta: float) -> void:
 		# Sin carretera hasta el Nucleo no produce (PopulationManager pone la meta).
 		if not bool(node.get_meta("connected", true)):
 			continue
+		var e: Dictionary = _producing[node]
+		var data: BuildingData = e["data"]
+		# Intervalo y tope en cache (2026-11-01, perf/coste-fotograma): se
+		# recalculan solo si cambia el nivel, el cultivo o la configuracion de
+		# tiempos (dev_mode, time_multiplier). Mismos numeros que
+		# get_cycle_seconds() y get_stock_cap(); ver _cache_entry().
+		var level: int = int(node.get_meta("level", 1))
+		if int(e.get("cs", -1)) != _cache_stamp or int(e.get("lvl", -1)) != level:
+			_cache_entry(node, e, data, level)
 		# Lleno: parado hasta que se recoja. El reloj no avanza (no se adelanta
 		# trabajo que no tiene donde ir).
-		if is_full(node):
-			continue
-		var data: BuildingData = _producing[node]["data"]
+		var cap: int = e["cap"]
+		if cap > 0 and _stock.has(node):
+			var total := 0
+			var held: Dictionary = _stock[node]["res"]
+			for res_name in held:
+				total += int(held[res_name])
+			if total >= cap:
+				continue
 		# Una granja sin obreros o en ruinas no crece: el cultivo espera. Los
 		# demas edificios ya se quedaban sin rendir en ese caso.
-		if data.id == FARM_ID and not can_work(node, data):
+		if e["farm"] and not can_work(node, data):
 			continue
-		_producing[node]["timer"] += delta
-		var interval := get_cycle_seconds(node, data)
-		if interval > 0.0 and _producing[node]["timer"] >= interval:
-			_producing[node]["timer"] -= interval
+		var timer: float = float(e["timer"]) + delta
+		var interval: float = e["iv"]
+		if interval > 0.0 and timer >= interval:
+			timer -= interval
+			e["timer"] = timer
 			_award_production(node, data)
+		else:
+			e["timer"] = timer
 	for node in to_remove:
 		_producing.erase(node)
+
+## Cache de cada productor: intervalo del ciclo, tope de lo acumulado y si es
+## Granja. Lo que el tic leia en cada vuelta llamando a get_cycle_seconds() y a
+## get_stock_cap() (con sus busquedas en GameConfig): ~20 us por productor y tic
+## en la colonia grande. Se invalida por entrada (nivel distinto, cultivo nuevo:
+## `cs` a -1) o entera (`_cache_stamp`, si cambian dev_mode o time_multiplier).
+## Las entradas que crean las pruebas a mano ({"timer", "data"}) se rellenan
+## solas la primera vez.
+var _cache_stamp := 0
+var _cache_dev := false
+var _cache_time_mult := 1.0
+
+func _cache_entry(node: Node, e: Dictionary, data: BuildingData, level: int) -> void:
+	e["cs"] = _cache_stamp
+	e["lvl"] = level
+	e["farm"] = data.id == FARM_ID
+	e["iv"] = get_cycle_seconds(node, data)
+	e["cap"] = GameConfig.get_stock_cap(data.id, level) if data.is_producer() else 0
+
+func _check_cache_stamp() -> void:
+	if GameConfig.dev_mode != _cache_dev or GameConfig.time_multiplier != _cache_time_mult:
+		_cache_dev = GameConfig.dev_mode
+		_cache_time_mult = GameConfig.time_multiplier
+		_cache_stamp += 1
+
+## Olvida lo cacheado de todos los productores (lo recalcula el siguiente tic).
+## Para quien cambie en caliente los topes o los cultivos de GameConfig.
+func invalidate_production_cache() -> void:
+	_cache_stamp += 1
+
+func _invalidate_entry(node: Node) -> void:
+	if _producing.has(node):
+		(_producing[node] as Dictionary)["cs"] = -1
 
 func _award_production(node: Node, data: BuildingData) -> void:
 	var produced := get_cycle_yield(node, data)
@@ -551,6 +606,7 @@ func plant_crop(node: Node, crop_id: String) -> bool:
 	_crops[node] = crop_id
 	if _producing.has(node):
 		_producing[node]["timer"] = 0.0
+	_invalidate_entry(node)
 	EventBus.crop_planted.emit(node, crop_id)
 	return true
 
@@ -700,13 +756,24 @@ func _stock_changed(node: Node) -> void:
 func _tick_spoilage(delta: float) -> void:
 	if _stock.is_empty():
 		return
-	var spoil := GameMode.spoilage_enabled()
+	if not GameMode.spoilage_enabled():
+		# Sin caducidad (Colono) solo envejece: sin copiar las claves cada tic.
+		var gone: Array = []
+		for node in _stock:
+			if not is_instance_valid(node):
+				gone.append(node)
+				continue
+			var st: Dictionary = _stock[node]
+			st["age"] = float(st["age"]) + delta
+		for node in gone:
+			_stock.erase(node)
+		return
 	for node in _stock.keys():
 		if not is_instance_valid(node):
 			_stock.erase(node)
 			continue
 		_stock[node]["age"] = float(_stock[node]["age"]) + delta
-		if spoil and float(_stock[node]["age"]) >= _spoil_after(node):
+		if float(_stock[node]["age"]) >= _spoil_after(node):
 			_spoil(node, 1)
 
 ## Plazo de caducidad de lo acumulado en `node` (el Silo lo alarga en las Granjas).
@@ -776,6 +843,8 @@ func get_save_data() -> Array:
 func load_save_data(entries: Array) -> void:
 	_stock.clear()
 	_crops.clear()
+	# Cultivos nuevos: el intervalo cacheado de las Granjas ya no vale.
+	invalidate_production_cache()
 	for entry in entries:
 		if not (entry is Dictionary):
 			continue
@@ -785,6 +854,7 @@ func load_save_data(entries: Array) -> void:
 		var crop_id := String(entry.get("crop", ""))
 		if crop_id != "" and not GameConfig.get_crop(crop_id).is_empty():
 			_crops[node] = crop_id
+			_invalidate_entry(node)
 		var raw: Variant = entry.get("stock", {})
 		if raw is Dictionary and not (raw as Dictionary).is_empty():
 			var res := {}

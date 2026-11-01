@@ -48,13 +48,23 @@ func _on_grid_resized(_w: int, _h: int) -> void:
 
 func _process(delta: float) -> void:
 	_distance = lerpf(_distance, _target_distance, minf(1.0, 8.0 * delta))
+	# El acercamiento suave termina de verdad (si no, el zoom cambiaba en
+	# millonesimas cada fotograma y el reloj 2D recolocaba todos los badges).
+	if absf(_distance - _target_distance) < 0.001:
+		_distance = _target_distance
 	_clamp()
 	_apply()
 
+## Solo asigna lo que cambia (perf/coste-fotograma, 2026-11-01): con la camara
+## quieta, poner la misma posicion y el mismo zoom cada fotograma volvia a
+## propagar la transformacion del lienzo entero.
 func _apply() -> void:
-	position = _target * View2D.PX_PER_UNIT
+	var p := _target * View2D.PX_PER_UNIT
+	if p != position:
+		position = p
 	var z := View2D.distance_to_zoom(_distance) * screen_boost() / ui_scale()
-	zoom = Vector2(z, z)
+	if z != zoom.x or z != zoom.y:
+		zoom = Vector2(z, z)
 
 ## La escala de interfaz (content_scale_factor, DeviceProfile) agranda el lienzo
 ## entero, mapa 2D incluido. La camara la descuenta: la escala es de la
