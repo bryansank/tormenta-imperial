@@ -285,6 +285,31 @@ func test_the_new_game_step_comes_preset_and_skip_accepts_it() -> void:
 	assert_str(ColonyFlag.spec_key(got[0][1])).is_equal(preset_key)
 	assert_bool(panel.is_open()).is_false()
 
+## QA tablet real (2026-10-26): la ✕ de "TU PAIS" empezaba una partida nueva.
+## Ahora la ✕ (y ESC) cancelan tambien en "new"; solo Saltar acepta.
+func test_closing_the_new_game_step_cancels_instead_of_accepting() -> void:
+	var panel := _editor()
+	await await_idle_frame()
+	var got: Array = []
+	var cancelled: Array = []
+	panel.confirmed.connect(func(n, _s): got.append(n))
+	panel.cancelled.connect(func(): cancelled.append(true))
+	panel.open("new")
+	(panel.find_child("CloseButton", true, false) as Button).pressed.emit()
+	assert_int(got.size()).is_equal(0)
+	assert_int(cancelled.size()).is_equal(1)
+	assert_bool(panel.is_open()).is_false()
+
+func test_skip_uses_the_skip_icon_not_the_back_arrow() -> void:
+	var panel := _editor()
+	await await_idle_frame()
+	panel.open("new")
+	var skip: Button = panel.find_child("Secondary", true, false)
+	assert_str(String(skip.get_meta("glyph", ""))).is_equal("skip")
+	panel.cancel()
+	panel.open("edit")
+	assert_str(String(skip.get_meta("glyph", ""))).is_equal("back")
+
 func test_the_new_game_step_only_offers_rank_one_pieces() -> void:
 	RankManager.add_xp(RankManager.xp_for_rank(18))
 	var panel := _editor()

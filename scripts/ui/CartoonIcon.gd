@@ -19,6 +19,8 @@ const GLYPHS := ["build", "army", "missions", "market", "research", "help", "men
 	"settings", "upgrade", "move", "demolish", "close", "lock", "star", "clock",
 	"sound", "music", "screen", "controls", "access", "game", "anchor", "plane",
 	"tank", "raid", "check", "storm", "plus", "minus", "back", "next", "workers_off", "sun", "wrench",
+	# Saltar (doble flecha con tope), firmar (pluma) y quemar (llama): beta 0.9.
+	"skip", "quill", "fire",
 	# Materiales del taller (feat/recetas-tarjetas): no tienen PNG como los
 	# recursos; la tarjeta de receta los pide con CartoonTheme.res_glyph().
 	"mat_planks", "mat_ingots", "mat_beams", "mat_fuel"]
@@ -327,6 +329,25 @@ static func draw_glyph(ci: CanvasItem, r: Rect2, id: String, tint: Color = Color
 		"next":
 			_pl(ci, r, [4, 12, 19, 12], m)
 			_pl(ci, r, [13.5, 6.5, 19, 12, 13.5, 17.5], m)
+		"skip":
+			# Saltar: dos puntas hacia delante y el tope (no la flecha de volver).
+			_pl(ci, r, [4, 6.5, 9.5, 12, 4, 17.5], m)
+			_pl(ci, r, [11, 6.5, 16.5, 12, 11, 17.5], m)
+			_pl(ci, r, [19.5, 6, 19.5, 18], a)
+		"quill":
+			# Pluma de firmar: el cañon en diagonal, la barba y la raya de la firma.
+			var vane := [19.5, 3, 13.5, 6, 8.5, 12.5, 6.5, 16.5, 10.5, 14.5, 16, 10, 19.5, 3]
+			_fill(ci, r, vane, soft)
+			_pl(ci, r, vane, m, true)
+			_pl(ci, r, [19.5, 3, 5, 18.5], m)
+			_pl(ci, r, [3.5, 21, 20.5, 21], a)
+		"fire":
+			# Llama: lengua grande y la de dentro en el color del detalle.
+			var flame := [12, 2.5, 15, 7, 18.5, 11.5, 18.5, 15.5, 16.5, 19.5, 12, 21.5, 7.5, 19.5, 5.5, 15.5,
+				6, 11.5, 8.5, 13.5, 9, 9, 12, 2.5]
+			_fill(ci, r, flame, soft)
+			_pl(ci, r, flame, m, true)
+			_pl(ci, r, [12, 11.5, 14.5, 15, 14, 18, 12, 19.5, 10, 18, 9.8, 15.5, 12, 11.5], a, true)
 		"wrench":
 			# Llave fija: mango en diagonal y boca abierta arriba a la derecha.
 			_pl(ci, r, [4.5, 19.5, 12.6, 11.4], m, false, 1.25)

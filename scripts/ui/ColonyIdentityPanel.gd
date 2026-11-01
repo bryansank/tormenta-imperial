@@ -9,7 +9,8 @@ extends CanvasLayer
 ##
 ## "new"   el paso de Nueva partida: sale con un nombre y una bandera al azar ya
 ##         puestos y piezas de rango 1 (con el que empieza toda partida).
-##         "Saltar" acepta lo que habia al abrir. NO toca RankManager: quien lo
+##         "Saltar" acepta lo que habia al abrir; la ✕ y ESC cancelan (no se
+##         empieza ninguna partida: QA tablet real, 2026-10-26). NO toca RankManager: quien lo
 ##         abre decide (NewGameDialog lo pasa a GameManager.start_new_game(),
 ##         que llama a set_colony() tras RankManager.reset()).
 ## "edit"  ☰ MENU > COLONIA: parte del pais de esta partida, con las piezas del
@@ -103,6 +104,8 @@ func open(mode: String = "edit", colony_name: String = "", spec: Dictionary = {}
 	_name_edit.text = _name
 	_name_error.visible = false
 	_set_button_text(_secondary_btn, Tr.t("BTN_IDENTITY_SKIP") if _mode == "new" else Tr.t("BTN_CANCEL"))
+	# Saltar sigue adelante (doble flecha); Cancelar vuelve (flecha atras).
+	_set_button_glyph(_secondary_btn, "skip" if _mode == "new" else "back")
 	_tab = "patterns"
 	_open = true
 	visible = true
@@ -196,10 +199,8 @@ func _finish(ok: bool, colony_name: String, spec: Dictionary) -> void:
 func _input(event: InputEvent) -> void:
 	if _open and event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
-		if _mode == "new":
-			secondary()
-		else:
-			cancel()
+		# ESC, como la ✕: cerrar, nunca aceptar.
+		cancel()
 
 # ── Montaje ──
 
@@ -228,7 +229,9 @@ func _build() -> void:
 	var close: Button = w["close"]
 	close.name = "CloseButton"
 	close.tooltip_text = Tr.t("BTN_CLOSE")
-	close.pressed.connect(func(): secondary() if _mode == "new" else cancel())
+	# La ✕ cierra sin mas, tambien en "new": antes aceptaba como Saltar y
+	# Nueva partida seguia, asi que cerrar la ventana creaba otra partida.
+	close.pressed.connect(cancel)
 	var col: VBoxContainer = w["body"]
 
 	# Fila del nombre: [  Monte Biela  ] [dado]  (el aviso, corto, debajo).
@@ -506,6 +509,14 @@ func _color_allowed(slot: int, color_id: String) -> bool:
 			var fixed := ColonyFlag.fix_spec({"pattern": _spec["pattern"], "emblem": _spec["emblem"], "colors": colors}, _open_colors())
 			return String(fixed["colors"][2]) == color_id
 	return false
+
+## Cambia el icono de una pastilla (su CartoonIcon hijo).
+func _set_button_glyph(b: Button, glyph_id: String) -> void:
+	b.set_meta("glyph", glyph_id)
+	for n in b.find_children("*", "Control", true, false):
+		if "glyph" in n:
+			n.set("glyph", glyph_id)
+			return
 
 ## Cambia el texto de una pastilla (su etiqueta y la meta "text").
 func _set_button_text(b: Button, text_s: String) -> void:
