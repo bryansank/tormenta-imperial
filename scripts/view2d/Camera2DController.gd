@@ -34,11 +34,12 @@ func _ready() -> void:
 	fit_to_grid()
 	_apply()
 
-## Los limites del paneo son los de la tierra (el rectangulo que la contiene;
-## con la isla cuadrada, la rejilla entera): el centro de la vista nunca se va
-## al mar abierto.
+## Los limites del paneo: la tierra (con la isla cuadrada, la rejilla entera)
+## mas GameConfig.camera_bounds_margin_cells, como la 3D. Desde la beta 0.9 se
+## limita lo que se ve, no solo el centro (_clamp).
 func fit_to_grid() -> void:
 	var land: Rect2 = GridManager.land_world_rect()
+	land = land.grow(GameConfig.camera_bounds_margin_cells * GridManager.cell_size)
 	boundary_min = land.position
 	boundary_max = land.end
 
@@ -79,9 +80,29 @@ func screen_boost() -> float:
 		return 1.0
 	return pow(logical / phys, 0.75)
 
+## El borde de la pantalla llega como mucho al limite; si la vista es mas
+## grande que el limite en un eje, se centra en ese eje. El zoom es el que va a
+## tener la camara con _distance (no el de ahora): asi no tiembla al alejarse.
 func _clamp() -> void:
-	_target.x = clampf(_target.x, boundary_min.x, boundary_max.x)
-	_target.y = clampf(_target.y, boundary_min.y, boundary_max.y)
+	var half := view_half_extent()
+	_target.x = clamp_axis(_target.x, boundary_min.x, boundary_max.x, half.x)
+	_target.y = clamp_axis(_target.y, boundary_min.y, boundary_max.y, half.y)
+
+## Media vista en unidades de mundo (x, z).
+func view_half_extent() -> Vector2:
+	if not is_inside_tree():
+		return Vector2.ZERO
+	var z := View2D.distance_to_zoom(_distance) * screen_boost() / ui_scale()
+	if z <= 0.0:
+		return Vector2.ZERO
+	return get_viewport().get_visible_rect().size * 0.5 / z / View2D.PX_PER_UNIT
+
+static func clamp_axis(v: float, lo: float, hi: float, half: float) -> float:
+	var a := lo + half
+	var b := hi - half
+	if a > b:
+		return (a + b) * 0.5
+	return clampf(v, a, b)
 
 # ── Senales ───────────────────────────────────────────────────────────
 

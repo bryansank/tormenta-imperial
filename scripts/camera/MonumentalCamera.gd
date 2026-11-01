@@ -60,11 +60,15 @@ func _ready() -> void:
 	fit_to_grid()
 	_update_transform()
 
-## Los limites del paneo son los de la tierra (el rectangulo que la contiene;
-## con la isla cuadrada, la rejilla entera): el centro de la vista nunca se va
-## al mar abierto.
+## Los limites del paneo: el rectangulo de la tierra (con la isla cuadrada, la
+## rejilla entera) mas GameConfig.camera_bounds_margin_cells. Desde la beta 0.9
+## no se limita solo el centro de la vista sino lo que se ve
+## (_clamp_to_boundaries): con la camara inclinada y alejada, el centro en la
+## orilla dejaba media pantalla de mar abierto (QA tablet real, 2026-10-26).
 func fit_to_grid() -> void:
 	var land: Rect2 = GridManager.land_world_rect()
+	var margin: float = GameConfig.camera_bounds_margin_cells * GridManager.cell_size
+	land = land.grow(margin)
 	boundary_min = land.position
 	boundary_max = land.end
 
@@ -140,6 +144,52 @@ func set_state(data: Dictionary) -> void:
 	_target_distance = _distance
 	_update_transform()
 
+## Mantiene lo que se ve dentro de [boundary_min, boundary_max]: el borde de
+## la vista (de lado, la fila del centro de la pantalla; de frente, la de
+## arriba y la de abajo) llega como mucho al limite. Si la vista es mas grande
+## que el limite en un eje (muy alejada), se centra en ese eje. Vale para
+## teclado, arrastre, dedo y controles en pantalla: todos mueven
+## _ground_target y aqui se recorta cada fotograma.
 func _clamp_to_boundaries() -> void:
-	_ground_target.x = clampf(_ground_target.x, boundary_min.x, boundary_max.x)
-	_ground_target.y = clampf(_ground_target.y, boundary_min.y, boundary_max.y)
+	var fp := view_footprint(_distance, pitch_for(_distance), _yaw, _aspect(), fov)
+	_ground_target.x = clamp_axis(_ground_target.x, boundary_min.x, boundary_max.x, fp.position.x, fp.end.x)
+	_ground_target.y = clamp_axis(_ground_target.y, boundary_min.y, boundary_max.y, fp.position.y, fp.end.y)
+
+## Recorta `v` (el centro) para que [v + lo_off, v + hi_off] quede dentro de
+## [lo, hi]; si no cabe, lo centra.
+static func clamp_axis(v: float, lo: float, hi: float, lo_off: float, hi_off: float) -> float:
+	var a := lo - lo_off
+	var b := hi - hi_off
+	if a > b:
+		return (a + b) * 0.5
+	return clampf(v, a, b)
+
+## Lo que se ve en el suelo, relativo al objetivo, como caja en XZ (x, z):
+## de frente, hasta donde llegan la fila de arriba y la de abajo de la
+## pantalla; de lado, el ancho a la altura del centro (los rincones de arriba
+## pueden asomar algo mas: la perspectiva abre la vista al fondo). Con el giro,
+## la caja que contiene ese rectangulo girado.
+static func view_footprint(distance: float, pitch_deg: float, yaw_deg: float, aspect: float, fov_deg: float = 40.0) -> Rect2:
+	var pitch := deg_to_rad(absf(pitch_deg))
+	var half := deg_to_rad(fov_deg) * 0.5
+	var height := distance * sin(pitch)
+	var back := distance * cos(pitch)
+	# Fila de arriba: el rayo baja (pitch - half); se acota por si roza el horizonte.
+	var top_angle := maxf(deg_to_rad(5.0), pitch - half)
+	var bottom_angle := minf(deg_to_rad(89.0), pitch + half)
+	var far := height / tan(top_angle) - back
+	var near := back - height / tan(bottom_angle)
+	var side := distance * tan(half) * maxf(0.1, aspect)
+	var yaw := deg_to_rad(yaw_deg)
+	var fwd := Vector2(-sin(yaw), -cos(yaw))
+	var lat := Vector2(cos(yaw), -sin(yaw))
+	var box := Rect2(fwd * far + lat * side, Vector2.ZERO)
+	for p in [fwd * far - lat * side, -fwd * near + lat * side, -fwd * near - lat * side]:
+		box = box.expand(p)
+	return box
+
+func _aspect() -> float:
+	if not is_inside_tree():
+		return 16.0 / 9.0
+	var vp := get_viewport().get_visible_rect().size
+	return vp.x / vp.y if vp.y > 0.0 else 16.0 / 9.0

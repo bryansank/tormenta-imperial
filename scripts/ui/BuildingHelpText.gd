@@ -12,6 +12,7 @@ extends RefCounted
 
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const Objectives := preload("res://scripts/services/Objectives.gd")
+const View2D := preload("res://scripts/view2d/View2D.gd")
 
 ## El recurso que llega con una era y el edificio que lo trae. La Fundicion abre
 ## la era 2 (acero) y la Refineria la 3 (petroleo): CLAUDE.md, "3-Era Progression".
@@ -133,7 +134,9 @@ static func focus_and_select(viewport: Viewport, node: Node) -> void:
 			state["target_y"] = pos.z
 			cam3.call("set_state", state)
 		elif cam2 != null and node is Node2D and cam2.has_method("look_at_world"):
-			cam2.call("look_at_world", (node as Node2D).global_position)
+			# look_at_world quiere unidades de mundo; el edificio 2D esta en pixeles.
+			var w: Vector3 = View2D.px_to_world((node as Node2D).global_position)
+			cam2.call("look_at_world", Vector2(w.x, w.z))
 	EventBus.building_clicked.emit(node, info["data"])
 
 # ══════════════════════════════════════════════════════════════════════

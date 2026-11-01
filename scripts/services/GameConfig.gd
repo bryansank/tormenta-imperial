@@ -525,6 +525,10 @@ var grid_width_min := 60
 var grid_width_max := 74
 var grid_height_min := 60
 var grid_height_max := 74
+## Celdas de margen alrededor de la tierra hasta donde puede llegar el BORDE de
+## lo que ve la camara (3D y 2D, docs/21): la vista no se va al mar abierto, y
+## las celdas de la orilla no quedan bajo el HUD. Beta 0.9 (QA tablet real).
+var camera_bounds_margin_cells := 3.0
 
 ## La costa de la isla irregular (scripts/map/IslandShape.gd, docs/02 "Mapa
 ## aleatorio"). Mismas claves y valores que IslandShape.DEFAULTS (un test lo
