@@ -119,7 +119,7 @@ into that list.
 
 ```
 Main (Node3D, ViewRouter view_mode="3d")
-  +-- MonumentalCamera (Camera3D) -- orthographic RTS camera; a new game starts closer (distance 24) and the view tilts from -52 to -38 degrees as it zooms in (derived from the distance, nothing saved)
+  +-- MonumentalCamera (Camera3D) -- orthographic RTS camera; a new game starts closer (distance 24) and the view tilts from -52 to -38 degrees as it zooms in (derived from the distance, nothing saved); what it sees stays inside the land + `camera_bounds_margin_cells` (`view_footprint()`)
   +-- DirectionalLight
   +-- WorldEnvironment (WorldLook.gd) -- sky, tonemapping; WorldLook only decides what costs GPU per quality (SSAO, glow, shadow cascades, MSAA, 3D resolution, simple island)
   +-- IslandGenerator (Node3D) -- procedural island mesh: the irregular coast of the land mask (`IslandShape.coast_polygon`: grass, cliff, sand and foam along it; the sea shades from a distance texture); an old square-island save keeps the rounded square that covers the grid. Rebuilds on `grid_resized`
@@ -1629,6 +1629,7 @@ All balance values live in `GameConfig.gd`:
   `building_look_sync_interval` - how buildings look on the map (docs/03, "Aspecto en el mapa")
 - `deposit_per_type_min/max` / `deposit_core_gap` / `map_shore_band` / `deposit_sizes` - the random map's deposits
 - `grid_width_min/max` / `grid_height_min/max` - the grid rolled per game (even, saved in the `grid` key)
+- `camera_bounds_margin_cells` - how far past the land the EDGE of the view may go (3D and 2D cameras clamp what is seen, not only the centre)
 - `island_coast` - the irregular coast (`scripts/map/IslandShape.gd`, docs/02 "The irregular island"): land area, lobes, noise, bays, capes, clean-up radii, sea border and the land kept around the Núcleo. Copied into each new game's save: retuning it only changes new islands
 - `contract_*` - the contract board: source eras, first delays, cooldown, era scaling, reputation, Tithe fallback gold, rank XP, templates (docs/27)
 - `game_mode_rules` / `sandbox_*` - per-mode rules and multipliers on top of the base
