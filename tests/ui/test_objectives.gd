@@ -889,7 +889,9 @@ func test_gold_waiting_in_the_mine_is_the_step_and_counts() -> void:
 	ProductionManager._stock.erase(mine)
 	assert_str(String(cur["kind"])).is_equal("collect")
 	assert_str(String(cur["text"])).is_equal(Tr.t("OBJ_STEP_COLLECT") % [Tr.res_name("gold"), Objectives.building_the("gold_mine"), 45])
-	assert_str(String(cur["how"])).is_equal(Tr.t("OBJ_STEP_BAG_COUNT") % [20, 45, cost])
+	var gold_label: String = Tr.res_name("gold")
+	gold_label = gold_label.substr(0, 1).to_upper() + gold_label.substr(1)
+	assert_str(String(cur["how"])).is_equal(Tr.t("OBJ_STEP_BAG_COUNT") % [gold_label, 20, 45, cost])
 	assert_object(cur["go"]["node"]).is_same(mine)
 	assert_str(Objectives.plan_line(p)).contains(Tr.t("OBJ_STEP_COLLECT_SHORT") % [Tr.res_name("gold"), 45])
 	# Recogido, el paso avanza solo: ya no hay nada que recoger, queda juntar.

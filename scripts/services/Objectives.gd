@@ -2123,8 +2123,12 @@ static func _collect_item(res: String, have: int, need: int, stock: Dictionary) 
 	var amount: int = int(stock.get("amount", 0))
 	# "de el Aserradero" -> "del Aserradero" (recorrido del 2026-10-24).
 	var text_s: String = (Tr.t("OBJ_STEP_COLLECT") % [Tr.res_name(res), building_the(bid), amount]).replace(" de el ", " del ")
+	# La cuenta dice de que recurso es: bajo "Junta 60 de oro" se leia
+	# "necesitas 40" (de madera) como si fuera oro (QA escritorio, n. 7).
+	var res_label: String = Tr.res_name(res)
+	res_label = res_label.substr(0, 1).to_upper() + res_label.substr(1)
 	var item := _item("collect", text_s,
-		Tr.t("OBJ_STEP_BAG_COUNT") % [have, amount, need], {"node": node})
+		Tr.t("OBJ_STEP_BAG_COUNT") % [res_label, have, amount, need], {"node": node})
 	item["short"] = Tr.t("OBJ_STEP_COLLECT_SHORT") % [Tr.res_name(res), amount]
 	item["res"] = res
 	return item
