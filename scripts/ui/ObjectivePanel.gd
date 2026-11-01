@@ -569,6 +569,8 @@ func _make_step_row(is_how: bool) -> Control:
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", UITheme.FONT_BODY)
+	# Se toca: alto de dedo (QA telefono B3, filas de 32).
+	b.custom_minimum_size.y = UITheme.MIN_BTN_H
 	b.pressed.connect(func(): go_to_step(int(b.get_meta("item", -1))))
 	return b
 

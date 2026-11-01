@@ -39,6 +39,12 @@ func test_placement_buttons_stay_opaque_while_placing() -> void:
 	osc._set_placing(false)
 	assert_float(rot.modulate.a).is_equal_approx(0.45, 0.001)
 
+## QA telefono B3: los pasos de QUE HACER se tocan: alto de dedo.
+func test_objective_step_rows_are_finger_tall() -> void:
+	var panel = auto_free(load("res://scripts/ui/ObjectivePanel.gd").new())
+	var row: Button = auto_free(panel._make_step_row(false))
+	assert_float(row.custom_minimum_size.y).is_greater_equal(float(UITheme.MIN_BTN_H))
+
 ## QA telefono M3: la carretera no gira; al colocarla no sale R.
 func test_no_rotate_button_for_roads() -> void:
 	var osc = auto_free(OSC.new())

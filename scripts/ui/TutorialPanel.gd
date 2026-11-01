@@ -390,7 +390,8 @@ func _build_chip() -> void:
 	_coach.add_child(_chip)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	var face := CT.captain_face(34 if CT.is_phone() else 42)
+	# 36 + 2 x 6 de margen = 48 de alto en telefono (QA telefono B4: 46).
+	var face := CT.captain_face(36 if CT.is_phone() else 42)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(face)
