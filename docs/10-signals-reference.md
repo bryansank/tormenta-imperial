@@ -2,7 +2,7 @@
 
 All inter-system communication flows through `EventBus` (`scripts/services/EventBus.gd`). Systems emit signals; others subscribe. No direct references between services.
 
-**165 signals** in the categories of `EventBus.gd` (2026-10-26, integration v1.3: + `chapter_completed`, `tithe_choice_changed` and `campaign_piece_won` of `feat/ritmo-colono`; 2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
+**168 signals** in the categories of `EventBus.gd` (2026-11-01: + `achievement_unlocked` of `feat/logros-estadisticas`; 2026-10-26, integration v1.3: + `chapter_completed`, `tithe_choice_changed` and `campaign_piece_won` of `feat/ritmo-colono`; 2026-10-19: + `residents_arrived`; counted on 2026-10-18, integration of 1.1: `touch_controls_size_changed` from the mobile controls branch, `instructors_visibility_changed` from the instructors branch and the rest added since 2026-10-17; on 2026-10-17 there were 134: the 133 of 1.1 — the 126 of 1.0, `regiment_changed`, `storm_order_changed` and the 5 of [Encargos](#encargos) — plus `trial_tithe_resolved`, the 1.0 toy Tax), mostly in the order they are declared in `EventBus.gd`. Emitters and
 consumers below were read out of `scripts/` — tests that emit or listen for a
 signal are **not** counted as wiring, because a signal only exercised by a test is
 not wired in the game.
@@ -565,3 +565,13 @@ queda en la mesa y el jugador elige (docs/06 §Final con elección).
 
 Firmar arranca la fase con `empire_phase_started` (como antes); quemar avisa por
 `notification_posted` (`MSG_END_BURN`). Las dos emiten `empire_changed`.
+
+## Logros (`feat/logros-estadisticas`, docs/29)
+
+| Signal | Params | Emitted By | Consumed By |
+|--------|--------|------------|-------------|
+| `achievement_unlocked` | `achievement_id: String` (id de `GameConfig.achievement_definitions`) | AchievementManager (`_unlock()`, una vez por logro y dispositivo; ya apuntado en `settings.cfg [perfil]`) | AudioManager (`milestone`), AchievementsPanel (repinta si está abierta) |
+
+El aviso al jugador ("Nuevo logro: …") va por `notification_posted` con categoría
+`"achievement"`. AchievementManager no emite nada más: los contadores de la partida
+salen de señales que ya existían (tabla de docs/29 §4).

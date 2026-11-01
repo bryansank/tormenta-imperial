@@ -456,6 +456,8 @@ const PANEL_SLOTS := {
 	"SkirmishButton":             "skirmish_button",
 	"ContractPanel.modal":        "center_modal",
 	"SmugglerPanel.modal":       "center_modal",
+	## LOGROS Y ESTADISTICAS (docs/29): creada por RankPanel en tiempo de ejecucion.
+	"AchievementsPanel.modal":   "center_modal",
 }
 
 ## Per-panel size overrides (when smaller than slot max_size)

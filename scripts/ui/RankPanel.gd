@@ -23,6 +23,7 @@ const CARD_W := 520.0
 const ColonyFlag := preload("res://scripts/ui/ColonyFlag.gd")
 const Rules := preload("res://scripts/buildings/PlacementRules.gd")
 const IdentityPanel := preload("res://scripts/ui/ColonyIdentityPanel.gd")
+const AchievementsPanelScript := preload("res://scripts/ui/AchievementsPanel.gd")
 
 var _root: Control
 var _dock: Control
@@ -48,6 +49,9 @@ var _is_open := false
 ## hermano, glifo].
 const HUB_ENTRIES := [
 	["progress", "BTN_PROGRESS", "ProgressPanel", "star"],
+	# Logros y estadisticas (docs/29): ventana creada aqui en tiempo de
+	# ejecucion (_mount_achievements), no esta en las escenas.
+	["achievements", "BTN_ACHIEVEMENTS", "AchievementsPanel", "trophy"],
 	["contracts", "BTN_CONTRACTS", "ContractPanel", "check"],
 	# Volverse el Imperio (v1.2): el mapa de las islas, solo tras FIRMAR el libro.
 	["archipelago", "BTN_ARCHIPELAGO", "ArchipelagoPanel", "anchor"],
@@ -78,6 +82,19 @@ func _ready() -> void:
 	EventBus.game_new_started.connect(refresh)
 	get_viewport().size_changed.connect(_relayout)
 	refresh()
+	_mount_achievements.call_deferred()
+
+## Pone LOGROS Y ESTADISTICAS de hermano (una vez), como VictoryScreen hace con
+## el archipielago: asi no hay que tocar Main.tscn ni Main2D.tscn. Oculto y sin
+## construir hasta que se abre: no cuesta nada mientras no se usa.
+func _mount_achievements() -> void:
+	var parent: Node = get_parent()
+	if parent == null or parent.get_node_or_null(AchievementsPanelScript.NODE_NAME) != null:
+		return
+	var panel: CanvasLayer = AchievementsPanelScript.new()
+	panel.name = AchievementsPanelScript.NODE_NAME
+	parent.add_child(panel)
+	_refresh_hub()
 
 # ── Montaje ──
 

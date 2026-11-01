@@ -63,13 +63,13 @@ holds a service's state of its own.
 
 ### Autoload Services (registered in project.godot, load order matters)
 
-32 autoloads in `project.godot`: the 31 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager`, `EconomyManager`, `ThreatManager` and `EmpireManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
+33 autoloads in `project.godot`: the 32 game services below, plus `BeckettRuntime`, the `addons/beckett` dev bridge. `BeckettRuntime` loads between `AudioManager` and `DeviceProfile`, then `RankManager`, `ContractManager`, `EconomyManager`, `ThreatManager`, `EmpireManager` and `AchievementManager` (last); it points at `scripts/services/BeckettGate.gd`, which loads the addon's runtime only in the editor, and it is not a game system. `GameMode`, `UITheme`, `UILayoutConfig`, `HudRegistry`, `FloatingText`, `Objectives`, `GraphicsQuality` (graphics quality outside the 3D world, renderer override, first-launch detection rules), `SaveSlots` (the saved-games folder and its index), `ColonyIdentity` (country flag pieces, random names, word filter), `ErrorLog` and `BugReport` are static helpers (a `class_name` or a `preload`), not autoloads. `WorldLook` (`scripts/map/WorldLook.gd`) is the script of the 3D scene's `WorldEnvironment`, not an autoload either.
 
 | # | Service | File | Purpose |
 |---|---------|------|---------|
 | 1 | `Tr` | `scripts/services/Tr.gd` | i18n translation (ES/EN) |
 | 2 | `GameConfig` | `scripts/services/GameConfig.gd` | All tunable values, balance, durations |
-| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 167 signals in 36 categories (incl. `game_load_progress` and `shortcut_pressed`) (`docs/10-signals-reference.md`) |
+| 3 | `EventBus` | `scripts/services/EventBus.gd` | Global signal bus: 168 signals in 37 categories (incl. `game_load_progress` and `shortcut_pressed`) (`docs/10-signals-reference.md`) |
 | 4 | `InputService` | `scripts/services/InputService.gd` | Unified input: keyboard, mouse, touch. Its child `TouchTooltip` (`scripts/ui/TouchTooltip.gd`, layer 50) is "hold to read": on touch, a finger held still 0.5 s on a Control shows its tooltip in a bubble without pressing it (docs/21 §9). PC shortcuts (`feat/atajos-pc`): it filters the keys and emits `EventBus.shortcut_pressed` (B build, M missions, H help in BottomBar; Space in PauseMenu; Enter/D/E on the board), and `InputService.hint()` adds the key to tooltips on PC |
 | 5 | `GridManager` | `scripts/grid/GridManager.gd` | Cell grid rolled per game (width and height apart, 60-74, even, `grid_width_*` / `grid_height_*`; 2.0 units/cell, centred on the world origin; saved as `"grid"`, a save without it is 40x40) plus the island seed and the **land mask** (`is_land_cell()`, from `IslandShape`; water is never free), building/obstacle placement; emits `grid_resized` |
 | 6 | `ResourceManager` | `scripts/services/ResourceManager.gd` | 5 resources in the shared pool (gold, wood, food, steel, oil) + 4 workshop materials outside it (`Type` enum: `GOLD, STEEL, OIL, WOOD, PLANKS, INGOTS, BEAMS, FUEL, FOOD`) + unlock system |
@@ -98,6 +98,7 @@ holds a service's state of its own.
 | 29 | `EconomyManager` | `scripts/services/EconomyManager.gd` | The 1.2 economy buildings (`feat/edificios-economia`): the smuggler's ship of the Trade port (pure `scripts/economy/SmugglerShip.gd`: clock, 3 offers, deals through `take_offer()`), minor blueprints bought from it (`has_plan()`, read by `RankManager.is_building_unlocked`), the Diesel plants' fuel (`burn_fuel()`) and the Exchange's Governor interest; emits `smuggler_*`, `diesel_plant_fuel_changed`, `exchange_interest_paid`, `economy_changed`; saved as `economy`. See `docs/03-buildings.md` "Economía de la 1.2" |
 | 30 | `ThreatManager` | `scripts/services/ThreatManager.gd` | Coastal threats (1.2, optional loot only): ticks the pure `scripts/combat/ThreatBoard.gd` on a 5 s Timer, finds free shore cells only when a mark is due, launches the 1-fight pure-domain raid through `CombatManager.launch_threat_offer()`, closes it on `expedition_ended`, sends workers to wrecks (`busy_workers()`, read by PopulationManager) and pays them; emits `threat_*`; saved as `threats`. See `docs/15-combat.md` §14 |
 | 31 | `EmpireManager` | `scripts/services/EmpireManager.gd` | The **ending with a choice** and Volverse el Imperio (1.2): after the Final Audit is **won** (Campaña/Supervivencia, rule `empire_phase`) the Tax book waits on the table (`choice_pending()`); `choose_ending("sign"|"burn")` stores the choice once (`ending`, in the `empire` key, emits `ending_chosen`): signing opens the archipelago phase (`is_active()`), burning frees the island (`is_free()`: no phase, title `END_BURN_TITLE`, the Sun flag emblem). For the phase it owns the pure `scripts/empire/Archipelago.gd` (6 neighbouring islands, conquest progress, tribute clock), launches conquest missions through `CombatManager.launch_conquest_mission()`, records them on `expedition_ended`, pays the periodic tribute and grants the unique rewards; emits `empire_*`, `conquest_mission_won`, `island_conquered`; saved as `empire`. See `docs/06-progression-victory.md` §Volverse el Imperio |
+| 32 | `AchievementManager` | `scripts/services/AchievementManager.gd` | **Achievements and stats** (`feat/logros-estadisticas`): counts the run's stats from EventBus signals (buildings, roads, collected, trades, techs, contracts, fights won/lost, units lost, Storms, Taxes paid/refused, campaigns, ending...; saved as `stats`, reset in the three places) and, when one reaches the goal of an achievement (`GameConfig.achievement_definitions`, 31, 4 secret), records it in the **profile** (`settings.cfg [perfil] achievements`, `GameConfig.record_achievement`), emits `achievement_unlocked` and posts an `"achievement"` notice. None in Sandbox (`GameMode.achievements_enabled()`). No `_process`. See `docs/29-logros.md` |
 
 ### Scene Tree (Main.tscn and Main2D.tscn)
 
@@ -147,7 +148,7 @@ Main (Node3D, ViewRouter view_mode="3d")
   +-- WarReportScreen (CanvasLayer 19) -- queued war reports: blind defence (defense_auto_resolved) and the Tithe (COBRADO / REPELIDO)
   +-- AuditDefeatScreen (CanvasLayer 20) -- a lost siege: what was taken and how to resummon (or the end of a Survival run)
   +-- SandboxPanel (CanvasLayer 11) -- Sandbox mode only: the SANDBOX tab, summon a storm / the Final Audit
-  +-- RankPanel (CanvasLayer 11) -- compact governor rank badge (flag, ★ number, country name, XP bar; phone without the name) left of ☰, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel, and the `ColonyHub` row: Progreso, Encargos, Registro, Sandbox)
+  +-- RankPanel (CanvasLayer 11) -- compact governor rank badge (flag, ★ number, country name, XP bar; phone without the name) left of ☰, rank-up toast, the COLONIA card (country, rank, BANDERA Y NOMBRE → ColonyIdentityPanel, and the `ColonyHub` row: Progreso, Logros, Encargos, Registro, Sandbox)
   +-- SkirmishButton (CanvasLayer 10) -- the old MISIONES button next to CONSTRUIR; still in the scene but hidden by BottomBar (its Misiones button replaces it)
   +-- ContractPanel (CanvasLayer 11) -- ENCARGOS: one card per source (clock, what they want with the missing part in red, the reward in icons, ENTREGAR / No, gracias), opened from the COLONIA card (tap the rank) (docs/27)
   +-- BottomBar (CanvasLayer 10) -- the bottom bar (docs/28 §12): Ejército, Misiones (red dot) | CONSTRUIR's gap | Mercado, Investigar, Ayuda; round blue buttons, name under them on PC/tablet, icon only on a phone; grey + lock + reason on hold when not available (slot `bottom_bar`)
@@ -168,6 +169,7 @@ Created at runtime, not in either .tscn:
   NewGameDialog (layer 40, scripts/ui/NewGameDialog.gd) -- the mode picker (step 1) and the country name + flag (step 2), created by GameManager.request_new_game()
   ColonyIdentityPanel (layer 41, scripts/ui/ColonyIdentityPanel.gd) -- the country name + flag editor: open("new") from NewGameDialog, open("edit") from RankPanel's COLONIA card
   SavesPanel (layer 40, scripts/ui/SavesPanel.gd) -- PARTIDAS, the saved-games list, created by GameManager.open_saves_list()
+  AchievementsPanel (layer 11, scripts/ui/AchievementsPanel.gd) -- LOGROS Y ESTADÍSTICAS (tabs Logros / Estadísticas), mounted by RankPanel as a sibling (`_mount_achievements`), opened from the ColonyHub row; built on first open (docs/29)
   LayoutEditor (layer 35, scripts/ui/LayoutEditor.gd) -- EDITAR DISPOSICIÓN (Settings), created by UILayoutManager
 ```
 
@@ -772,6 +774,20 @@ CONSTRUIR card shows a padlock and "Rango N". UI: `RankPanel` (badge in slot
 a save without it is rank 1 with a country rolled from `GridManager.island_seed`; an old
 `"flag"`/`"color"` pair is translated to pieces. Sandbox has every rank unlock open.
 
+### Achievements and stats — full doc: `docs/29-logros.md`
+
+`AchievementManager` (last autoload) counts the **run's stats** from EventBus signals
+(saved as `stats`; `reset()` in the three places of GameManager) and turns them into
+**profile achievements**: each of the 31 in `GameConfig.achievement_definitions` is
+"stat ≥ goal" (4 secret). An achievement is recorded once per device in
+`settings.cfg [perfil] achievements` (survives Nueva partida), emits
+`achievement_unlocked` (AudioManager plays `milestone`) and posts a
+`notification_posted(..., "achievement")` notice like milestones and rank-ups. Sandbox
+earns none (mode rule `achievements`, `GameMode.achievements_enabled()`); stats count
+in every mode. The window is `AchievementsPanel` (runtime sibling mounted by
+RankPanel, ColonyHub entry LOGROS with the new `trophy` glyph; tabs Logros /
+Estadísticas; one column on a phone). Untested in play (tests written, not run).
+
 ### Contracts (ENCARGOS) — full doc: `docs/27-encargos.md`
 
 A board of 3 timed delivery contracts, one slot per source (doc 21 §2.3 of the
@@ -1208,7 +1224,8 @@ preference calls `GameConfig.save_user_settings()`. Currently stored:
   Mobile renderer. Any other quality deletes it. Only `GraphicsQuality.set_quality()`
   touches it;
 - `[perfil]`: `runs_finished`, `campaigns_won` — the player profile that unlocks
-  Gobernador (docs/20 §1b). Of the player on this device, never of the run.
+  Gobernador (docs/20 §1b) — and `achievements` (id → unix time, `GameConfig.profile_achievements`,
+  docs/29). Of the player on this device, never of the run.
 
 Never put any of this in the save, and never put game state in `settings.cfg`. The
 locale is `es`/`en`, applied to `Tr` at startup. The language selector lives in SettingsPanel:
@@ -1287,7 +1304,7 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
   (`GameManager.open_saves_list()`, from the title menu "PARTIDAS n/5" and from ☰ → PARTIDAS) has Load and Delete
   (confirmed); `load_slot()`, `delete_slot()`, `leave_deleted_slot()` (the in-memory game was deleted: open the most
   recent or a new one). `clear_save()` discards only the active slot (the reused fresh island, tests)
-- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, the `final_audit` and the closed `chapters`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `threats` (ThreatManager: coastal threats, `ThreatBoard`; a save without it = empty shore), `empire` (EmpireManager: the archipelago after victory, `Archipelago`; a save without it = nothing started, and a save with the Audit already won starts the phase on load), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
+- Saves (top-level keys written by `GameManager._write_save()`): `resources`, `buildings` (level, name, construction state, health), `deposits`, `camera`, `progression` (eras, milestones, played time, the `final_audit` and the closed `chapters`), `market`, `unlocked_resources`, `population`, `random_events`, `active_processes`, `stockpiles` (what waits in each building, Farm crops, production clocks), `tech_tree`, `army`, `expedition` (CombatManager: the run in flight, with `kind`/`offer`/`loot` for sorties), `sorties` (CombatManager: the sortie board, blueprints, Tithe-discount note), `campaigns` (CombatManager: the three campaigns, `CampaignBook`; a save without it = none started), `storm` (StormCycle + armed/halted/trial; since 1.1 also the Regency Order: `tithe_discounts`, `order`, `calm_total`, `barometer_offset`), `tutorial` (also `combat_lessons_done`), `day` (DayClock: the hour, 0-1; frozen while the game is closed), `rank` (RankManager: XP and the country, `colony`: name + flag recipe), `contracts` (ContractManager: the board, docs/27), `economy` (EconomyManager: the smuggler's ship with its offers and dice, bought blueprints, fuel and interest clocks), `threats` (ThreatManager: coastal threats, `ThreatBoard`; a save without it = empty shore), `empire` (EmpireManager: the archipelago after victory, `Archipelago`; a save without it = nothing started, and a save with the Audit already won starts the phase on load), `stats` (AchievementManager: the run's counters, docs/29; a save without it = all zero), `game_mode`, `grid` (width, height, island seed; restored before anything is placed). Same save for the 3D and 2D views
 - Cloud: `CloudSaveManager` (Supabase REST) implements anonymous/email auth + save/load, but no game code calls it yet — local JSON is the only active path
 - Auto-saves on: building placed/moved/renamed/demolished, deposit depleted, tech research, and (debounced by
   `GameConfig.autosave_debounce`) trades, training, processes, upgrades, storm phases, Tithe, Final Audit, expedition
@@ -1315,12 +1332,12 @@ Every new effect, mesh, sound or `_process` has to justify its cost.
 
 ```
 tormenta-imperial/
-+-- project.godot                    # Engine config (version 0.9-beta, main scene Boot.tscn), 32 autoloads (31 game + BeckettRuntime), renderer override hook
++-- project.godot                    # Engine config (version 0.9-beta, main scene Boot.tscn), 33 autoloads (32 game + BeckettRuntime), renderer override hook
 +-- export_presets.cfg               # Windows Desktop, Android, Android QA (emulador) — no secrets
 +-- LICENSE, THIRD-PARTY-NOTICES.md, licenses/  # Licence, third-party notices, the engine's copyright text
 +-- CLAUDE.md                        # THIS FILE - AI guidance
 +-- readme.md                        # Game overview (Spanish, public)
-+-- docs/                            # Per-system deep docs 01-26 (INDEX.md); media/ = screenshots
++-- docs/                            # Per-system deep docs 01-29 (INDEX.md); media/ = screenshots
 +-- specs/001-combate-pve/           # Spec, plan and tasks for the combat pillar
 +-- .specify/memory/constitution.md  # Non-negotiable project rules (Spec-Driven Development)
 +-- qa/maestro/                      # Maestro flows for the Android tablet emulator (QA APK, coordinates + screenshots)
@@ -1392,7 +1409,7 @@ tormenta-imperial/
 |   +-- economy/SmugglerShip.gd      # PURE model: the smuggler's ship of the Trade port (clock, 3 offers, own RNG; 1.2)
 |   +-- empire/                      # PURE models of Volverse el Imperio: Archipelago.gd (islands, progress, tribute) and ConquestGenerator.gd (conquest missions)
 |   +-- storm/DayCycle.gd            # PURE model: the day/night clock (DayClock ticks it)
-|   +-- services/                    # The 31 game autoloads (table above) + BeckettGate.gd
+|   +-- services/                    # The 32 game autoloads (table above) + BeckettGate.gd
 |   |   +-- ...Manager.gd / EventBus.gd / GameConfig.gd / Tr.gd / DeviceProfile.gd
 |   |   +-- GameMode.gd              # Static: the mode of this run and its rules
 |   |   +-- Objectives.gd            # Static: the next step for ¿QUÉ HACER?
@@ -1530,7 +1547,7 @@ guarnición), cañoneros (not dotación). Code identifiers (`tithe`, `audit`, `g
 
 ### Key Rule: GDScript first (decided 2026-09-12)
 
-- **GDScript for everything**, combat included. The whole project (31 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
+- **GDScript for everything**, combat included. The whole project (32 game autoloads + all UI) is GDScript; a second language adds build times, cross-runtime debugging and marshalling for no benefit here.
 - The old plan put unit AI, combat math and pathfinding in C# **for performance**. That argument does not apply at the agreed combat scale: an 8x8 board with 4–6 units per side. GDScript is orders of magnitude more than enough.
 - **Migrate later, only on evidence**: if a profiled module proves too slow, port that module to C#. Do not create the .NET project speculatively.
 
@@ -1616,6 +1633,7 @@ All balance values live in `GameConfig.gd`:
 - `decor_rank_unlocks` / `decor_deed_unlocks` / `decor_shore_only` - the other 18 decorations (rank, deed, coast); `traffic_*` - the trucks (end of the file, `_register_decorations_traffic()`)
 - `empire_islands` / `empire_tier_enemy` / `empire_boss_extra_scale` / `empire_tribute_interval` / `empire_mission_cooldown` / `empire_reward_mult` / `empire_titles` - Volverse el Imperio (the archipelago after victory; block at the end of GameConfig, unmeasured)
 - `REGIMENT_PAINTS` / `regiment_star_wins` - the regiment's paints and stars (cosmetic only)
+- `achievement_definitions` / `achievement_groups` / `achievement_stat_rows` - achievements (stat + goal each) and the stats screen (end of the file, `_register_achievements()` adds the mode rule `achievements`; docs/29)
 - `audio_*_volume` / `audio_music_fade` / `audio_sfx_voices` - audio
 - `phase_triggers` / `early_*` - onboarding phase pacing
 - `combat_*` - board, deploy cap, unit combat stats, enemy/risk scaling, map shape,

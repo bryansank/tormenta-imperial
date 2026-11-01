@@ -639,6 +639,8 @@ func _connect_events() -> void:
 	EventBus.storm_halted_forever.connect(_on_final_audit_ended)
 	# Volverse el Imperio: una isla tomada suena como un ascenso (sin sonido nuevo).
 	EventBus.island_conquered.connect(func(_i): play_sfx("rank_up"))
+	# Logros (docs/29): el mismo toque que un hito, sin sonido nuevo.
+	EventBus.achievement_unlocked.connect(func(_id): play_sfx("milestone"))
 	# La Tormenta: el ambiente sigue a la fase y cada cambio relevante suena.
 	EventBus.storm_phase_changed.connect(_on_storm_phase_changed)
 	# Dia y noche (DayClock): de noche cambia el ambiente, nada mas.

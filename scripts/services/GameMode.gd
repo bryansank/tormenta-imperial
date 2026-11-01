@@ -206,6 +206,11 @@ static func random_events_enabled() -> bool:
 static func contracts_enabled() -> bool:
 	return _flag("contracts")
 
+## Los logros del perfil (AchievementManager, docs/29). Sandbox no gana
+## ninguno: todo abierto y recursos infinitos.
+static func achievements_enabled() -> bool:
+	return _flag("achievements")
+
 ## Los eventos de categoria "danger" (tormenta menor, plaga, bandidos...).
 static func danger_events_enabled() -> bool:
 	return _flag("danger_events")

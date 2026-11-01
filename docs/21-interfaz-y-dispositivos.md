@@ -1122,7 +1122,7 @@ e Informar fallo, en pequeño debajo. Lo que salió del ☰ sigue a mano:
 | Mercado, Tecnología (ya iban por su edificio) | Barra de abajo (con su edificio terminado y con carretera) |
 | ¿Qué hacer? | La línea del siguiente paso (`PauseMenu.entry("Colony_objectives")` la devuelve, para el tutorial) |
 | Colonia (rango) | Tocar el rango |
-| Progreso, Encargos, Registro, Sandbox | La tarjeta de la colonia (tocar el rango), fila `ColonyHub` |
+| Progreso, Encargos, Registro, Sandbox | La tarjeta de la colonia (tocar el rango), fila `ColonyHub` (con LOGROS, la ventana de logros y estadísticas, docs/29) |
 | Música | Ajustes → Audio |
 | Guardar | PARTIDAS guarda antes de abrir; autoguardado |
 

@@ -625,3 +625,10 @@ signal empire_tribute_paid(amounts: Dictionary)
 ## quema: la isla queda libre). Una vez por partida (EmpireManager.choose_ending).
 @warning_ignore("unused_signal")
 signal ending_chosen(choice: String)
+# ── Logros (feat/logros-estadisticas, docs/29) ──
+## Se acaba de ganar un logro del perfil (GameConfig.achievement_definitions).
+## Solo AchievementManager, una vez por logro y dispositivo; ya apuntado en
+## settings.cfg [perfil]. AudioManager toca su sonido; el aviso va por
+## notification_posted ("achievement").
+@warning_ignore("unused_signal")
+signal achievement_unlocked(achievement_id: String)

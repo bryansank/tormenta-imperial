@@ -581,6 +581,8 @@ func _new_game() -> void:
 	ThreatManager.reset()
 	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
 	EmpireManager.reset()
+	# Estadisticas de la partida (clave "stats"); los logros del perfil no se tocan.
+	AchievementManager.reset()
 	_apply_pending_identity()
 	# El tamano de la rejilla y la forma de la isla se sortean aqui, con la
 	# rejilla todavia vacia y antes del Nucleo: es el reset de GridManager para
@@ -825,6 +827,10 @@ func _load_game() -> void:
 	# la fase empieza al terminar la carga (EmpireManager, game_load_completed).
 	var empire_data: Variant = data.get("empire", {})
 	EmpireManager.load_save_data(empire_data if empire_data is Dictionary else {})
+	# Estadisticas de la partida (feat/logros-estadisticas). Sin la clave
+	# (partida anterior a los logros) todo empieza en 0.
+	var stats_data: Variant = data.get("stats", {})
+	AchievementManager.load_save_data(stats_data if stats_data is Dictionary else {})
 
 	# La bolsa es una sola y su tope depende de la era, de los almacenes y del arbol
 	# tecnologico: hasta que los tres no estan restaurados no se sabe cuanto cabe. Por
@@ -978,6 +984,7 @@ func _write_save() -> void:
 	data["economy"] = EconomyManager.get_save_data()
 	data["threats"] = ThreatManager.get_save_data()
 	data["empire"] = EmpireManager.get_save_data()
+	data["stats"] = AchievementManager.get_save_data()
 
 	# Camera
 	if _camera and _camera.has_method("get_state"):
@@ -1095,6 +1102,8 @@ func clear_save() -> void:
 	ThreatManager.reset()
 	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
 	EmpireManager.reset()
+	# Estadisticas de la partida (clave "stats"); los logros del perfil no se tocan.
+	AchievementManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null
@@ -1145,6 +1154,8 @@ func clear_save_and_reload_from(save_data: Dictionary, scene_path: String = "") 
 	ThreatManager.reset()
 	# Volverse el Imperio (clave "empire"): partida nueva, archipielago sin tocar.
 	EmpireManager.reset()
+	# Estadisticas de la partida (clave "stats"); los logros del perfil no se tocan.
+	AchievementManager.reset()
 	UIManager.reset()
 	_placer = null
 	_map_gen = null

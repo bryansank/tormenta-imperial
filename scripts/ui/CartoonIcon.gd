@@ -19,6 +19,8 @@ const GLYPHS := ["build", "army", "missions", "market", "research", "help", "men
 	"settings", "upgrade", "move", "demolish", "close", "lock", "star", "clock",
 	"sound", "music", "screen", "controls", "access", "game", "anchor", "plane",
 	"tank", "raid", "check", "storm", "plus", "minus", "back", "next", "workers_off", "sun", "wrench",
+	# Logros (feat/logros-estadisticas): la copa de LOGROS Y ESTADISTICAS.
+	"trophy",
 	# Materiales del taller (feat/recetas-tarjetas): no tienen PNG como los
 	# recursos; la tarjeta de receta los pide con CartoonTheme.res_glyph().
 	"mat_planks", "mat_ingots", "mat_beams", "mat_fuel"]
@@ -229,6 +231,16 @@ static func draw_glyph(ci: CanvasItem, r: Rect2, id: String, tint: Color = Color
 			var st := [12, 3, 14.7, 8.6, 20.8, 9.4, 16.3, 13.6, 17.4, 19.7, 12, 16.8, 6.6, 19.7, 7.7, 13.6, 3.2, 9.4, 9.3, 8.6]
 			_fill(ci, r, st, Color(a, 0.45))
 			_pl(ci, r, st, m if not has_t else a, true)
+		"trophy":
+			# La copa: taza con dos asas, pie y peana; el brillo en laton.
+			var cup := [6.5, 4, 17.5, 4, 17, 9.5, 15.5, 12.5, 12, 14, 8.5, 12.5, 7, 9.5]
+			_fill(ci, r, cup, soft)
+			_pl(ci, r, cup, m, true)
+			_arc(ci, r, 6.5, 7.5, 3, PI * 0.5, PI * 1.5, m)
+			_arc(ci, r, 17.5, 7.5, 3, -PI * 0.5, PI * 0.5, m)
+			_pl(ci, r, [12, 14, 12, 17.5], m)
+			_pl(ci, r, [8, 20.5, 16, 20.5, 15, 17.5, 9, 17.5], m, true)
+			_pl(ci, r, [10, 6.5, 10, 9.5], a)
 		"clock":
 			_ring(ci, r, 12, 13, 8, m)
 			_pl(ci, r, [12, 9, 12, 13.2, 14.8, 15], a)

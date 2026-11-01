@@ -863,6 +863,10 @@ var quality_detect_flat_ms := 0.3
 var profile_runs_finished := 0
 ## Campanas ganadas (Auditoria Final superada).
 var profile_campaigns_won := 0
+## Logros ganados en este dispositivo (feat/logros-estadisticas, docs/29):
+## id -> hora unix. Los apunta record_achievement(); nunca los borra una
+## partida nueva.
+var profile_achievements: Dictionary = {}
 
 ## La partida activa (settings.cfg [partidas] activa): la ultima que se jugo en
 ## este dispositivo, la que abre "Continuar". Es preferencia del dispositivo, no
@@ -970,6 +974,7 @@ func _load_interface_settings(cf: ConfigFile) -> void:
 	ui_touch_controls_size = csize if csize in TOUCH_CONTROLS_SIZE_MODES else "auto"
 	profile_runs_finished = maxi(0, int(cf.get_value("perfil", "runs_finished", profile_runs_finished)))
 	profile_campaigns_won = maxi(0, int(cf.get_value("perfil", "campaigns_won", profile_campaigns_won)))
+	profile_achievements = _clean_achievements(cf.get_value("perfil", "achievements", {}))
 	saves_active_slot = maxi(0, int(cf.get_value("partidas", "activa", saves_active_slot)))
 
 func save_user_settings() -> void:
@@ -1014,6 +1019,7 @@ func save_user_settings() -> void:
 	cf.set_value("interfaz", "touch_controls_size", ui_touch_controls_size)
 	cf.set_value("perfil", "runs_finished", profile_runs_finished)
 	cf.set_value("perfil", "campaigns_won", profile_campaigns_won)
+	cf.set_value("perfil", "achievements", profile_achievements)
 	cf.set_value("partidas", "activa", saves_active_slot)
 	cf.save(USER_SETTINGS_PATH)
 
@@ -1025,6 +1031,17 @@ func set_combat_view(view: String) -> bool:
 	ui_combat_view = view
 	save_user_settings()
 	return true
+
+## Los logros leidos de settings.cfg: solo ids que existen, con una hora
+## entera. Un archivo editado a mano o de otra version no mete basura.
+func _clean_achievements(raw: Variant) -> Dictionary:
+	var out := {}
+	if not raw is Dictionary:
+		return out
+	for id in raw:
+		if not achievement_def(str(id)).is_empty():
+			out[str(id)] = maxi(0, int(raw[id]))
+	return out
 
 ## El perfil ya abre Gobernador: una partida terminada o una Campana ganada.
 ## (En dev_mode se ofrece siempre; eso lo decide GameMode.governor_unlocked().)
@@ -4572,4 +4589,118 @@ func _register_v12_unlocks() -> bool:
 		row["buildings"] = list
 		rank_rewards[rank] = row
 	smuggler_plan_chance = 0.0
+	return true
+
+# ══════════════════════════════════════════════════════════════════════
+# ── Logros y estadisticas (feat/logros-estadisticas, docs/29) ──
+# ══════════════════════════════════════════════════════════════════════
+# Los LOGROS son del perfil del jugador en este dispositivo (settings.cfg
+# [perfil] achievements: id -> hora unix en que se gano) y sobreviven a "Nueva
+# partida". Las ESTADISTICAS son de la partida (clave "stats" del guardado, la
+# lleva AchievementManager). Cada logro es "la estadistica `stat` de esta
+# partida llega a `goal`": asi un logro nuevo es una fila aqui y, si hace
+# falta, un contador nuevo en AchievementManager.
+#
+#   id      clave del logro (Tr: ACH_<ID>_NAME / ACH_<ID>_DESC)
+#   group   build / economy / storm / combat / final (pestanas de la pantalla)
+#   stat    contador de la partida (AchievementManager.STAT_KEYS)
+#   goal    a cuanto tiene que llegar
+#   glyph   icono de CartoonIcon de la fila
+#   secret  se ve como "???" hasta ganarlo
+#
+# En Sandbox no se gana ninguno: regla "achievements" de game_mode_rules
+# (GameMode.achievements_enabled()). Las estadisticas se cuentan igual.
+var achievement_definitions: Array = [
+	# Construccion
+	{"id": "first_stone", "group": "build", "stat": "buildings_built", "goal": 1, "glyph": "build"},
+	{"id": "builder_25", "group": "build", "stat": "buildings_built", "goal": 25, "glyph": "build"},
+	{"id": "roads_150", "group": "build", "stat": "roads_built", "goal": 150, "glyph": "move"},
+	{"id": "level_3", "group": "build", "stat": "max_level", "goal": 3, "glyph": "upgrade"},
+	# Eras y economia
+	{"id": "era_2", "group": "economy", "stat": "era", "goal": 2, "glyph": "mat_beams"},
+	{"id": "era_3", "group": "economy", "stat": "era", "goal": 3, "glyph": "mat_fuel"},
+	{"id": "trader_50", "group": "economy", "stat": "trades", "goal": 50, "glyph": "market"},
+	{"id": "harvest_5000", "group": "economy", "stat": "resources_collected", "goal": 5000, "glyph": "check"},
+	{"id": "tech_15", "group": "economy", "stat": "techs_researched", "goal": 15, "glyph": "research"},
+	{"id": "contracts_10", "group": "economy", "stat": "contracts_delivered", "goal": 10, "glyph": "check"},
+	# La Tormenta y el Impuesto
+	{"id": "storm_1", "group": "storm", "stat": "storms", "goal": 1, "glyph": "storm"},
+	{"id": "storm_10", "group": "storm", "stat": "storms", "goal": 10, "glyph": "storm"},
+	{"id": "tithe_repel_1", "group": "storm", "stat": "tithes_repelled", "goal": 1, "glyph": "army"},
+	{"id": "tithe_repel_5", "group": "storm", "stat": "tithes_repelled", "goal": 5, "glyph": "army"},
+	# Combate y campanas
+	{"id": "win_1", "group": "combat", "stat": "fights_won", "goal": 1, "glyph": "army"},
+	{"id": "win_50", "group": "combat", "stat": "fights_won", "goal": 50, "glyph": "star"},
+	{"id": "flawless", "group": "combat", "stat": "flawless_wins", "goal": 1, "glyph": "star"},
+	{"id": "routed", "group": "combat", "stat": "routs", "goal": 1, "glyph": "raid"},
+	{"id": "campaign_land", "group": "combat", "stat": "campaign_land", "goal": 1, "glyph": "tank"},
+	{"id": "campaign_sea", "group": "combat", "stat": "campaign_sea", "goal": 1, "glyph": "anchor"},
+	{"id": "campaign_air", "group": "combat", "stat": "campaign_air", "goal": 1, "glyph": "plane"},
+	# El final
+	{"id": "audit_won", "group": "final", "stat": "audits_won", "goal": 1, "glyph": "sun"},
+	{"id": "ending_sign", "group": "final", "stat": "ending_sign", "goal": 1, "glyph": "check"},
+	{"id": "ending_burn", "group": "final", "stat": "ending_burn", "goal": 1, "glyph": "sun"},
+	{"id": "archipelago", "group": "final", "stat": "archipelago", "goal": 1, "glyph": "anchor"},
+	{"id": "rank_18", "group": "final", "stat": "rank", "goal": 18, "glyph": "star"},
+	{"id": "governor_win", "group": "final", "stat": "governor_wins", "goal": 1, "glyph": "star"},
+	# Secretos (y un poco de guasa)
+	{"id": "deserters", "group": "combat", "stat": "deserters", "goal": 1, "glyph": "workers_off", "secret": true},
+	{"id": "tax_payer", "group": "storm", "stat": "tithes_paid", "goal": 10, "glyph": "market", "secret": true},
+	{"id": "smuggler_5", "group": "economy", "stat": "smuggler_deals", "goal": 5, "glyph": "anchor", "secret": true},
+	{"id": "demolish_20", "group": "build", "stat": "buildings_demolished", "goal": 20, "glyph": "demolish", "secret": true},
+]
+
+## Orden de las pestanas de LOGROS (y su icono).
+var achievement_groups: Array = [
+	["build", "build"], ["economy", "market"], ["storm", "storm"],
+	["combat", "army"], ["final", "star"],
+]
+
+## Las filas de ESTADISTICAS, en orden: [contador, icono]. Cada contador tiene
+## su texto en Tr (STAT_<CONTADOR>). "played" es el tiempo jugado (lo lleva
+## ProgressionManager, no se duplica).
+var achievement_stat_rows: Array = [
+	["played", "clock"],
+	["buildings_built", "build"],
+	["roads_built", "move"],
+	["upgrades", "upgrade"],
+	["buildings_demolished", "demolish"],
+	["resources_collected", "check"],
+	["trades", "market"],
+	["techs_researched", "research"],
+	["contracts_delivered", "check"],
+	["units_trained", "army"],
+	["fights_won", "star"],
+	["fights_lost", "close"],
+	["units_lost", "workers_off"],
+	["enemies_defeated", "raid"],
+	["campaign_missions", "missions"],
+	["storms", "storm"],
+	["tithes_paid", "market"],
+	["tithes_repelled", "army"],
+]
+
+var _achievements_registered := _register_achievements()
+
+## La regla "achievements" por modo: Sandbox no gana logros (todo abierto y
+## recursos infinitos: no tendria merito). Los demas, si.
+func _register_achievements() -> bool:
+	game_mode_rules["campaign"]["achievements"] = true
+	game_mode_rules["sandbox"]["achievements"] = false
+	return true
+
+## La definicion de un logro, o {} si no existe.
+func achievement_def(achievement_id: String) -> Dictionary:
+	for def in achievement_definitions:
+		if String(def.get("id", "")) == achievement_id:
+			return def
+	return {}
+
+## Apunta en el perfil un logro ganado (hora unix) y guarda settings.cfg.
+## Devuelve false si ya estaba o si no existe. Lo llama AchievementManager.
+func record_achievement(achievement_id: String, when: int) -> bool:
+	if profile_achievements.has(achievement_id) or achievement_def(achievement_id).is_empty():
+		return false
+	profile_achievements[achievement_id] = when
+	save_user_settings()
 	return true
