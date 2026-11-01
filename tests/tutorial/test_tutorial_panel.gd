@@ -212,3 +212,13 @@ func test_a_new_game_shows_what_it_is_about_before_the_lore() -> void:
 	for loc in ["es", "en"]:
 		var body: String = Tr._STRINGS[loc]["ABOUT_BODY"]
 		assert_int(body.split(".", false).size()).is_less_equal(4)
+
+## QA tablet real n. 5: con CONSTRUIR abierto la tarjeta solo se ve en los pasos
+## que ocurren dentro (abrir, elegir, colocar, lo que falta); en los demas la
+## lista queda libre.
+func test_the_card_only_covers_build_on_build_steps() -> void:
+	var Panel: GDScript = load("res://scripts/ui/TutorialPanel.gd")
+	for step in ["open_build", "pick_sawmill", "place_gold_mine", "need_barracks"]:
+		assert_bool(Panel.shows_over_build_menu(step)).override_failure_message(step).is_true()
+	for step in ["wait_sawmill", "collect", "train", "battle", "resources"]:
+		assert_bool(Panel.shows_over_build_menu(step)).override_failure_message(step).is_false()

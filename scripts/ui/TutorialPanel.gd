@@ -743,7 +743,10 @@ func _should_hide() -> bool:
 		if not is_instance_valid(w):
 			continue
 		var wname := String(w.name)
-		if wname == "ConstructionMenu":
+		# CONSTRUIR solo deja ver la tarjeta en los pasos que ocurren en ella
+		# (abrir, elegir, colocar, lo que falta para pagarlo); en los demas
+		# (esperar la obra, recoger...) la tapaba (QA tablet real n. 5).
+		if wname == "ConstructionMenu" and shows_over_build_menu(_step):
 			continue
 		if wname == "BuildingInfoPanel" and _step in TutorialManager.INFO_PANEL_STEPS:
 			continue
@@ -753,6 +756,13 @@ func _should_hide() -> bool:
 		return true
 	if CombatManager.is_board_open():
 		return true
+	return false
+
+## Pasos del tutorial que ocurren dentro de CONSTRUIR (la tarjeta se ve encima).
+static func shows_over_build_menu(step_id: String) -> bool:
+	for prefix in ["open_", "pick_", "place_", TutorialManager.NEED_PREFIX]:
+		if step_id.begins_with(prefix):
+			return true
 	return false
 
 func _process(delta: float) -> void:
