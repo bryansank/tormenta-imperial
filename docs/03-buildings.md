@@ -147,10 +147,25 @@ goes in the save: it all derives from the buildings.
 
 Side storage: `ResourceManager.get_total_stored()` only counts what overflows each
 side bag, and `add()` / `add_fitting()` use `get_free_space_for(type)`. The Tithe
-still takes from the raw amount. Looks: one procedural mesh per type
-(`UtilityToys.gd`, LotMesh + ToyPalette, cached) until `tools/build_toy_models.gd
--- --only=windmill,...` bakes `assets/models/toy/<id>.tscn`; then `UtilityToys.create`
-picks the bake without touching the `.tres`. 2D: `BuildingArt2D._utility`.
+still takes from the raw amount. Looks: the bakes in `assets/models/toy/<id>.tscn`
+(2026-11-01, `feat/decoraciones-cc0`: `tools/build_toy_models.gd -- --only=windmill,silo,tavern,carpentry,well,lighthouse,fuel_depot`),
+which `UtilityToys.create` picks without touching the `.tres`; its procedural mesh
+(LotMesh + ToyPalette, cached) stays as the fallback if a bake is missing. 2D:
+`BuildingArt2D._utility`.
+
+| Edificio | Triangulos | Piezas CC0 del horneado (sobre el cuerpo de `UtilityToys.build_core`) |
+|---|---|---|
+| `windmill` | 1.700 | aspas `ft:windmill` (Kenney Fantasy Town); granero `kk:building_grain`, sacos `kk:sack`, barril `kk:barrel` (KayKit Medieval Hexagon) |
+| `silo` | 1.304 | tanque `kn:detail-tank` (Kenney City Kit Industrial); `kk:crate_A_small`, `kk:sack` (KayKit) |
+| `tavern` | 952 | farol `ft:lantern` (Kenney Fantasy Town); barriles `pir:barrel` (Kenney Pirate) |
+| `carpentry` | 1.061 | `kk:resource_lumber`, `kk:pallet`, `kk:crate_open` (KayKit) |
+| `well` | 980 | `kk:bucket_water`, `kk:barrel` (KayKit) |
+| `lighthouse` | 1.248 | torre `pir:tower-complete-small`, bandera `pir:flag-high` (Kenney Pirate) |
+| `fuel_depot` | 1.910 | `kn:detail-tank-large`, `kn:detail-tank` (Kenney City Kit Industrial); bidones `pir:barrel` (Kenney Pirate) |
+
+All inside the 650-2,700 range of the other bakes; the windmill and the fuel depot
+are above their recipe's first estimate (~1,050 / ~1,270) because of the CC0 blades
+(732) and the two tanks (876).
 
 ### Defensa (1.2, `feat/edificios-defensa-vida`)
 

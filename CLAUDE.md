@@ -335,8 +335,9 @@ Stretch is `canvas_items` + `aspect=expand` (no black bars). Full detail:
 
 The seven "(1.1)" rows (`feat/edificios-utiles-1`, doc 21 §6.3): areas in
 `scripts/buildings/UtilityEffects.gd` (on build/demolish, never per frame), look in
-`scripts/buildings/UtilityToys.gd` (one procedural toy mesh per type until its bake
-exists) and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
+`scripts/buildings/UtilityToys.gd` (serves the bake `assets/models/toy/<id>.tscn`,
+all seven baked 2026-11-01, 952-1910 triangles; its procedural mesh is the fallback)
+and `BuildingArt2D._utility`. Full table: `docs/03-buildings.md`.
 
 **Fishing dock (feat/muelle-pesca, doc 21 §6.3 n.º 7):** `fishing_dock`, era 1, the
 second food producer, and a little gold from the same school (12 food + 3 gold / 30 s).
@@ -1483,6 +1484,8 @@ unset:
 | Source | Buildings |
 |---|---|
 | Baked toy model (`model_scene` = `assets/models/toy/<id>.tscn`) | `nucleo`, `house`, `sawmill`, `farm`, `gold_mine`, `warehouse`, `market`, `laboratory`, `foundry`, `barracks`, `refinery`, `tower`, `headquarters`, `garden`, `fountain`, `statue`, `fishing_dock`, `shipyard`, `aerodrome` (19). The Farm adds its beds as a separate mesh (`Crops`, `FarmCrops3D`) animated by the shared `toy_crops.gdshader` |
+| `UtilityToys` (through `DieselpunkBuildingFactory.create()`) | `windmill`, `silo`, `tavern`, `carpentry`, `well`, `lighthouse`, `fuel_depot` (1.1): their bake `assets/models/toy/<id>.tscn` (baked 2026-11-01, `feat/decoraciones-cc0`; no `model_scene` in the `.tres`), the shared procedural mesh if it is missing |
+| `DefenseToys` (through `DieselpunkBuildingFactory.create()`) | `bastion`, `scrapyard`, `telegraph` (1.2): their bake `assets/models/toy/<id>.tscn` (no `model_scene` in the `.tres`), the shared procedural mesh if it is missing |
 | `EconomyToys` (through `DieselpunkBuildingFactory.create()`) | `trade_port`, `exchange`, `diesel_plant` (1.2): their bake `assets/models/toy/<id>.tscn` (baked 2026-10-18; no `model_scene` in the `.tres`), the shared procedural mesh if it is missing. Also the smuggler's ship (`ship_mesh()`) |
 | `DecorMesh` (through `DieselpunkBuildingFactory.create()`) | the 28 decorations (the 10 cheap ones and the 18 of `DecorMesh2`): one shared mesh per type, baked `assets/models/toy/<id>_mesh.res` (all baked), procedural (LotMesh boxes, cylinders, balls) as the fallback |
 | `RoadBatch3D` | `road`: the node carries no mesh; the batch draws every tile with `DieselpunkBuildingFactory.road_mesh()` per neighbour mask |
