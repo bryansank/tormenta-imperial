@@ -405,7 +405,8 @@ static func draw_bust(ci: CanvasItem, area: Rect2, id: String, e: String, dir: i
 		ci.draw_circle(rc + Vector2(-rv * 0.3, -rv * 0.3), rv * 0.35, Color(1, 1, 1, 0.35))
 	var font: Font = UITheme.bold_font()
 	if font != null:
-		var fs := int(clampf(h * 0.085, 9.0, 16.0))
+		# Minimo 11 (QA escritorio n. 19: a 9 px no se leia el nombre).
+		var fs := int(clampf(h * 0.1, 11.0, 16.0))
 		var text := Tr.t(short_key(id))
 		var room := area.size.x - bw * 2.0 - rv * 8.0
 		var tw: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

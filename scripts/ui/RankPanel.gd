@@ -416,7 +416,9 @@ static func rank_up_text(rank: int, rewards: Dictionary) -> String:
 	var text := Tr.t("FMT_RANK_UP") % [rank, Tr.t(GameConfig.rank_title_key(rank))]
 	var lines := reward_lines(rewards)
 	if not lines.is_empty():
-		text += ": " + ", ".join(lines.map(func(l): return "+ " + String(l)))
+		# Las cifras ya traen su "+" ("+2 % produccion"): no se dobla (QA
+		# telefono M6: "+ +2 %").
+		text += ": " + ", ".join(lines.map(func(l): return String(l) if String(l).begins_with("+") else "+ " + String(l)))
 	return text
 
 # ── Abrir y cerrar (☰ MENU > COLONIA, o tocar la insignia) ──

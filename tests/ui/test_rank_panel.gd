@@ -68,6 +68,13 @@ func test_ranking_up_shows_a_short_toast_with_what_it_opened() -> void:
 	# Ya no hay placa propia del panel.
 	assert_object(panel.find_child("RankToast", true, false)).is_null()
 
+## QA telefono M6: "+ +2 % produccion". Las cifras ya traen su signo.
+func test_the_rank_up_text_never_doubles_the_plus() -> void:
+	var RankPanelScript: GDScript = load("res://scripts/ui/RankPanel.gd")
+	var text: String = RankPanelScript.rank_up_text(4, {"production": 0.02, "storage": 0.03})
+	assert_str(text).not_contains("+ +")
+	assert_str(text).contains(Tr.t("FMT_RANK_REWARD_PRODUCTION") % 2)
+
 func test_the_colony_card_opens_the_editor_and_locks_what_is_not_earned() -> void:
 	var panel := _panel()
 	await await_idle_frame()
